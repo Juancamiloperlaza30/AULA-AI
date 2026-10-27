@@ -8,6 +8,7 @@ import {
 import {
   ActivityIndicator,
   Alert,
+  Platform,
   ScrollView,
   StyleSheet,
   Text,
@@ -15,6 +16,20 @@ import {
   TouchableOpacity,
   View,
 } from 'react-native';
+
+import { Ionicons } from '@expo/vector-icons';
+
+const mostrarAlerta = (titulo, mensaje) => {
+  if (
+    Platform.OS === 'web' &&
+    typeof window !== 'undefined'
+  ) {
+    window.alert(`${titulo}\n\n${mensaje}`);
+    return;
+  }
+
+  Alert.alert(titulo, mensaje);
+};
 
 export default function RegisterUserScreen({
   accessToken,
@@ -34,6 +49,15 @@ export default function RegisterUserScreen({
 
   const [gradoId, setGradoId] = useState(null);
   const [grupoId, setGrupoId] = useState(null);
+  const [gradoAmbitoId, setGradoAmbitoId] =
+    useState(null);
+  const [gruposAmbito, setGruposAmbito] =
+    useState([]);
+  const [ambitosOrientador, setAmbitosOrientador] =
+    useState([]);
+  const [cargandoGruposAmbito, setCargandoGruposAmbito] =
+    useState(false);
+  const solicitudAmbitosId = useRef(0);
 
   const [busquedaEstudiante, setBusquedaEstudiante] = useState('');
   const [resultadosEstudiantes, setResultadosEstudiantes] = useState([]);
@@ -65,7 +89,7 @@ export default function RegisterUserScreen({
       const data = await response.json();
 
       if (!response.ok) {
-        Alert.alert(
+        mostrarAlerta(
           'Error',
           data.message || 'No fue posible cargar los grados.'
         );
@@ -76,7 +100,7 @@ export default function RegisterUserScreen({
     } catch (error) {
       console.log('Error cargando grados:', error);
 
-      Alert.alert(
+      mostrarAlerta(
         'Error de conexión',
         'No fue posible consultar los grados.'
       );
@@ -87,7 +111,10 @@ export default function RegisterUserScreen({
   ]);
 
   useEffect(() => {
-    if (rol === 'estudiante') {
+    if (
+      rol === 'estudiante' ||
+      rol === 'orientador'
+    ) {
       Promise.resolve().then(
         cargarGrados
       );
@@ -113,7 +140,7 @@ export default function RegisterUserScreen({
       const data = await response.json();
 
       if (!response.ok) {
-        Alert.alert(
+        mostrarAlerta(
           'Error',
           data.message || 'No fue posible cargar los grupos.'
         );
@@ -124,10 +151,73 @@ export default function RegisterUserScreen({
     } catch (error) {
       console.log('Error cargando grupos:', error);
 
-      Alert.alert(
+      mostrarAlerta(
         'Error de conexión',
         'No fue posible consultar los grupos.'
       );
+    }
+  };
+
+  const cargarGruposOrientador = async (
+    idGrado
+  ) => {
+    const solicitudId =
+      ++solicitudAmbitosId.current;
+
+    setGradoAmbitoId(idGrado);
+    setGruposAmbito([]);
+    setCargandoGruposAmbito(true);
+
+    try {
+      const response = await fetch(
+        `${apiUrl}/api/academic/grados/${idGrado}/grupos`,
+        {
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (
+          solicitudId === solicitudAmbitosId.current
+        ) {
+          mostrarAlerta(
+            'Error',
+            data.message ||
+              'No fue posible cargar los grupos.'
+          );
+        }
+        return;
+      }
+
+      if (
+        solicitudId === solicitudAmbitosId.current
+      ) {
+        setGruposAmbito(data.grupos || []);
+      }
+    } catch (error) {
+      console.log(
+        'Error cargando grupos del orientador:',
+        error
+      );
+
+      if (
+        solicitudId === solicitudAmbitosId.current
+      ) {
+        mostrarAlerta(
+          'Error de conexión',
+          'No fue posible consultar los grupos.'
+        );
+      }
+    } finally {
+      if (
+        solicitudId === solicitudAmbitosId.current
+      ) {
+        setCargandoGruposAmbito(false);
+      }
     }
   };
 
@@ -163,7 +253,7 @@ export default function RegisterUserScreen({
           solicitudId ===
           solicitudBusquedaId.current
         ) {
-          Alert.alert(
+          mostrarAlerta(
             'No fue posible buscar',
             data.message ||
               'Ocurrió un error durante la búsqueda.'
@@ -265,6 +355,63 @@ export default function RegisterUserScreen({
     }
   };
 
+  const alternarAmbitoOrientador = (grupo) => {
+    if (!gradoAmbitoId) {
+      return;
+    }
+
+    setAmbitosOrientador((ambitosActuales) => {
+      const yaSeleccionado = ambitosActuales.some(
+        (ambito) =>
+          String(ambito.gradoId) ===
+            String(gradoAmbitoId) &&
+          String(ambito.grupoId) ===
+            String(grupo.id)
+      );
+
+      if (yaSeleccionado) {
+        return ambitosActuales.filter(
+          (ambito) =>
+            String(ambito.gradoId) !==
+              String(gradoAmbitoId) ||
+            String(ambito.grupoId) !==
+              String(grupo.id)
+        );
+      }
+
+      const grado = grados.find(
+        (item) =>
+          String(item.id) ===
+          String(gradoAmbitoId)
+      );
+
+      return [
+        ...ambitosActuales,
+        {
+          gradoId: gradoAmbitoId,
+          grupoId: grupo.id,
+          gradoNombre: grado?.nombre || '',
+          grupoNombre: grupo.nombre || '',
+        },
+      ];
+    });
+  };
+
+  const quitarAmbitoOrientador = (
+    gradoSeleccionadoId,
+    grupoSeleccionadoId
+  ) => {
+    setAmbitosOrientador((ambitosActuales) =>
+      ambitosActuales.filter(
+        (ambito) =>
+          String(ambito.gradoId) !==
+            String(gradoSeleccionadoId) ||
+          String(ambito.grupoId) !==
+            String(grupoSeleccionadoId)
+      )
+    );
+  };
+
   const validarFormulario = () => {
     if (!nombres.trim()) {
       return 'Ingrese los nombres.';
@@ -309,6 +456,13 @@ export default function RegisterUserScreen({
     }
 
     if (
+      rol === 'orientador' &&
+      ambitosOrientador.length === 0
+    ) {
+      return 'Seleccione al menos un grado y grupo para el orientador.';
+    }
+
+    if (
       rol === 'acudiente' &&
       estudiantesSeleccionados.length === 0
     ) {
@@ -323,7 +477,7 @@ export default function RegisterUserScreen({
       validarFormulario();
 
     if (errorValidacion) {
-      Alert.alert(
+      mostrarAlerta(
         'Formulario incompleto',
         errorValidacion
       );
@@ -360,6 +514,14 @@ export default function RegisterUserScreen({
           );
       }
 
+      if (rol === 'orientador') {
+        body.ambitosOrientador =
+          ambitosOrientador.map((ambito) => ({
+            gradoId: ambito.gradoId,
+            grupoId: ambito.grupoId,
+          }));
+      }
+
       const response = await fetch(
         `${apiUrl}/api/users`,
         {
@@ -380,7 +542,7 @@ export default function RegisterUserScreen({
       const data = await response.json();
 
       if (!response.ok) {
-        Alert.alert(
+        mostrarAlerta(
           'No fue posible registrar',
           data.message ||
             'Ocurrió un error durante el registro.'
@@ -389,7 +551,7 @@ export default function RegisterUserScreen({
         return;
       }
 
-      Alert.alert(
+      mostrarAlerta(
         'Registro exitoso',
         data.message
       );
@@ -401,7 +563,7 @@ export default function RegisterUserScreen({
         error
       );
 
-      Alert.alert(
+      mostrarAlerta(
         'Sin conexión',
         'Se requiere conexión a internet para registrar usuarios.'
       );
@@ -420,6 +582,11 @@ export default function RegisterUserScreen({
     setRol('');
     setGradoId(null);
     setGrupoId(null);
+    setGradoAmbitoId(null);
+    setGruposAmbito([]);
+    setAmbitosOrientador([]);
+    setCargandoGruposAmbito(false);
+    solicitudAmbitosId.current += 1;
     setGrupos([]);
     setBusquedaEstudiante('');
     setResultadosEstudiantes([]);
@@ -432,22 +599,80 @@ export default function RegisterUserScreen({
       contentContainerStyle={styles.container}
       keyboardShouldPersistTaps="handled"
     >
-      <TouchableOpacity
-        onPress={onBack}
-        style={styles.backButton}
-      >
-        <Text style={styles.backText}>
-          ← Volver
+      {/* ENCABEZADO INSTITUCIONAL */}
+
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <TouchableOpacity
+            onPress={onBack}
+            style={styles.backButton}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Volver al panel de administración"
+          >
+            <Ionicons
+              name="arrow-back"
+              size={21}
+              color="#FFFFFF"
+            />
+
+            <Text style={styles.backText}>
+              Volver
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.headerBadge}>
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={14}
+              color="#27C4E8"
+            />
+
+            <Text style={styles.headerBadgeText}>
+              ADMIN
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.headerIcon}>
+          <Ionicons
+            name="person-add-outline"
+            size={28}
+            color="#FFFFFF"
+          />
+        </View>
+
+        <Text style={styles.title}>
+          Registrar usuario
         </Text>
-      </TouchableOpacity>
 
-      <Text style={styles.title}>
-        Registrar usuario
-      </Text>
+        <Text style={styles.subtitle}>
+          Completa la información para crear una nueva
+          cuenta institucional en AULA-AI.
+        </Text>
+      </View>
 
-      <Text style={styles.subtitle}>
-        Complete la información del nuevo usuario.
-      </Text>
+      {/* TARJETA: INFORMACIÓN PERSONAL */}
+      <View style={styles.formCard}>
+        <View style={styles.cardHeader}>
+          <View style={styles.cardIcon}>
+            <Ionicons
+              name="person-outline"
+              size={21}
+              color="#123B73"
+            />
+          </View>
+
+          <View style={styles.cardHeaderContent}>
+            <Text style={styles.cardTitle}>
+              Información personal
+            </Text>
+
+            <Text style={styles.cardSubtitle}>
+              Datos de identificación y contacto
+            </Text>
+          </View>
+        </View>
 
       <Text style={styles.label}>
         Nombres *
@@ -519,6 +744,30 @@ export default function RegisterUserScreen({
         placeholder="Número de teléfono"
         keyboardType="phone-pad"
       />
+      </View>
+      {/* FIN TARJETA: INFORMACIÓN PERSONAL */}
+
+      {/* TARJETA: ROL INSTITUCIONAL */}
+      <View style={styles.formCard}>
+        <View style={styles.cardHeader}>
+          <View style={styles.cardIcon}>
+            <Ionicons
+              name="people-outline"
+              size={21}
+              color="#123B73"
+            />
+          </View>
+
+          <View style={styles.cardHeaderContent}>
+            <Text style={styles.cardTitle}>
+              Rol institucional
+            </Text>
+
+            <Text style={styles.cardSubtitle}>
+              Selecciona el perfil del nuevo usuario
+            </Text>
+          </View>
+        </View>
 
       <Text style={styles.label}>
         Rol *
@@ -534,12 +783,19 @@ export default function RegisterUserScreen({
                 styles.optionSelected,
             ]}
             onPress={() => {
-              setRol(item);
-
-              if (item !== 'estudiante') {
+              if (item !== rol) {
+                solicitudAmbitosId.current += 1;
                 setGradoId(null);
                 setGrupoId(null);
+                setGrupos([]);
+                setGradoAmbitoId(null);
+                setGruposAmbito([]);
+                setAmbitosOrientador([]);
+                setCargandoGruposAmbito(false);
+                setEstudiantesSeleccionados([]);
               }
+
+              setRol(item);
             }}
           >
             <Text
@@ -556,11 +812,30 @@ export default function RegisterUserScreen({
         ))}
       </View>
 
+      {/* FIN TARJETA: ROL INSTITUCIONAL */}
+      </View>
+
       {rol === 'estudiante' && (
-        <>
-          <Text style={styles.sectionTitle}>
-            Información académica
-          </Text>
+        <View style={styles.formCard}>
+          <View style={styles.cardHeader}>
+            <View style={styles.cardIcon}>
+              <Ionicons
+                name="school-outline"
+                size={22}
+                color="#123B73"
+              />
+            </View>
+
+            <View style={styles.cardHeaderContent}>
+              <Text style={styles.cardTitle}>
+                Información académica
+              </Text>
+
+              <Text style={styles.cardSubtitle}>
+                Asigna el grado y grupo del estudiante
+              </Text>
+            </View>
+          </View>
 
           <Text style={styles.label}>
             Grado *
@@ -628,7 +903,153 @@ export default function RegisterUserScreen({
               </View>
             </>
           )}
-        </>
+        </View>
+      )}
+
+      {rol === 'orientador' && (
+        <View style={styles.infoBox}>
+          <Text style={styles.sectionTitle}>
+            Ámbito de atención
+          </Text>
+
+          <Text style={styles.infoText}>
+            Seleccione todos los pares de grado y
+            grupo que tendrá asignados el orientador.
+          </Text>
+
+          <Text style={styles.label}>
+            Grado *
+          </Text>
+
+          <View style={styles.optionsContainer}>
+            {grados.map((grado) => (
+              <TouchableOpacity
+                key={grado.id}
+                style={[
+                  styles.option,
+                  String(gradoAmbitoId) ===
+                    String(grado.id) &&
+                    styles.optionSelected,
+                ]}
+                onPress={() =>
+                  cargarGruposOrientador(grado.id)
+                }
+                disabled={cargandoGruposAmbito}
+                accessibilityRole="radio"
+                accessibilityState={{
+                  selected:
+                    String(gradoAmbitoId) ===
+                    String(grado.id),
+                }}
+              >
+                <Text
+                  style={[
+                    styles.optionText,
+                    String(gradoAmbitoId) ===
+                      String(grado.id) &&
+                      styles.optionTextSelected,
+                  ]}
+                >
+                  {grado.nombre}
+                </Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+
+          {gradoAmbitoId && (
+            <>
+              <Text style={styles.label}>
+                Grupos *
+              </Text>
+
+              {cargandoGruposAmbito ? (
+                <View style={styles.searchLoading}>
+                  <ActivityIndicator
+                    size="small"
+                    color="#1F4E79"
+                  />
+                  <Text style={styles.searchLoadingText}>
+                    Cargando grupos...
+                  </Text>
+                </View>
+              ) : (
+                <View style={styles.optionsContainer}>
+                  {gruposAmbito.map((grupo) => {
+                    const seleccionado =
+                      ambitosOrientador.some(
+                        (ambito) =>
+                          String(ambito.gradoId) ===
+                            String(gradoAmbitoId) &&
+                          String(ambito.grupoId) ===
+                            String(grupo.id)
+                      );
+
+                    return (
+                      <TouchableOpacity
+                        key={grupo.id}
+                        style={[
+                          styles.option,
+                          seleccionado &&
+                            styles.optionSelected,
+                        ]}
+                        onPress={() =>
+                          alternarAmbitoOrientador(grupo)
+                        }
+                        accessibilityRole="checkbox"
+                        accessibilityState={{
+                          checked: seleccionado,
+                        }}
+                      >
+                        <Text
+                          style={[
+                            styles.optionText,
+                            seleccionado &&
+                              styles.optionTextSelected,
+                          ]}
+                        >
+                          {grupo.nombre}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              )}
+            </>
+          )}
+
+          {ambitosOrientador.length > 0 && (
+            <>
+              <Text style={styles.label}>
+                Ámbitos seleccionados
+              </Text>
+
+              {ambitosOrientador.map((ambito) => (
+                <TouchableOpacity
+                  key={`${ambito.gradoId}-${ambito.grupoId}`}
+                  style={styles.studentCardSelected}
+                  onPress={() =>
+                    quitarAmbitoOrientador(
+                      ambito.gradoId,
+                      ambito.grupoId
+                    )
+                  }
+                  accessibilityRole="button"
+                  accessibilityLabel={
+                    `Quitar ${ambito.gradoNombre}, ` +
+                    `${ambito.grupoNombre}`
+                  }
+                >
+                  <Text style={styles.studentName}>
+                    {ambito.gradoNombre} · {ambito.grupoNombre}
+                  </Text>
+                  <Text style={styles.selectionTextSelected}>
+                    Tocar para quitar
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </>
+          )}
+        </View>
       )}
 
       {rol === 'acudiente' && (
@@ -742,113 +1163,231 @@ export default function RegisterUserScreen({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: '#F4F7FB',
   },
 
   container: {
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 60,
+  },
+
+  header: {
+    backgroundColor: '#091D3A',
+    paddingTop: Platform.OS === 'android' ? 55 : 75,
     paddingHorizontal: 24,
-    paddingTop: 55,
-    paddingBottom: 50,
+    paddingBottom: 35,
+    marginBottom: 25,
+  },
+
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 28,
   },
 
   backButton: {
-    alignSelf: 'flex-start',
-    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
   },
 
   backText: {
-    color: '#1F4E79',
+    color: '#FFFFFF',
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: 14,
+  },
+
+  headerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+
+  headerBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  headerIcon: {
+    width: 55,
+    height: 55,
+    borderRadius: 17,
+    backgroundColor: '#123B73',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
 
   title: {
-    fontSize: 30,
-    fontWeight: 'bold',
-    color: '#1F4E79',
-    marginBottom: 5,
+    fontSize: 27,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 9,
   },
 
   subtitle: {
-    fontSize: 15,
-    color: '#607D8B',
-    marginBottom: 30,
+    fontSize: 13,
+    lineHeight: 20,
+    color: '#D6E4F2',
+  },
+
+  formCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 22,
+    padding: 20,
+    marginHorizontal: 18,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E5ECF4',
+    shadowColor: '#091D3A',
+    shadowOffset: {
+      width: 0,
+      height: 5,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+    paddingBottom: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF2F7',
+  },
+
+  cardIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#EAF3FC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  cardHeaderContent: {
+    flex: 1,
+  },
+
+  cardTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#091D3A',
+    marginBottom: 4,
+  },
+
+  cardSubtitle: {
+    fontSize: 12,
+    color: '#718096',
+    lineHeight: 18,
   },
 
   label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#263238',
-    marginBottom: 8,
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#263B53',
+    marginBottom: 9,
   },
 
   input: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFD',
     borderWidth: 1,
-    borderColor: '#D5DCE5',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 16,
-    marginBottom: 20,
+    borderColor: '#DFE7F0',
+    borderRadius: 13,
+    paddingHorizontal: 15,
+    paddingVertical: 14,
+    fontSize: 15,
+    color: '#091D3A',
+    marginBottom: 19,
+    minHeight: 52,
   },
 
   sectionTitle: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F4E79',
-    marginTop: 15,
-    marginBottom: 20,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#091D3A',
+    marginTop: 5,
+    marginBottom: 18,
   },
 
   optionsContainer: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    marginBottom: 20,
+    marginBottom: 10,
+    gap: 9,
   },
 
   option: {
     borderWidth: 1,
-    borderColor: '#C8D1DB',
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    paddingVertical: 9,
-    marginRight: 8,
-    marginBottom: 8,
-    backgroundColor: '#FFFFFF',
+    borderColor: '#DFE7F0',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#F8FAFD',
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 
   optionSelected: {
-    backgroundColor: '#1F4E79',
-    borderColor: '#1F4E79',
+    backgroundColor: '#123B73',
+    borderColor: '#123B73',
   },
 
   optionText: {
-    color: '#455A64',
-    fontSize: 14,
+    color: '#52657B',
+    fontSize: 13,
+    fontWeight: '600',
   },
 
   optionTextSelected: {
     color: '#FFFFFF',
-    fontWeight: '600',
+    fontWeight: '700',
   },
 
   infoBox: {
-    backgroundColor: '#EAF1F8',
-    borderRadius: 10,
-    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 20,
+    marginHorizontal: 18,
     marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E5ECF4',
+    shadowColor: '#091D3A',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
 
   infoTitle: {
-    color: '#1F4E79',
-    fontWeight: 'bold',
-    marginBottom: 5,
+    color: '#091D3A',
+    fontSize: 18,
+    fontWeight: '800',
+    marginBottom: 10,
   },
 
   infoText: {
-    color: '#455A64',
-    lineHeight: 20,
+    color: '#64748B',
+    fontSize: 13,
+    lineHeight: 21,
+    marginBottom: 15,
   },
 
   searchLoading: {
@@ -864,22 +1403,33 @@ const styles = StyleSheet.create({
   },
 
   submitButton: {
-    backgroundColor: '#1F4E79',
-    minHeight: 52,
-    borderRadius: 10,
+    backgroundColor: '#123B73',
+    minHeight: 56,
+    borderRadius: 15,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 10,
+    marginTop: 12,
+    marginHorizontal: 18,
+    marginBottom: 20,
+    shadowColor: '#091D3A',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
   },
 
   submitButtonDisabled: {
-    opacity: 0.7,
+    opacity: 0.65,
   },
 
   submitText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 0.2,
   },
 
   searchButton: {
@@ -896,11 +1446,11 @@ const styles = StyleSheet.create({
   },
 
   studentCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFD',
     borderWidth: 1,
-    borderColor: '#D5DCE5',
-    borderRadius: 10,
-    padding: 14,
+    borderColor: '#DFE7F0',
+    borderRadius: 14,
+    padding: 16,
     marginBottom: 10,
   },
 
@@ -917,9 +1467,12 @@ const styles = StyleSheet.create({
   },
 
   studentCardSelected: {
-    borderColor: '#1F4E79',
-    borderWidth: 2,
-    backgroundColor: '#EAF1F8',
+    borderColor: '#123B73',
+    borderWidth: 1.5,
+    borderRadius: 14,
+    backgroundColor: '#EAF3FC',
+    padding: 16,
+    marginBottom: 10,
   },
 
   selectionText: {
@@ -930,6 +1483,7 @@ const styles = StyleSheet.create({
   },
 
   selectionTextSelected: {
-    color: '#1F4E79',
+    color: '#123B73',
+    fontWeight: '700',
   },
 });

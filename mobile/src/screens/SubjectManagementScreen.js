@@ -15,6 +15,8 @@ import {
   View,
 } from 'react-native';
 
+import { Ionicons } from '@expo/vector-icons';
+
 export default function SubjectManagementScreen({
   accessToken,
   apiUrl,
@@ -121,40 +123,137 @@ export default function SubjectManagementScreen({
         styles.container
       }
     >
-      <TouchableOpacity
-        onPress={onBack}
-        style={styles.backButton}
-      >
-        <Text style={styles.backText}>
-          ← Volver
+      {/* ENCABEZADO INSTITUCIONAL */}
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
+          <TouchableOpacity
+            onPress={onBack}
+            style={styles.backButton}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Volver al panel de administración"
+          >
+            <Ionicons
+              name="arrow-back"
+              size={21}
+              color="#FFFFFF"
+            />
+
+            <Text style={styles.backText}>
+              Volver
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.headerBadge}>
+            <Ionicons
+              name="shield-checkmark-outline"
+              size={14}
+              color="#27C4E8"
+            />
+
+            <Text style={styles.headerBadgeText}>
+              ADMIN
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.headerIcon}>
+          <Ionicons
+            name="library-outline"
+            size={28}
+            color="#FFFFFF"
+          />
+        </View>
+
+        <Text style={styles.title}>
+          Gestión de materias
         </Text>
-      </TouchableOpacity>
 
-      <Text style={styles.title}>
-        Gestión de Materias
-      </Text>
+        <Text style={styles.subtitle}>
+          Consulta, registra y administra las materias
+          académicas de la institución.
+        </Text>
+      </View>
 
-      <Text style={styles.subtitle}>
-        Consulte y administre las materias de la institución.
-      </Text>
-
+      {/* ACCIÓN PRINCIPAL */}
       <TouchableOpacity
         style={styles.registerButton}
         onPress={onRegisterSubject}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel="Registrar nueva materia"
       >
-        <Text
-          style={styles.registerButtonText}
-        >
-          + Registrar materia
+        <Ionicons
+          name="add-circle-outline"
+          size={23}
+          color="#FFFFFF"
+        />
+
+        <Text style={styles.registerButtonText}>
+          Registrar nueva materia
         </Text>
+
+        <Ionicons
+          name="arrow-forward"
+          size={19}
+          color="#FFFFFF"
+        />
       </TouchableOpacity>
 
-      <TextInput
-        style={styles.searchInput}
-        value={busqueda}
-        onChangeText={setBusqueda}
-        placeholder="Buscar por materia, grado, grupo o periodo"
-      />
+      {/* BUSCADOR DE MATERIAS */}
+      <View style={styles.searchCard}>
+        <View style={styles.searchHeader}>
+          <View style={styles.searchIconBox}>
+            <Ionicons
+              name="search-outline"
+              size={21}
+              color="#123B73"
+            />
+          </View>
+
+          <View style={styles.searchHeaderContent}>
+            <Text style={styles.searchTitle}>
+              Buscar materias
+            </Text>
+
+            <Text style={styles.searchSubtitle}>
+              Encuentra materias por sus datos académicos
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.searchInputContainer}>
+          <Ionicons
+            name="search"
+            size={19}
+            color="#718096"
+          />
+
+          <TextInput
+            style={styles.searchInput}
+            value={busqueda}
+            onChangeText={setBusqueda}
+            placeholder="Materia, grado, grupo o período"
+            placeholderTextColor="#94A3B8"
+            autoCapitalize="none"
+            returnKeyType="search"
+          />
+
+          {busqueda.length > 0 && (
+            <TouchableOpacity
+              onPress={() => setBusqueda('')}
+              accessibilityRole="button"
+              accessibilityLabel="Limpiar búsqueda"
+            >
+              <Ionicons
+                name="close-circle"
+                size={20}
+                color="#94A3B8"
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
 
       {cargando ? (
         <View style={styles.loadingBox}>
@@ -182,60 +281,166 @@ export default function SubjectManagementScreen({
             key={item.id}
             style={styles.card}
           >
-            <Text style={styles.subjectName}>
-              {item.materia?.nombre}
-            </Text>
+            {/* ENCABEZADO DE LA MATERIA */}
+            <View style={styles.subjectHeader}>
+              <View style={styles.subjectIcon}>
+                <Ionicons
+                  name="book-outline"
+                  size={23}
+                  color="#123B73"
+                />
+              </View>
 
-            <Text style={styles.cardText}>
-              Grado:{' '}
-              {item.grado?.nombre}
-            </Text>
-
-            <Text style={styles.cardText}>
-              Grupo:{' '}
-              {item.grupo?.nombre}
-            </Text>
-
-            <Text style={styles.cardText}>
-              Periodo:{' '}
-              {item.periodo?.nombre}
-            </Text>
-
-            <Text style={styles.cardText}>
-              Estado:{' '}
-              {item.estado}
-            </Text>
-
-            <Text style={styles.cardLabel}>
-              Docentes responsables:
-            </Text>
-
-            {item.docentes?.map(
-              (relacion) => (
-                <Text
-                  key={
-                    relacion.docente?.id
-                  }
-                  style={styles.teacherText}
-                >
-                  •{' '}
-                  {relacion.docente
-                    ?.nombres}{' '}
-                  {relacion.docente
-                    ?.apellidos}
+              <View style={styles.subjectHeaderContent}>
+                <Text style={styles.subjectName}>
+                  {item.materia?.nombre || 'Materia sin nombre'}
                 </Text>
-              )
-            )}
 
+                <Text style={styles.subjectCaption}>
+                  Información académica
+                </Text>
+              </View>
+            </View>
+
+            {/* INFORMACIÓN ACADÉMICA */}
+            <View style={styles.subjectDetails}>
+              <View style={styles.detailRow}>
+                <Ionicons
+                  name="school-outline"
+                  size={18}
+                  color="#64748B"
+                />
+                <Text style={styles.detailLabel}>
+                  Grado:
+                </Text>
+                <Text style={styles.detailValue}>
+                  {item.grado?.nombre || 'Sin asignar'}
+                </Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Ionicons
+                  name="people-outline"
+                  size={18}
+                  color="#64748B"
+                />
+                <Text style={styles.detailLabel}>
+                  Grupo:
+                </Text>
+                <Text style={styles.detailValue}>
+                  {item.grupo?.nombre || 'Sin asignar'}
+                </Text>
+              </View>
+
+              <View style={styles.detailRow}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={18}
+                  color="#64748B"
+                />
+                <Text style={styles.detailLabel}>
+                  Período:
+                </Text>
+                <Text style={styles.detailValue}>
+                  {item.periodo?.nombre || 'Sin asignar'}
+                </Text>
+              </View>
+            </View>
+
+            {/* ESTADO */}
+            <View style={styles.statusRow}>
+              <Text style={styles.statusLabel}>
+                Estado de la materia
+              </Text>
+
+              <View
+                style={[
+                  styles.statusBadge,
+                  String(item.estado || '').toLowerCase() === 'activo'
+                    ? styles.statusActive
+                    : styles.statusInactive,
+                ]}
+              >
+                <View
+                  style={[
+                    styles.statusDot,
+                    String(item.estado || '').toLowerCase() === 'activo'
+                      ? styles.statusDotActive
+                      : styles.statusDotInactive,
+                  ]}
+                />
+
+                <Text
+                  style={[
+                    styles.statusText,
+                    String(item.estado || '').toLowerCase() === 'activo'
+                      ? styles.statusTextActive
+                      : styles.statusTextInactive,
+                  ]}
+                >
+                  {item.estado || 'Sin estado'}
+                </Text>
+              </View>
+            </View>
+
+            {/* DOCENTES RESPONSABLES */}
+            <View style={styles.teachersSection}>
+              <View style={styles.teachersHeader}>
+                <Ionicons
+                  name="person-outline"
+                  size={18}
+                  color="#123B73"
+                />
+
+                <Text style={styles.teachersTitle}>
+                  Docentes responsables
+                </Text>
+              </View>
+
+              {item.docentes?.length > 0 ? (
+                item.docentes.map((relacion, index) => (
+                  <View
+                    key={`${relacion.docente?.id || 'docente'}-${index}`}
+                    style={styles.teacherRow}
+                  >
+                    <View style={styles.teacherDot} />
+
+                    <Text style={styles.teacherName}>
+                      {relacion.docente?.nombres}{' '}
+                      {relacion.docente?.apellidos}
+                    </Text>
+                  </View>
+                ))
+              ) : (
+                <Text style={styles.noTeachersText}>
+                  No hay docentes asignados.
+                </Text>
+              )}
+            </View>
+
+            {/* EDITAR MATERIA */}
             <TouchableOpacity
               style={styles.editButton}
-              onPress={() =>
-                onEditSubject(item)
-              }
+              onPress={() => onEditSubject(item)}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel={`Editar materia ${item.materia?.nombre || ''}`}
             >
+              <Ionicons
+                name="create-outline"
+                size={19}
+                color="#123B73"
+              />
+
               <Text style={styles.editButtonText}>
                 Editar materia
               </Text>
+
+              <Ionicons
+                name="chevron-forward"
+                size={17}
+                color="#123B73"
+              />
             </TouchableOpacity>
           </View>
         ))
@@ -247,63 +452,182 @@ export default function SubjectManagementScreen({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: '#F4F7FB',
   },
 
   container: {
-    paddingHorizontal: 24,
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 60,
+  },
+
+  header: {
+    backgroundColor: '#091D3A',
     paddingTop: 55,
-    paddingBottom: 50,
+    paddingHorizontal: 24,
+    paddingBottom: 35,
+    marginBottom: 25,
+  },
+
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 28,
   },
 
   backButton: {
-    alignSelf: 'flex-start',
-    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
   },
 
   backText: {
-    color: '#1F4E79',
+    color: '#FFFFFF',
     fontWeight: '600',
-    fontSize: 16,
+    fontSize: 14,
+  },
+
+  headerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+
+  headerBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+  },
+
+  headerIcon: {
+    width: 55,
+    height: 55,
+    borderRadius: 17,
+    backgroundColor: '#123B73',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
   },
 
   title: {
-    fontSize: 30,
-    fontWeight: 'bold',
-    color: '#1F4E79',
-    marginBottom: 5,
+    fontSize: 27,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 9,
   },
 
   subtitle: {
-    fontSize: 15,
-    color: '#607D8B',
-    lineHeight: 21,
-    marginBottom: 25,
+    fontSize: 13,
+    lineHeight: 20,
+    color: '#D6E4F2',
   },
 
   registerButton: {
-    backgroundColor: '#1F4E79',
-    paddingVertical: 14,
-    borderRadius: 10,
+    backgroundColor: '#123B73',
+    minHeight: 58,
+    borderRadius: 16,
+    marginHorizontal: 18,
+    marginBottom: 20,
+    paddingHorizontal: 18,
+    flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 25,
+    justifyContent: 'center',
+    gap: 11,
+    shadowColor: '#091D3A',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    elevation: 3,
   },
 
   registerButtonText: {
+    flexShrink: 1,
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: 'bold',
+    fontSize: 15,
+    fontWeight: '800',
+    textAlign: 'center',
+  },
+
+  searchCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 20,
+    padding: 18,
+    marginHorizontal: 18,
+    marginBottom: 22,
+    borderWidth: 1,
+    borderColor: '#E5ECF4',
+    shadowColor: '#091D3A',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+
+  searchHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 18,
+  },
+
+  searchIconBox: {
+    width: 43,
+    height: 43,
+    borderRadius: 13,
+    backgroundColor: '#EAF3FC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  searchHeaderContent: {
+    flex: 1,
+  },
+
+  searchTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#091D3A',
+    marginBottom: 4,
+  },
+
+  searchSubtitle: {
+    fontSize: 12,
+    lineHeight: 18,
+    color: '#718096',
+  },
+
+  searchInputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFD',
+    borderWidth: 1,
+    borderColor: '#DFE7F0',
+    borderRadius: 13,
+    paddingHorizontal: 14,
+    minHeight: 53,
+    gap: 10,
   },
 
   searchInput: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D5DCE5',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 16,
-    marginBottom: 20,
+    flex: 1,
+    minWidth: 0,
+    color: '#091D3A',
+    fontSize: 14,
+    paddingVertical: 12,
   },
 
   loadingBox: {
@@ -318,8 +642,11 @@ const styles = StyleSheet.create({
 
   emptyBox: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
+    borderRadius: 18,
+    padding: 22,
+    marginHorizontal: 18,
+    borderWidth: 1,
+    borderColor: '#E5ECF4',
   },
 
   emptyTitle: {
@@ -334,20 +661,192 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
 
+  subjectHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingBottom: 17,
+    marginBottom: 18,
+    borderBottomWidth: 1,
+    borderBottomColor: '#EEF2F7',
+  },
+
+  subjectIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 15,
+    backgroundColor: '#EAF3FC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  subjectHeaderContent: {
+    flex: 1,
+  },
+
+  subjectCaption: {
+    fontSize: 12,
+    color: '#718096',
+  },
+
+  subjectDetails: {
+    backgroundColor: '#F8FAFD',
+    borderRadius: 14,
+    padding: 15,
+    marginBottom: 17,
+  },
+
+  detailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    gap: 9,
+  },
+
+  detailLabel: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+
+  detailValue: {
+    flex: 1,
+    fontSize: 13,
+    color: '#091D3A',
+    fontWeight: '700',
+    textAlign: 'right',
+  },
+
+  statusRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+    gap: 10,
+  },
+
+  statusLabel: {
+    flex: 1,
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 20,
+    gap: 6,
+  },
+
+  statusActive: {
+    backgroundColor: '#E7F8EF',
+  },
+
+  statusInactive: {
+    backgroundColor: '#F1F5F9',
+  },
+
+  statusDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+
+  statusDotActive: {
+    backgroundColor: '#16A34A',
+  },
+
+  statusDotInactive: {
+    backgroundColor: '#64748B',
+  },
+
+  statusText: {
+    fontSize: 12,
+    fontWeight: '800',
+    textTransform: 'capitalize',
+  },
+
+  statusTextActive: {
+    color: '#15803D',
+  },
+
+  statusTextInactive: {
+    color: '#475569',
+  },
+
+  teachersSection: {
+    borderTopWidth: 1,
+    borderTopColor: '#EEF2F7',
+    paddingTop: 17,
+    marginBottom: 18,
+  },
+
+  teachersHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 12,
+  },
+
+  teachersTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#091D3A',
+  },
+
+  teacherRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 9,
+    gap: 9,
+  },
+
+  teacherDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: '#27C4E8',
+  },
+
+  teacherName: {
+    flex: 1,
+    color: '#475569',
+    fontSize: 13,
+    lineHeight: 19,
+  },
+
+  noTeachersText: {
+    fontSize: 13,
+    color: '#94A3B8',
+    fontStyle: 'italic',
+  },
+
   card: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
+    borderRadius: 18,
     padding: 18,
+    marginHorizontal: 18,
     marginBottom: 15,
     borderWidth: 1,
-    borderColor: '#E0E5EB',
+    borderColor: '#E5ECF4',
+    shadowColor: '#091D3A',
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
 
   subjectName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F4E79',
-    marginBottom: 12,
+    fontSize: 18,
+    fontWeight: '800',
+    color: '#091D3A',
+    marginBottom: 5,
   },
 
   cardText: {
@@ -368,17 +867,21 @@ const styles = StyleSheet.create({
   },
 
   editButton: {
-    marginTop: 15,
+    backgroundColor: '#EAF3FC',
     borderWidth: 1,
-    borderColor: '#1F4E79',
-    borderRadius: 10,
-    paddingVertical: 11,
+    borderColor: '#D5E5F7',
+    borderRadius: 13,
+    minHeight: 48,
+    paddingHorizontal: 15,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 9,
   },
 
   editButtonText: {
-    color: '#1F4E79',
-    fontWeight: 'bold',
+    color: '#123B73',
+    fontWeight: '800',
     fontSize: 14,
   },
 });

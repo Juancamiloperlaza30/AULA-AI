@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes"
+  />
+  <title>AULA-AI | Visor de soportes</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 12px;
+      background: #f1f5f9;
+      font-family: Arial, sans-serif;
+    }
+    #estado {
+      padding: 12px;
+      text-align: center;
+      color: #263b4d;
+      font-size: 13px;
+    }
+    #paginas {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 14px;
+    }
+    canvas {
+      display: block;
+      max-width: 100%;
+      height: auto !important;
+      background: white;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.12);
+    }
+  </style>
+</head>
+<body>
+  <script>
+    window.addEventListener('error', function (evento) {
+      const mensaje =
+        evento.message ||
+        'Error desconocido al cargar el visor PDF.';
+
+      const estado = document.getElementById('estado');
+
+      if (estado) {
+        estado.textContent = 'Error del visor: ' + mensaje;
+      }
+
+      window.ReactNativeWebView?.postMessage(
+        JSON.stringify({
+          tipo: 'error',
+          mensaje: 'Error del visor: ' + mensaje
+        })
+      );
+    });
+
+    window.addEventListener('unhandledrejection', function (evento) {
+      const mensaje =
+        evento.reason?.message ||
+        String(evento.reason || 'Error al cargar PDF.js');
+
+      const estado = document.getElementById('estado');
+
+      if (estado) {
+        estado.textContent = 'Error del visor: ' + mensaje;
+      }
+
+      window.ReactNativeWebView?.postMessage(
+        JSON.stringify({
+          tipo: 'error',
+          mensaje: 'Error del visor: ' + mensaje
+        })
+      );
+    });
+  </script>
+  <div id="estado">Preparando visor seguro...</div>
+  <div id="paginas"></div>
+
+  <script type="module">
+    import * as pdfjsLib from './pdf.min.js';
+
+    pdfjsLib.GlobalWorkerOptions.workerSrc = './pdf.worker.min.js';
+
+    const estado = document.getElementById('estado');
+    const contenedor = document.getElementById('paginas');
+
+    function comunicar(tipo, mensaje) {
+      window.ReactNativeWebView?.postMessage(
+        JSON.stringify({ tipo, mensaje })
+      );
+    }
+
+    async function mostrarPDF(base64) {
+      try {
+        estado.style.display = 'block';
+        estado.textContent = 'Procesando documento...';
+        contenedor.replaceChildren();
+
+        const binario = atob(base64);
+        const bytes = new Uint8Array(binario.length);
+
+        for (let i = 0; i < binario.length; i++) {
+          bytes[i] = binario.charCodeAt(i);
+        }
+
+        const pdf = await pdfjsLib.getDocument({
+          data: bytes,
+          isEvalSupported: false,
+          useSystemFonts: false,
+        }).promise;
+
+        estado.textContent = `Cargando ${pdf.numPages} página(s)...`;
+
+        for (let numero = 1; numero <= pdf.numPages; numero++) {
+          const pagina = await pdf.getPage(numero);
+          const ancho = Math.max(
+            280,
+            document.documentElement.clientWidth - 24
+          );
+          const original = pagina.getViewport({ scale: 1 });
+          const escala = ancho / original.width;
+          const densidad = Math.min(window.devicePixelRatio || 1, 2);
+          const viewport = pagina.getViewport({
+            scale: escala * densidad,
+          });
+
+          const canvas = document.createElement('canvas');
+          const contexto = canvas.getContext('2d');
+
+          canvas.width = Math.floor(viewport.width);
+          canvas.height = Math.floor(viewport.height);
+          canvas.style.width = `${ancho}px`;
+          canvas.style.height = 'auto';
+
+          contenedor.appendChild(canvas);
+
+          await pagina.render({
+            canvasContext: contexto,
+            viewport,
+          }).promise;
+        }
+
+        estado.textContent = `${pdf.numPages} página(s) disponibles`;
+        comunicar('listo', 'Documento cargado correctamente.');
+      } catch (error) {
+        estado.textContent =
+          error?.message || 'No fue posible mostrar el documento.';
+        comunicar('error', estado.textContent);
+      }
+    }
+
+    window.addEventListener('message', (evento) => {
+      try {
+        const datos = JSON.parse(evento.data);
+        if (datos.tipo === 'pdf') mostrarPDF(datos.base64);
+      } catch {
+        comunicar('error', 'No se pudo recibir el documento.');
+      }
+    });
+
+    document.addEventListener('message', (evento) => {
+      try {
+        const datos = JSON.parse(evento.data);
+        if (datos.tipo === 'pdf') mostrarPDF(datos.base64);
+      } catch {
+        comunicar('error', 'No se pudo recibir el documento.');
+      }
+    });
+
+    comunicar(
+      'preparado',
+      'Motor PDF.js 4.10.38 cargado correctamente.'
+    );
+  </script>
+</body>
+</html>

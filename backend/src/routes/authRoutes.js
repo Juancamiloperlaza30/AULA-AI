@@ -6,6 +6,8 @@ const {
 	recuperarPassword,
 	renovarSesion,
 	actualizarPassword,
+	cambiarPasswordInicial,
+	confirmarRecuperacionPassword,
 } = require('../controllers/authController');
 
 const {
@@ -40,6 +42,18 @@ router.post(
 	actualizarPassword
 );
 
+router.put(
+	'/cambiar-password-inicial',
+	verificarToken,
+	cambiarPasswordInicial
+);
+
+router.put(
+	'/confirmar-recuperacion-password',
+	verificarToken,
+	confirmarRecuperacionPassword
+);
+
 // Consultar la sesión y perfil actual del usuario
 router.get(
 	'/me',
@@ -55,6 +69,10 @@ router.get(
 				correo: req.usuario.correo,
 				rol: req.usuario.rol,
 				activo: req.usuario.activo,
+				debeCambiarPassword:
+					req.usuario.debe_cambiar_password === true,
+				passwordCambiadoAt:
+					req.usuario.password_cambiado_at || null,
 			},
 		});
 	}

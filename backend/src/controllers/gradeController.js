@@ -260,11 +260,145 @@ const listarEstudiantesActividadDocente =
         });
       }
 
+      // 4. Consultar calificaciones ya registradas
+      const estudianteIds =
+        (estudiantes || []).map(
+          (estudiante) =>
+            estudiante.usuario_id
+        );
+
+      let calificacionesExistentes = [];
+
+      if (estudianteIds.length > 0) {
+        const {
+          data: notas,
+          error: errorNotas,
+        } = await supabaseAdmin
+          .from('calificaciones')
+          .select(`
+            id,
+            estudiante_id,
+            valor,
+            retroalimentacion,
+            estado,
+            created_at,
+            updated_at
+          `)
+          .eq(
+            'actividad_id',
+            actividadId
+          )
+          .eq(
+            'estado',
+            'registrada'
+          )
+          .in(
+            'estudiante_id',
+            estudianteIds
+          )
+          .order(
+            'updated_at',
+            {
+              ascending: false,
+            }
+          );
+
+        if (errorNotas) {
+          console.error(
+            'Error consultando calificaciones existentes:',
+            errorNotas.message
+          );
+
+          return res.status(500).json({
+            success: false,
+            message:
+              'No fue posible consultar las calificaciones existentes.',
+          });
+        }
+
+        calificacionesExistentes =
+          notas || [];
+      }
+
+      // 5. Relacionar cada estudiante
+      //    con su calificación existente
+      const notasPorEstudiante =
+        new Map();
+
+      calificacionesExistentes.forEach(
+        (nota) => {
+          const clave =
+            String(
+              nota.estudiante_id
+            );
+
+          // Como vienen ordenadas por
+          // updated_at descendente,
+          // conservamos la más reciente.
+          if (
+            !notasPorEstudiante.has(
+              clave
+            )
+          ) {
+            notasPorEstudiante.set(
+              clave,
+              nota
+            );
+          }
+        }
+      );
+
+      const estudiantesConCalificacion =
+        (estudiantes || []).map(
+          (estudiante) => {
+            const usuario =
+              Array.isArray(
+                estudiante.usuario
+              )
+                ? estudiante.usuario[0]
+                : estudiante.usuario;
+
+            const nota =
+              notasPorEstudiante.get(
+                String(
+                  estudiante.usuario_id
+                )
+              );
+
+            return {
+              usuario_id:
+                estudiante.usuario_id,
+
+              usuario,
+
+              calificacion:
+                nota
+                  ? {
+                      id:
+                        nota.id,
+
+                      valor:
+                        Number(
+                          nota.valor
+                        ),
+
+                      retroalimentacion:
+                        nota.retroalimentacion ||
+                        '',
+
+                      updated_at:
+                        nota.updated_at,
+                    }
+                  : null,
+            };
+          }
+        );
+
       return res.status(200).json({
         success: true,
         actividadId,
         estudiantes:
-          estudiantes || [],
+          estudiantesConCalificacion,
       });
     } catch (error) {
       console.error(
@@ -375,14 +509,16 @@ const registrarCalificacionesMasivas =
 
         if (
           !item.estudianteId ||
-          Number.isNaN(valor) ||
+          !Number.isFinite(valor) ||
           valor < 0 ||
           valor > 5
         ) {
           return res.status(400).json({
             success: false,
             message:
-              'Existe una calificación inválida. La nota debe estar entre 0.00 y 5.00.',
+              valor < 0
+                ? 'No se permiten calificaciones negativas. La nota debe estar entre 0.00 y 5.00.'
+                : 'Existe una calificación inválida. La nota debe estar entre 0.00 y 5.00.',
           });
         }
 
@@ -427,52 +563,250 @@ const registrarCalificacionesMasivas =
         }
       }
 
-      // 3. Registro transaccional en PostgreSQL
-      const {
-        data: calificacionesRegistradas,
-        error: errorRegistro,
-      } = await supabaseAdmin.rpc(
-        'registrar_calificaciones_masivas',
-        {
-          p_actividad_id:
-            actividadId,
-          p_docente_id:
-            docenteId,
-          p_calificaciones:
-            calificaciones,
-        }
-      );
-
-      if (errorRegistro) {
-        console.error(
-          'Error registrando calificaciones:',
-          errorRegistro.message
+      // 3. Separar calificaciones nuevas de las ya registradas.
+      const estudianteIds =
+        calificaciones.map(
+          (item) =>
+            item.estudianteId
         );
 
-        if (
-          errorRegistro.code ===
-          '23505'
-        ) {
-          return res.status(409).json({
-            success: false,
-            message:
-              'Ya existe una calificación registrada para uno de los estudiantes.',
-          });
-        }
+      const {
+        data: calificacionesExistentes,
+        error: errorExistentes,
+      } = await supabaseAdmin
+        .from('calificaciones')
+        .select(`
+          id,
+          estudiante_id,
+          valor,
+          retroalimentacion,
+          estado
+        `)
+        .eq(
+          'actividad_id',
+          actividadId
+        )
+        .eq(
+          'estado',
+          'registrada'
+        )
+        .in(
+          'estudiante_id',
+          estudianteIds
+        );
+
+      if (errorExistentes) {
+        console.error(
+          'Error consultando calificaciones existentes:',
+          errorExistentes.message
+        );
 
         return res.status(500).json({
           success: false,
           message:
-            'No fue posible registrar las calificaciones.',
+            'No fue posible consultar las calificaciones existentes.',
         });
       }
 
-      return res.status(201).json({
+      const existentesPorEstudiante =
+        new Map(
+          (calificacionesExistentes || [])
+            .map(
+              (calificacion) => [
+                String(
+                  calificacion.estudiante_id
+                ),
+                calificacion,
+              ]
+            )
+        );
+
+      const calificacionesNuevas = [];
+      const calificacionesActualizadas = [];
+
+      for (const item of calificaciones) {
+        const calificacionExistente =
+          existentesPorEstudiante.get(
+            String(
+              item.estudianteId
+            )
+          );
+
+        if (!calificacionExistente) {
+          calificacionesNuevas.push(item);
+          continue;
+        }
+
+        const valorNuevo =
+          Number(item.valor);
+
+        const retroalimentacionNueva =
+          item.retroalimentacion?.trim() ||
+          null;
+
+        if (
+          Number(calificacionExistente.valor) ===
+            valorNuevo &&
+          (
+            calificacionExistente
+              .retroalimentacion || null
+          ) ===
+            retroalimentacionNueva
+        ) {
+          calificacionesActualizadas.push(
+            calificacionExistente
+          );
+
+          continue;
+        }
+
+        const {
+          data: calificacionActualizada,
+          error: errorActualizacion,
+        } = await supabaseAdmin
+          .from('calificaciones')
+          .update({
+            valor:
+              valorNuevo,
+            retroalimentacion:
+              retroalimentacionNueva,
+            updated_at:
+              new Date().toISOString(),
+          })
+          .eq(
+            'id',
+            calificacionExistente.id
+          )
+          .select(`
+            id,
+            estudiante_id,
+            valor,
+            retroalimentacion,
+            estado,
+            created_at,
+            updated_at
+          `)
+          .maybeSingle();
+
+        if (errorActualizacion) {
+          console.error(
+            'Error actualizando calificación del docente:',
+            errorActualizacion.message
+          );
+
+          return res.status(500).json({
+            success: false,
+            message:
+              'No fue posible actualizar una calificación existente.',
+          });
+        }
+
+        if (!calificacionActualizada) {
+          return res.status(409).json({
+            success: false,
+            message:
+              'La calificación cambió o dejó de estar disponible. Actualice la actividad e inténtelo de nuevo.',
+          });
+        }
+
+        calificacionesActualizadas.push(
+          calificacionActualizada
+        );
+
+        const {
+          error: errorHistorial,
+        } = await supabaseAdmin
+          .from(
+            'calificaciones_historial'
+          )
+          .insert({
+            calificacion_id:
+              calificacionExistente.id,
+            usuario_id:
+              docenteId,
+            valor_anterior:
+              calificacionExistente.valor,
+            valor_nuevo:
+              valorNuevo,
+            retroalimentacion_anterior:
+              calificacionExistente
+                .retroalimentacion,
+            retroalimentacion_nueva:
+              retroalimentacionNueva,
+            motivo:
+              'Calificación actualizada por el docente.',
+            rol_usuario:
+              'docente',
+          });
+
+        if (errorHistorial) {
+          console.error(
+            'Error registrando historial de calificación:',
+            errorHistorial.message
+          );
+        }
+      }
+
+      // Las calificaciones nuevas conservan el registro transaccional existente.
+      let calificacionesRegistradas = [];
+
+      if (calificacionesNuevas.length > 0) {
+        const {
+          data,
+          error: errorRegistro,
+        } = await supabaseAdmin.rpc(
+          'registrar_calificaciones_masivas',
+          {
+            p_actividad_id:
+              actividadId,
+            p_docente_id:
+              docenteId,
+            p_calificaciones:
+              calificacionesNuevas,
+          }
+        );
+
+        if (errorRegistro) {
+          console.error(
+            'Error registrando calificaciones:',
+            errorRegistro.message
+          );
+
+          if (
+            errorRegistro.code ===
+            '23505'
+          ) {
+            return res.status(409).json({
+              success: false,
+              message:
+                'La calificación ya existe o fue registrada por otro proceso. Actualice la actividad e inténtelo de nuevo.',
+            });
+          }
+
+          return res.status(500).json({
+            success: false,
+            message:
+              'No fue posible registrar las calificaciones.',
+          });
+        }
+
+        calificacionesRegistradas =
+          data || [];
+      }
+
+      return res.status(
+        calificacionesNuevas.length > 0
+          ? 201
+          : 200
+      ).json({
         success: true,
         message:
-          'Calificaciones registradas correctamente.',
+          'Calificaciones guardadas correctamente.',
         calificaciones:
-          calificacionesRegistradas || [],
+          [
+            ...calificacionesActualizadas,
+            ...calificacionesRegistradas,
+          ],
       });
     } catch (error) {
       console.error(
@@ -493,6 +827,35 @@ const listarCalificacionesEstudiante =
     try {
       const usuarioId =
         req.usuario.id;
+
+      const {
+        periodoId,
+      } = req.query;
+
+      const periodoIdSolicitado =
+        periodoId
+          ? Number(periodoId)
+          : null;
+
+      if (
+        periodoId &&
+        (
+          !Number.isInteger(
+            periodoIdSolicitado
+          ) ||
+          periodoIdSolicitado <= 0
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'El periodo académico no es válido.',
+        });
+      }
+
+      // ================================
+      // 1. VALIDAR ESTUDIANTE
+      // ================================
 
       const {
         data: estudiante,
@@ -531,6 +894,90 @@ const listarCalificacionesEstudiante =
         });
       }
 
+      // =====================================
+      // 2. CONSULTAR PERIODOS ACADÉMICOS
+      // =====================================
+
+      const {
+        data: periodos,
+        error: errorPeriodos,
+      } = await supabaseAdmin
+        .from('periodos_academicos')
+        .select(`
+          id,
+          nombre,
+          fecha_inicio,
+          fecha_fin,
+          activo
+        `)
+        .order(
+          'fecha_inicio',
+          {
+            ascending: true,
+          }
+        );
+
+      if (errorPeriodos) {
+        console.error(
+          'Error consultando periodos:',
+          errorPeriodos.message
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            'No fue posible consultar los periodos académicos.',
+        });
+      }
+
+      const listaPeriodos =
+        periodos || [];
+
+      // =====================================
+      // 3. DETERMINAR PERIODO ACTUAL
+      // =====================================
+
+      const hoy =
+        new Date();
+
+      let periodoActual =
+        null;
+
+      if (periodoIdSolicitado) {
+        periodoActual =
+          listaPeriodos.find(
+            (periodo) =>
+              Number(periodo.id) ===
+              periodoIdSolicitado
+          ) || null;
+      }
+
+      if (!periodoActual) {
+        periodoActual =
+          listaPeriodos.find(
+            (periodo) => {
+              const inicio =
+                new Date(
+                  `${periodo.fecha_inicio}T00:00:00`
+                );
+
+              const fin =
+                new Date(
+                  `${periodo.fecha_fin}T23:59:59`
+                );
+
+              return (
+                hoy >= inicio &&
+                hoy <= fin
+              );
+            }
+          ) || null;
+      }
+
+      // =====================================
+      // 4. CONSULTAR TODAS LAS CALIFICACIONES
+      // =====================================
+
       const {
         data: calificaciones,
         error: errorCalificaciones,
@@ -550,7 +997,11 @@ const listarCalificacionesEstudiante =
             descripcion,
             fecha_publicacion,
             fecha_entrega,
+            estado,
+            es_evaluable,
             materia_grupo_periodo:materia_grupo_periodo_id (
+              id,
+              periodo_id,
               materia:materias (
                 id,
                 nombre
@@ -594,10 +1045,347 @@ const listarCalificacionesEstudiante =
         });
       }
 
+      const listaCalificaciones =
+        calificaciones || [];
+
+      // =====================================
+      // 5. AGRUPAR NOTAS POR PERIODO Y MATERIA
+      // =====================================
+
+      const grupos = {};
+
+      listaCalificaciones.forEach(
+        (calificacion) => {
+          const actividad =
+            Array.isArray(calificacion.actividad)
+              ? calificacion.actividad[0]
+              : calificacion.actividad;
+
+          // HU-08:
+          // Solo las actividades publicadas y
+          // evaluables participan en promedios.
+          if (
+            !actividad ||
+            actividad.estado !== 'publicada' ||
+            actividad.es_evaluable !== true
+          ) {
+            return;
+          }
+
+          const asignacion =
+            Array.isArray(
+              actividad
+                ?.materia_grupo_periodo
+            )
+              ? actividad
+                  .materia_grupo_periodo[0]
+              : actividad
+                  ?.materia_grupo_periodo;
+
+          if (!asignacion) {
+            return;
+          }
+
+          const periodoId =
+            Number(
+              asignacion.periodo_id
+            );
+
+          const materia =
+            Array.isArray(
+              asignacion.materia
+            )
+              ? asignacion.materia[0]
+              : asignacion.materia;
+
+          const materiaId =
+            materia?.id;
+
+          const valor =
+            Number(
+              calificacion.valor
+            );
+
+          if (
+            !periodoId ||
+            !materiaId ||
+            !Number.isFinite(valor)
+          ) {
+            return;
+          }
+
+          if (!grupos[periodoId]) {
+            grupos[periodoId] = {};
+          }
+
+          if (
+            !grupos[periodoId][
+              materiaId
+            ]
+          ) {
+            grupos[periodoId][
+              materiaId
+            ] = {
+              materiaId,
+              materiaNombre:
+                materia.nombre,
+              notas: [],
+            };
+          }
+
+          grupos[periodoId][
+            materiaId
+          ].notas.push(valor);
+        }
+      );
+
+      // =====================================
+      // 6. CALCULAR PROMEDIOS DE CADA PERIODO
+      // =====================================
+
+      const promediosPeriodos =
+        listaPeriodos.map(
+          (periodo) => {
+            const materiasPeriodo =
+              grupos[
+                Number(periodo.id)
+              ] || {};
+
+            const materias =
+              Object.values(
+                materiasPeriodo
+              ).map(
+                (materia) => {
+                  const suma =
+                    materia.notas.reduce(
+                      (
+                        acumulado,
+                        nota
+                      ) =>
+                        acumulado +
+                        nota,
+                      0
+                    );
+
+                  const promedio =
+                    materia.notas.length >
+                    0
+                      ? Number(
+                          (
+                            suma /
+                            materia
+                              .notas
+                              .length
+                          ).toFixed(2)
+                        )
+                      : null;
+
+                  return {
+                    materiaId:
+                      materia.materiaId,
+                    materia:
+                      materia
+                        .materiaNombre,
+                    cantidadNotas:
+                      materia.notas
+                        .length,
+                    promedio,
+                  };
+                }
+              );
+
+            const promediosMaterias =
+              materias
+                .map(
+                  (materia) =>
+                    materia.promedio
+                )
+                .filter(
+                  (promedio) =>
+                    Number.isFinite(
+                      promedio
+                    )
+                );
+
+            const promedioPeriodo =
+              promediosMaterias.length >
+              0
+                ? Number(
+                    (
+                      promediosMaterias.reduce(
+                        (
+                          acumulado,
+                          promedio
+                        ) =>
+                          acumulado +
+                          promedio,
+                        0
+                      ) /
+                      promediosMaterias
+                        .length
+                    ).toFixed(2)
+                  )
+                : null;
+
+            return {
+              periodoId:
+                periodo.id,
+              nombre:
+                periodo.nombre,
+              anio:
+                String(
+                  periodo.fecha_inicio || ''
+                ).slice(0, 4) || null,
+              fechaInicio:
+                periodo.fecha_inicio,
+              fechaFin:
+                periodo.fecha_fin,
+              promedio:
+                promedioPeriodo,
+              materias,
+            };
+          }
+        );
+
+      // =====================================
+      // 7. PROMEDIO DEL PERIODO ACTUAL
+      // =====================================
+
+      const resumenPeriodoActual =
+        periodoActual
+          ? promediosPeriodos.find(
+              (periodo) =>
+                Number(
+                  periodo.periodoId
+                ) ===
+                Number(
+                  periodoActual.id
+                )
+            )
+          : null;
+
+      const promedioPeriodoActual =
+        resumenPeriodoActual
+          ?.promedio ?? null;
+
+      // =====================================
+      // 8. PROMEDIO GENERAL DEL AÑO
+      // =====================================
+
+      let promedioAnual =
+        null;
+
+      const periodosConNota =
+        promediosPeriodos.filter(
+          (periodo) =>
+            Number.isFinite(
+              periodo.promedio
+            )
+        );
+
+      if (
+        listaPeriodos.length >= 4 &&
+        periodosConNota.length >= 4
+      ) {
+        const cuatroPeriodos =
+          periodosConNota.slice(
+            0,
+            4
+          );
+
+        const sumaPromedios =
+          cuatroPeriodos.reduce(
+            (
+              acumulado,
+              periodo
+            ) =>
+              acumulado +
+              periodo.promedio,
+            0
+          );
+
+        promedioAnual =
+          Number(
+            (
+              sumaPromedios /
+              cuatroPeriodos.length
+            ).toFixed(2)
+          );
+      }
+
+      // =====================================
+      // 9. CALIFICACIONES A DEVOLVER
+      // =====================================
+
+      let calificacionesRespuesta =
+        listaCalificaciones;
+
+      // Solo filtrar cuando la aplicación
+      // envíe un periodo específicamente.
+      if (periodoIdSolicitado) {
+        calificacionesRespuesta =
+          listaCalificaciones.filter(
+            (calificacion) => {
+              const actividad =
+                calificacion.actividad;
+
+              const asignacion =
+                Array.isArray(
+                  actividad
+                    ?.materia_grupo_periodo
+                )
+                  ? actividad
+                      .materia_grupo_periodo[0]
+                  : actividad
+                      ?.materia_grupo_periodo;
+
+              return (
+                Number(
+                  asignacion
+                    ?.periodo_id
+                ) ===
+                Number(
+                  periodoIdSolicitado
+                )
+              );
+            }
+          );
+      }
+
+      // =====================================
+      // 10. RESPUESTA FINAL
+      // =====================================
+
       return res.status(200).json({
         success: true,
+
+        periodoActual:
+          periodoActual
+            ? {
+                id:
+                  periodoActual.id,
+                nombre:
+                  periodoActual.nombre,
+              }
+            : null,
+
         calificaciones:
-          calificaciones || [],
+          calificacionesRespuesta,
+
+        resumen: {
+          totalCalificaciones:
+            calificacionesRespuesta
+              .length,
+
+          promedio:
+            promedioPeriodoActual,
+
+          promedioPeriodoActual,
+
+          promedioAnual,
+        },
+
+        promediosPeriodos,
       });
     } catch (error) {
       console.error(

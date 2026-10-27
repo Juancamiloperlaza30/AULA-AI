@@ -1,0 +1,70 @@
+# Learn more https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files
+
+# dependencies
+node_modules/
+
+# Expo
+.expo/
+dist/
+web-build/
+expo-env.d.ts
+
+# Native
+.kotlin/
+*.orig.*
+*.jks
+*.p8
+*.p12
+*.key
+*.mobileprovision
+
+# Metro
+.metro-health-check*
+
+# debug
+npm-debug.*
+yarn-debug.*
+yarn-error.*
+
+# macOS
+.DS_Store
+*.pem
+
+# local env files
+.env
+.env.*
+!.env.example
+.env*.local
+
+# typescript
+*.tsbuildinfo
+
+# generated native folders
+/ios
+/android
+
+# ======================================================
+# AULA-AI | EXCLUSIONES ADICIONALES EAS BUILD
+# ======================================================
+
+# Credenciales privadas
+*-firebase-adminsdk-*.json
+*service-account*.json
+*serviceAccount*.json
+*.pem
+*.p12
+*.p8
+*.jks
+
+# Variables locales privadas
+.env
+.env.*
+!.env.example
+
+# Archivos generados en pruebas anteriores
+dist-hu10-check/
+dist-hu11-test/
+
+# Copias de seguridad
+*.backup
+*.bak

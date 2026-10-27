@@ -37,3 +37,41 @@ Thumbs.db
 # Firebase Admin SDK - credenciales privadas
 *-firebase-adminsdk-*.json
 *-firebase-adminsdk-*.json
+
+# Respaldos temporales de historias de usuario
+*.backup-HU*
+*.HU*.backup
+
+# Archivos de pruebas académicas
+HU09-integracion-movil.zip
+backend/soporte-prueba-hu09.pdf
+backend/soporte-descargado-hu09.pdf
+
+# Scripts temporales con operaciones sobre usuarios
+backend/scripts/confirmarCorreo*.js
+backend/scripts/restablecerPassword*.js
+# ==========================================
+# AULA-AI - RESPALDOS Y ARCHIVOS TEMPORALES
+# ==========================================
+
+# Respaldos de codigo
+*.backup_*
+*.backup-*
+*.bak
+*.orig
+
+# Archivos temporales de revision
+*_ACTUAL.txt
+revision-hu*.txt
+
+# Exportaciones de pruebas
+dist-*/
+**/dist-*/
+
+# Carpetas temporales de Expo
+.expo-*/
+**/.expo-*/
+
+# Permitir ejemplos de configuracion
+!.env.example
+!**/.env.example

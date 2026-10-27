@@ -1,20 +1,25 @@
-import { StatusBar } from 'expo-status-bar';
 import * as Linking from 'expo-linking';
 import {
   useEffect,
+  useRef,
   useState,
 } from 'react';
+
+import {
+  supabase,
+  supabaseConfigurado,
+} from './supabaseClient';
 
 import {
   ActivityIndicator,
   Alert,
   StyleSheet,
   Text,
-  TextInput,
   TouchableOpacity,
   View,
 } from 'react-native';
 
+import LoginScreen from './src/components/LoginScreen';
 import AdminDashboard from './src/screens/AdminDashboard';
 import AcademicPeriodsScreen
   from './src/screens/AcademicPeriodsScreen';
@@ -36,6 +41,9 @@ import StudentGradesScreen
   from './src/screens/StudentGradesScreen';
 import TeacherGradesScreen
   from './src/screens/TeacherGradesScreen';
+import AttendanceScreen
+  from './src/screens/AttendanceScreen';
+import StudentAttendanceScreen from './src/screens/StudentAttendanceScreen';
 import MySubmissionScreen
   from './src/screens/MySubmissionScreen';
 import SubmitActivityScreen
@@ -50,11 +58,20 @@ import ActivateAccountScreen
   from './src/screens/ActivateAccountScreen';
 import ResetPasswordScreen
   from './src/screens/ResetPasswordScreen';
+import MandatoryPasswordChangeScreen
+  from './src/screens/MandatoryPasswordChangeScreen';
 import CoordinatorDashboard from './src/screens/CoordinatorDashboard';
 import OrientadorDashboard from './src/screens/OrientadorDashboard';
 import DocenteDashboard from './src/screens/DocenteDashboard';
+import ExcuseReviewScreen
+  from './src/screens/ExcuseReviewScreen';
 import AcudienteDashboard from './src/screens/AcudienteDashboard';
 import EstudianteDashboard from './src/screens/EstudianteDashboard';
+import StudentCommunicationsScreen
+  from './src/screens/StudentCommunicationsScreen';
+
+import PublishCommunicationScreen
+  from './src/screens/PublishCommunicationScreen';
 
 import {
   eliminarSesion,
@@ -65,10 +82,20 @@ import {
   registrarDispositivoEnBackend,
 } from './src/services/notificationService';
 import { API_URL } from './src/config/apiConfig';
+import {
+  eliminarHistorialEstudianteOffline,
+} from './src/database/studentAcademicOfflineDatabase';
+import {
+  eliminarCacheAcademicaLocal,
+} from './database/localDatabase';
 
 export default function App() {
   const [correo, setCorreo] = useState('');
   const [contrasena, setContrasena] = useState('');
+  const [
+    mostrarContrasena,
+    setMostrarContrasena,
+  ] = useState(false);
 
   const [cargando, setCargando] = useState(false);
 
@@ -110,14 +137,22 @@ export default function App() {
   ] = useState('dashboard');
 
   const [
-    modoRecuperacion,
-    setModoRecuperacion,
+    recuperandoPassword,
+    setRecuperandoPassword,
   ] = useState(false);
 
   const [
-    recoveryAccessToken,
-    setRecoveryAccessToken,
+    sesionRecuperacion,
+    setSesionRecuperacion,
   ] = useState(null);
+
+  const [
+    correoRecuperacion,
+    setCorreoRecuperacion,
+  ] = useState(null);
+
+  const procesandoEnlaceRecuperacion =
+    useRef(false);
 
   const [
     modoActivacion,
@@ -168,7 +203,7 @@ export default function App() {
     const controller = new AbortController();
     const timeoutId = setTimeout(
       () => controller.abort(),
-      4000
+      15000
     );
 
     try {
@@ -189,14 +224,13 @@ export default function App() {
     cargarSesionGuardada();
   }, []);
 
-  const procesarDeepLink = (url) => {
+  const procesarDeepLink = async (url) => {
     if (!url) {
       return;
     }
 
     console.log(
-      'Deep link recibido:',
-      url
+      'Deep link recibido.'
     );
 
     // Primero verificamos si realmente
@@ -204,8 +238,29 @@ export default function App() {
     const esActivacion =
       url.includes('activate-account');
 
-    const esRecuperacion =
-      url.includes('reset-password');
+    let esRecuperacion =
+      url.startsWith(
+        'aulaai://reset-password'
+      );
+
+    if (!esRecuperacion) {
+      try {
+        const urlRecuperacion =
+          new URL(url);
+
+        esRecuperacion =
+          urlRecuperacion.protocol ===
+            'exp:' &&
+          /^\/--\/reset-password\/?$/.test(
+            urlRecuperacion.pathname
+          );
+      } catch (error) {
+        console.log(
+          'No se pudo interpretar el enlace recibido:',
+          error.message
+        );
+      }
+    }
 
     // Si no es ninguno de los dos,
     // simplemente lo ignoramos.
@@ -261,11 +316,128 @@ export default function App() {
     }
 
     if (esRecuperacion) {
-      setRecoveryAccessToken(
-        accessToken
+      if (
+        !supabaseConfigurado ||
+        !supabase
+      ) {
+        console.log(
+          'Supabase móvil no está configurado.'
+        );
+
+        return;
+      }
+
+      const query =
+        url.split('#')[0].split('?')[1] ||
+        '';
+      const fragment =
+        url.split('#')[1] || '';
+
+      const parametros =
+        new URLSearchParams(
+          `${query}&${fragment}`
+        );
+
+      const accessTokenRecuperacion =
+        parametros.get(
+          'access_token'
+        );
+
+      const refreshTokenRecuperacion =
+        parametros.get(
+          'refresh_token'
+        );
+
+      const tipo =
+        parametros.get('type');
+
+      if (
+        tipo &&
+        tipo !== 'recovery'
+      ) {
+        return;
+      }
+
+      if (
+        !accessTokenRecuperacion ||
+        !refreshTokenRecuperacion
+      ) {
+        Alert.alert(
+          'Enlace inválido',
+          'El enlace de recuperación no contiene una sesión válida.'
+        );
+
+        return;
+      }
+
+      if (
+        procesandoEnlaceRecuperacion.current
+      ) {
+        return;
+      }
+
+      procesandoEnlaceRecuperacion.current =
+        true;
+
+      let data;
+      let error;
+
+      try {
+        ({
+          data,
+          error,
+        } = await supabase.auth.setSession({
+          access_token:
+            accessTokenRecuperacion,
+          refresh_token:
+            refreshTokenRecuperacion,
+        }));
+      } catch (errorSesion) {
+        procesandoEnlaceRecuperacion.current =
+          false;
+
+        console.log(
+          'Error estableciendo sesión de recuperación:',
+          errorSesion
+        );
+
+        Alert.alert(
+          'Enlace inválido',
+          'No fue posible validar la sesión de recuperación. Solicite un nuevo enlace.'
+        );
+
+        return;
+      }
+
+      if (error || !data?.session) {
+        procesandoEnlaceRecuperacion.current =
+          false;
+
+        console.log(
+          'Error estableciendo sesión de recuperación:',
+          error?.message
+        );
+
+        Alert.alert(
+          'Enlace inválido',
+          'No fue posible validar la sesión de recuperación. Solicite un nuevo enlace.'
+        );
+
+        return;
+      }
+
+      console.log(
+        'Sesión de recuperación establecida correctamente.'
       );
 
-      setModoRecuperacion(true);
+      setSesionRecuperacion(
+        data.session
+      );
+      setCorreoRecuperacion(
+        data.session.user?.email || null
+      );
+
+      setRecuperandoPassword(true);
     }
   };
 
@@ -495,7 +667,7 @@ export default function App() {
       Alert.alert(
         'Error de conexión',
         error.name === 'AbortError'
-          ? 'El servidor no respondió en 4 segundos. Verifique que el backend de AULA-AI esté activo.'
+          ? 'El servidor no respondió en 15 segundos. Verifique que el backend de AULA-AI esté activo y que el dispositivo tenga acceso a internet.'
           : 'No fue posible conectarse con el servidor de AULA-AI.'
       );
     } finally {
@@ -515,6 +687,16 @@ export default function App() {
     try {
       setCargando(true);
 
+      const redirectTo =
+        Linking.createURL(
+          'reset-password'
+        );
+
+      console.log(
+        'URL RECUPERACION EXPO:',
+        redirectTo
+      );
+
       const response = await fetch(
         `${API_URL}/api/auth/recuperar-password`,
         {
@@ -524,6 +706,7 @@ export default function App() {
           },
           body: JSON.stringify({
             correo: correo.trim().toLowerCase(),
+            redirectTo,
           }),
         }
       );
@@ -539,9 +722,24 @@ export default function App() {
         return;
       }
 
+      const correoDestino =
+        correo.trim().toLowerCase();
+
       Alert.alert(
         'Revisa tu correo',
-        data.message
+        `${data.message} Ingresa el código recibido para crear una nueva contraseña.`,
+        [
+          {
+            text: 'Continuar',
+            onPress: () => {
+              setCorreoRecuperacion(
+                correoDestino
+              );
+              setSesionRecuperacion(null);
+              setRecuperandoPassword(true);
+            },
+          },
+        ]
       );
     } catch (error) {
       console.log(
@@ -558,108 +756,117 @@ export default function App() {
     }
   };
 
-  /**
-   * Cierra la sesión y elimina
-   * cualquier información guardada.
-   */
+  // HU-07: limpiar los datos privados del estudiante
+  // antes de permitir un cambio de cuenta.
   const handleLogout = async () => {
-    try {
-      if (sesion?.accessToken) {
-        await fetch(
-          `${API_URL}/api/auth/logout`,
-          {
-            method: 'POST',
+    if (cargando) {
+      return;
+    }
 
-            headers: {
+    setCargando(true);
+
+    const usuarioActual = usuario;
+    let limpiezaCompleta =
+      usuarioActual?.rol !== 'estudiante' ||
+      !usuarioActual?.id;
+
+    try {
+      if (
+        usuarioActual?.rol === 'estudiante' &&
+        usuarioActual?.id
+      ) {
+        await eliminarCacheAcademicaLocal(
+          usuarioActual.id
+        );
+        await eliminarHistorialEstudianteOffline(
+          usuarioActual.id
+        );
+        limpiezaCompleta = true;
+
+        console.log(
+          'HU-07: caché académica del estudiante eliminada.'
+        );
+      }
+
+      if (sesion?.accessToken) {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(
+          () => controller.abort(),
+          5000
+        );
+
+        try {
+          await fetch(
+            `${API_URL}/api/auth/logout`,
+            {
+              signal: controller.signal,
+              method: 'POST',
+
+              headers: {
               Authorization:
                 `Bearer ${sesion.accessToken}`,
-            },
-          }
-        );
+              },
+            }
+          );
+        } finally {
+          clearTimeout(timeoutId);
+        }
       }
     } catch (error) {
       console.log(
-        'Error notificando logout al servidor:',
+        'Error durante el cierre de sesión:',
         error
       );
     } finally {
-      await eliminarSesion();
-
-      setUsuario(null);
-      setSesion(null);
-
-      setCorreo('');
-      setContrasena('');
-    }
-  };
-
-  const handleActualizarPassword =
-    async (nuevaPassword) => {
-      if (!recoveryAccessToken) {
+      if (
+        usuarioActual?.rol === 'estudiante' &&
+        usuarioActual?.id &&
+        !limpiezaCompleta
+      ) {
         Alert.alert(
-          'Enlace inválido',
-          'No fue posible validar el enlace de recuperación.'
+          'No se pudo completar el cierre de sesión',
+          'Ocurrió un problema al limpiar los datos locales. Inténtalo nuevamente.'
         );
-
+        setCargando(false);
         return;
       }
 
       try {
-        const response = await fetch(
-          `${API_URL}/api/auth/actualizar-password`,
-          {
-            method: 'POST',
-
-            headers: {
-              'Content-Type':
-                'application/json',
-            },
-
-            body: JSON.stringify({
-              accessToken:
-                recoveryAccessToken,
-
-              nuevaPassword,
-            }),
-          }
-        );
-
-        const data =
-          await response.json();
-
-        if (!response.ok) {
-          Alert.alert(
-            'No fue posible actualizar',
-            data.message
-          );
-
-          return;
-        }
-
-        Alert.alert(
-          'Contraseña actualizada',
-          'Ya puede iniciar sesión con su nueva contraseña.'
-        );
-
-        setModoRecuperacion(false);
-        setRecoveryAccessToken(null);
-
         await eliminarSesion();
-
-        setUsuario(null);
-        setSesion(null);
       } catch (error) {
-        console.log(
-          'Error actualizando contraseña:',
-          error
+        console.warn(
+          'HU-07: no fue posible eliminar la sesión local:',
+          error.message
         );
-
         Alert.alert(
-          'Error',
-          'No fue posible actualizar la contraseña.'
+          'No se pudo completar el cierre de sesión',
+          'Ocurrió un problema al eliminar la sesión guardada. Inténtalo nuevamente.'
         );
+        setCargando(false);
+        return;
       }
-    };
+
+      setUsuario(null);
+      setSesion(null);
+
+      setMateriaSeleccionada(null);
+      setActividadSeleccionada(null);
+      setActividadDocenteSeleccionada(null);
+      setActividadRecursosSeleccionada(null);
+      setEntregaSeleccionadaId(null);
+
+      setPantallaActual('dashboard');
+      setCorreo('');
+      setContrasena('');
+      setMostrarContrasena(false);
+
+      console.log(
+        'HU-07: cierre de sesión local completado.'
+      );
+
+      setCargando(false);
+    }
+  };
 
   const handleActivateAccount =
     async (password) => {
@@ -729,6 +936,75 @@ export default function App() {
       }
     };
 
+  const handleMandatoryPasswordChanged =
+    async () => {
+      const usuarioActualizado = {
+        ...usuario,
+        debeCambiarPassword: false,
+        passwordCambiadoAt:
+          new Date().toISOString(),
+      };
+
+      const guardado =
+        await guardarSesion({
+          usuario: usuarioActualizado,
+          session: sesion,
+        });
+
+      if (!guardado) {
+        Alert.alert(
+          'Advertencia',
+          'La contraseña cambió, pero no se pudo actualizar la sesión guardada. Cierre sesión y vuelva a ingresar.'
+        );
+      }
+
+      setUsuario(usuarioActualizado);
+    };
+
+  if (
+    recuperandoPassword &&
+    (
+      sesionRecuperacion ||
+      correoRecuperacion
+    )
+  ) {
+    return (
+      <ResetPasswordScreen
+        apiUrl={API_URL}
+        recoveryEmail={
+          correoRecuperacion
+        }
+        recoverySession={
+          sesionRecuperacion
+        }
+        onPasswordChanged={
+          async () => {
+            setRecuperandoPassword(
+              false
+            );
+
+            setSesionRecuperacion(
+              null
+            );
+            setCorreoRecuperacion(
+              null
+            );
+
+            procesandoEnlaceRecuperacion.current =
+              false;
+
+            await eliminarSesion();
+
+            setUsuario(null);
+            setSesion(null);
+            setCorreo('');
+            setContrasena('');
+          }
+        }
+      />
+    );
+  }
+
   /**
    * Mientras verificamos si existe
    * una sesión guardada mostramos carga.
@@ -748,6 +1024,24 @@ export default function App() {
     );
   }
 
+  if (
+    usuario?.debeCambiarPassword === true
+  ) {
+    return (
+      <MandatoryPasswordChangeScreen
+        usuario={usuario}
+        apiUrl={API_URL}
+        accessToken={
+          sesion?.accessToken
+        }
+        onLogout={handleLogout}
+        onPasswordChanged={
+          handleMandatoryPasswordChanged
+        }
+      />
+    );
+  }
+
   if (modoActivacion) {
     return (
       <ActivateAccountScreen
@@ -758,21 +1052,6 @@ export default function App() {
         onCancel={() => {
           setModoActivacion(false);
           setActivationAccessToken(null);
-        }}
-      />
-    );
-  }
-
-  if (modoRecuperacion) {
-    return (
-      <ResetPasswordScreen
-        onActualizarPassword={
-          handleActualizarPassword
-        }
-
-        onCancelar={() => {
-          setModoRecuperacion(false);
-          setRecoveryAccessToken(null);
         }}
       />
     );
@@ -926,6 +1205,26 @@ export default function App() {
             sesion?.accessToken
           }
           apiUrl={API_URL}
+          onBack={() =>
+            setPantallaActual('dashboard')
+          }
+        />
+      );
+    }
+  }
+
+  if (
+    usuario &&
+    pantallaActual === 'revisionExcusas'
+  ) {
+    if (usuario.rol !== 'docente' && usuario.rol !== 'coordinador') {
+      setPantallaActual('dashboard');
+    } else {
+      return (
+        <ExcuseReviewScreen
+          apiUrl={API_URL}
+          accessToken={sesion?.accessToken}
+          usuarioId={usuario?.id}
           onBack={() =>
             setPantallaActual('dashboard')
           }
@@ -1135,6 +1434,75 @@ export default function App() {
   }
 
   if (
+    usuario?.rol === 'docente' &&
+    pantallaActual === 'asistenciaDocente'
+  ) {
+    return (
+      <AttendanceScreen
+        apiUrl={API_URL}
+        accessToken={sesion?.accessToken}
+        usuarioId={usuario.id}
+        onBack={() =>
+          setPantallaActual('dashboard')
+        }
+      />
+    );
+  }
+
+  if (
+    usuario?.rol === 'estudiante' &&
+    pantallaActual === 'miAsistenciaEstudiante'
+  ) {
+    return (
+      <StudentAttendanceScreen
+        apiUrl={API_URL}
+        accessToken={sesion?.accessToken}
+        usuarioId={usuario.id}
+        onBack={() => setPantallaActual('dashboard')}
+      />
+    );
+  }
+
+  // ====================================================
+  // HU-12 | PUBLICAR COMUNICADOS
+  // ====================================================
+
+  if (
+    ['administrador', 'coordinador'].includes(usuario?.rol) &&
+    pantallaActual === 'publicarComunicado'
+  ) {
+    return (
+      <PublishCommunicationScreen
+        apiUrl={API_URL}
+        accessToken={sesion?.accessToken}
+        rol={usuario.rol}
+        onBack={() => setPantallaActual('dashboard')}
+        onSuccess={() => setPantallaActual('dashboard')}
+      />
+    );
+  }
+
+  if (
+    [
+      'administrador',
+      'estudiante',
+      'acudiente',
+      'docente',
+      'orientador',
+      'coordinador',
+    ].includes(usuario?.rol) &&
+    pantallaActual === 'misComunicadosEstudiante'
+  ) {
+    return (
+      <StudentCommunicationsScreen
+        apiUrl={API_URL}
+        accessToken={sesion?.accessToken}
+        onBack={() => setPantallaActual('dashboard')}
+      />
+    );
+  }
+
+  if (
     usuario &&
     pantallaActual === 'misCalificacionesEstudiante'
   ) {
@@ -1235,6 +1603,14 @@ export default function App() {
                 'periodosAcademicos'
               )
             }
+            onMyCommunications={() =>
+              setPantallaActual(
+                'misComunicadosEstudiante'
+              )
+            }
+            onPublishCommunication={() =>
+              setPantallaActual('publicarComunicado')
+            }
           />
         );
 
@@ -1260,6 +1636,14 @@ export default function App() {
                 'periodosAcademicos'
               )
             }
+            onMyCommunications={() =>
+              setPantallaActual(
+                'misComunicadosEstudiante'
+              )
+            }
+            onPublishCommunication={() =>
+              setPantallaActual('publicarComunicado')
+            }
           />
         );
 
@@ -1270,6 +1654,11 @@ export default function App() {
             apiUrl={API_URL}
             accessToken={sesion?.accessToken}
             onLogout={handleLogout}
+            onMyCommunications={() =>
+              setPantallaActual(
+                'misComunicadosEstudiante'
+              )
+            }
           />
         );
 
@@ -1295,6 +1684,19 @@ export default function App() {
                 'calificacionesDocente'
               )
             }
+            onAttendance={() =>
+              setPantallaActual(
+                'asistenciaDocente'
+              )
+            }
+            onReviewExcuses={() =>
+              setPantallaActual('revisionExcusas')
+            }
+            onMyCommunications={() =>
+              setPantallaActual(
+                'misComunicadosEstudiante'
+              )
+            }
           />
         );
 
@@ -1305,6 +1707,11 @@ export default function App() {
             apiUrl={API_URL}
             accessToken={sesion?.accessToken}
             onLogout={handleLogout}
+            onMyCommunications={() =>
+              setPantallaActual(
+                'misComunicadosEstudiante'
+              )
+            }
           />
         );
 
@@ -1325,9 +1732,15 @@ export default function App() {
                 'misActividadesEstudiante'
               )
             }
+            onMyAttendance={() => setPantallaActual('miAsistenciaEstudiante')}
             onMyGrades={() =>
               setPantallaActual(
                 'misCalificacionesEstudiante'
+              )
+            }
+            onMyCommunications={() =>
+              setPantallaActual(
+                'misComunicadosEstudiante'
               )
             }
           />
@@ -1361,76 +1774,17 @@ export default function App() {
    * Usuario no autenticado.
    */
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>
-        AULA-AI
-      </Text>
-
-      <Text style={styles.subtitle}>
-        Sistema inteligente de alerta temprana y acompañamiento escolar
-      </Text>
-
-      <View style={styles.form}>
-        <Text style={styles.label}>
-          Correo institucional
-        </Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="usuario@institucion.edu"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoCorrect={false}
-          value={correo}
-          onChangeText={setCorreo}
-          editable={!cargando}
-        />
-
-        <Text style={styles.label}>
-          Contraseña
-        </Text>
-
-        <TextInput
-          style={styles.input}
-          placeholder="Ingrese su contraseña"
-          secureTextEntry
-          value={contrasena}
-          onChangeText={setContrasena}
-          editable={!cargando}
-        />
-
-        <TouchableOpacity
-          style={[
-            styles.button,
-            cargando &&
-              styles.buttonDisabled,
-          ]}
-          onPress={handleLogin}
-          disabled={cargando}
-        >
-          {cargando ? (
-            <ActivityIndicator
-              color="#FFFFFF"
-            />
-          ) : (
-            <Text style={styles.buttonText}>
-              Iniciar sesión
-            </Text>
-          )}
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          disabled={cargando}
-          onPress={handleRecuperarPassword}
-        >
-          <Text style={styles.forgotPassword}>
-            ¿Olvidaste tu contraseña?
-          </Text>
-        </TouchableOpacity>
-      </View>
-
-      <StatusBar style="auto" />
-    </View>
+    <LoginScreen
+      correo={correo}
+      setCorreo={setCorreo}
+      contrasena={contrasena}
+      setContrasena={setContrasena}
+      mostrarContrasena={mostrarContrasena}
+      setMostrarContrasena={setMostrarContrasena}
+      cargando={cargando}
+      onLogin={handleLogin}
+      onForgotPassword={handleRecuperarPassword}
+    />
   );
 }
 
@@ -1479,28 +1833,6 @@ const styles = StyleSheet.create({
     marginBottom: 30,
   },
 
-  form: {
-    width: '100%',
-  },
-
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#263238',
-    marginBottom: 8,
-  },
-
-  input: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D5DCE5',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 16,
-    marginBottom: 20,
-  },
-
   button: {
     backgroundColor: '#1F4E79',
     paddingVertical: 15,
@@ -1511,20 +1843,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-  buttonDisabled: {
-    opacity: 0.7,
-  },
-
   buttonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: 'bold',
   },
 
-  forgotPassword: {
-    textAlign: 'center',
-    color: '#1F4E79',
-    marginTop: 20,
-    fontSize: 14,
-  },
 });

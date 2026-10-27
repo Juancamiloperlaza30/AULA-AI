@@ -55,7 +55,7 @@ const verificarToken = async (req, res, next) => {
     } = await supabaseAdmin
       .from('usuarios')
       .select(
-        'id, nombres, apellidos, correo, rol, activo'
+        'id, nombres, apellidos, correo, rol, activo, debe_cambiar_password, password_cambiado_at'
       )
       .eq('id', data.user.id)
       .maybeSingle();

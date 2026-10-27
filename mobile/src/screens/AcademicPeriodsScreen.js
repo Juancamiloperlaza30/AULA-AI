@@ -15,126 +15,143 @@ import {
   View,
 } from 'react-native';
 
+import { Ionicons } from '@expo/vector-icons';
+
+// ========================================
+// IDENTIDAD VISUAL AULA-AI
+// ========================================
+
+const COLORS = {
+  navy: '#091D3A',
+  blue: '#123B73',
+  cyan: '#27C4E8',
+  background: '#F4F7FB',
+  white: '#FFFFFF',
+  text: '#334155',
+  muted: '#718096',
+  border: '#DFE7F0',
+  pale: '#EAF3FC',
+  green: '#15803D',
+  greenBackground: '#ECFDF3',
+  orange: '#B45309',
+  orangeBackground: '#FFF7ED',
+};
+
 export default function AcademicPeriodsScreen({
   apiUrl,
   accessToken,
   onBack,
 }) {
-  const [
-    periodos,
-    setPeriodos,
-  ] = useState([]);
+  // ========================================
+  // ESTADOS ORIGINALES
+  // ========================================
 
-  const [
-    cargando,
-    setCargando,
-  ] = useState(true);
+  const [periodos, setPeriodos] = useState([]);
+  const [cargando, setCargando] = useState(true);
+  const [guardandoId, setGuardandoId] = useState(null);
+  const [periodoActual, setPeriodoActual] = useState(null);
 
-  const [
-    guardandoId,
-    setGuardandoId,
-  ] = useState(null);
+  // ========================================
+  // CONSULTAR PERÍODOS
+  // ========================================
 
-  const [
-    periodoActual,
-    setPeriodoActual,
-  ] = useState(null);
+  const consultarPeriodos = useCallback(async () => {
+    const response = await fetch(
+      `${apiUrl}/api/academic/periodos`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
 
-  const consultarPeriodos =
-    useCallback(async () => {
-      const response = await fetch(
-        `${apiUrl}/api/academic/periodos`,
-        {
-          headers: {
-            Authorization:
-              `Bearer ${accessToken}`,
-          },
-        }
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(
+        data.message ||
+          'No fue posible consultar los periodos.'
+      );
+    }
+
+    return data.periodos || [];
+  }, [apiUrl, accessToken]);
+
+  // ========================================
+  // RECARGAR PERÍODOS
+  // ========================================
+
+  const cargarPeriodos = useCallback(async () => {
+    setCargando(true);
+
+    try {
+      const periodosCargados =
+        await consultarPeriodos();
+
+      setPeriodos(periodosCargados);
+    } catch (error) {
+      console.log(
+        'Error consultando periodos:',
+        error
       );
 
-      const data =
-        await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            'No fue posible consultar los periodos.'
-        );
-      }
-
-      return data.periodos || [];
-    }, [
-      apiUrl,
-      accessToken,
-    ]);
-
-  const cargarPeriodos =
-    useCallback(async () => {
-      setCargando(true);
-
-      try {
-        const periodosCargados =
-          await consultarPeriodos();
-
-        setPeriodos(periodosCargados);
-      } catch (error) {
-        console.log(
-          'Error consultando periodos:',
-          error
-        );
-
-        Alert.alert(
-          'Error',
-          error.message ||
-            'No fue posible consultar los periodos académicos.'
-        );
-      } finally {
-        setCargando(false);
-      }
-    }, [consultarPeriodos]);
-
-  const consultarPeriodoActual =
-    useCallback(async () => {
-      const response = await fetch(
-        `${apiUrl}/api/academic/periodo-actual`,
-        {
-          headers: {
-            Authorization:
-              `Bearer ${accessToken}`,
-          },
-        }
+      Alert.alert(
+        'Error',
+        error.message ||
+          'No fue posible consultar los periodos académicos.'
       );
+    } finally {
+      setCargando(false);
+    }
+  }, [consultarPeriodos]);
 
-      const data =
-        await response.json();
+  // ========================================
+  // CONSULTAR PERÍODO ACTUAL
+  // ========================================
 
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-            'No fue posible consultar el periodo actual.'
-        );
+  const consultarPeriodoActual = useCallback(async () => {
+    const response = await fetch(
+      `${apiUrl}/api/academic/periodo-actual`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
       }
+    );
 
-      return data.periodo || null;
-    }, [
-      apiUrl,
-      accessToken,
-    ]);
+    const data = await response.json();
 
-  const cargarPeriodoActual =
-    useCallback(async () => {
-      try {
-        const periodo =
-          await consultarPeriodoActual();
+    if (!response.ok) {
+      throw new Error(
+        data.message ||
+          'No fue posible consultar el periodo actual.'
+      );
+    }
 
-        setPeriodoActual(periodo);
-      } catch (error) {
-        console.log(
-          'Error consultando periodo actual:',
-          error
-        );
-      }
-    }, [consultarPeriodoActual]);
+    return data.periodo || null;
+  }, [apiUrl, accessToken]);
+
+  // ========================================
+  // RECARGAR PERÍODO ACTUAL
+  // ========================================
+
+  const cargarPeriodoActual = useCallback(async () => {
+    try {
+      const periodo =
+        await consultarPeriodoActual();
+
+      setPeriodoActual(periodo);
+    } catch (error) {
+      console.log(
+        'Error consultando periodo actual:',
+        error
+      );
+    }
+  }, [consultarPeriodoActual]);
+
+  // ========================================
+  // CARGA INICIAL
+  // ========================================
 
   useEffect(() => {
     let activo = true;
@@ -153,12 +170,9 @@ export default function AcademicPeriodsScreen({
       }
 
       if (
-        resultadoPeriodos.status ===
-        'fulfilled'
+        resultadoPeriodos.status === 'fulfilled'
       ) {
-        setPeriodos(
-          resultadoPeriodos.value
-        );
+        setPeriodos(resultadoPeriodos.value);
       } else {
         console.log(
           'Error consultando periodos:',
@@ -173,8 +187,7 @@ export default function AcademicPeriodsScreen({
       }
 
       if (
-        resultadoPeriodoActual.status ===
-        'fulfilled'
+        resultadoPeriodoActual.status === 'fulfilled'
       ) {
         setPeriodoActual(
           resultadoPeriodoActual.value
@@ -199,418 +212,1080 @@ export default function AcademicPeriodsScreen({
     consultarPeriodoActual,
   ]);
 
+  // ========================================
+  // ACTUALIZAR CAMPOS LOCALMENTE
+  // ========================================
+
   const actualizarCampo = (
     periodoId,
     campo,
     valor
   ) => {
-    setPeriodos(
-      (anteriores) =>
-        anteriores.map(
-          (periodo) =>
-            periodo.id === periodoId
-              ? {
-                  ...periodo,
-                  [campo]: valor,
-                }
-              : periodo
-        )
+    setPeriodos((anteriores) =>
+      anteriores.map((periodo) =>
+        periodo.id === periodoId
+          ? {
+              ...periodo,
+              [campo]: valor,
+            }
+          : periodo
+      )
     );
   };
 
-  const guardarPeriodo =
-    async (periodo) => {
-      try {
-        if (
-          !periodo.fecha_inicio ||
-          !periodo.fecha_fin
-        ) {
-          Alert.alert(
-            'Fechas requeridas',
-            'Debe ingresar la fecha de inicio y la fecha de finalización.'
-          );
+  // ========================================
+  // GUARDAR PERÍODO
+  // ========================================
 
-          return;
-        }
-
-        setGuardandoId(
-          periodo.id
-        );
-
-        const response = await fetch(
-          `${apiUrl}/api/academic/periodos/${periodo.id}`,
-          {
-            method: 'PUT',
-
-            headers: {
-              Authorization:
-                `Bearer ${accessToken}`,
-
-              'Content-Type':
-                'application/json',
-            },
-
-            body: JSON.stringify({
-              fechaInicio:
-                periodo.fecha_inicio,
-
-              fechaFin:
-                periodo.fecha_fin,
-            }),
-          }
-        );
-
-        const data =
-          await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data.message ||
-              'No fue posible actualizar el periodo.'
-          );
-        }
-
+  const guardarPeriodo = async (periodo) => {
+    try {
+      if (
+        !periodo.fecha_inicio ||
+        !periodo.fecha_fin
+      ) {
         Alert.alert(
-          'Periodo actualizado',
-          data.message ||
-            'Periodo académico actualizado correctamente.'
+          'Fechas requeridas',
+          'Debe ingresar la fecha de inicio y la fecha de finalización.'
         );
 
-        setCargando(true);
-        await cargarPeriodos();
-        await cargarPeriodoActual();
-      } catch (error) {
-        console.log(
-          'Error actualizando periodo:',
-          error
-        );
-
-        Alert.alert(
-          'Error',
-          error.message ||
-            'No fue posible actualizar el periodo académico.'
-        );
-      } finally {
-        setGuardandoId(null);
+        return;
       }
-    };
+
+      setGuardandoId(periodo.id);
+
+      const response = await fetch(
+        `${apiUrl}/api/academic/periodos/${periodo.id}`,
+        {
+          method: 'PUT',
+
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+
+          body: JSON.stringify({
+            fechaInicio: periodo.fecha_inicio,
+            fechaFin: periodo.fecha_fin,
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+            'No fue posible actualizar el periodo.'
+        );
+      }
+
+      Alert.alert(
+        'Periodo actualizado',
+        data.message ||
+          'Periodo académico actualizado correctamente.'
+      );
+
+      setCargando(true);
+
+      await cargarPeriodos();
+      await cargarPeriodoActual();
+    } catch (error) {
+      console.log(
+        'Error actualizando periodo:',
+        error
+      );
+
+      Alert.alert(
+        'Error',
+        error.message ||
+          'No fue posible actualizar el periodo académico.'
+      );
+    } finally {
+      setGuardandoId(null);
+    }
+  };
+
+  // ========================================
+  // DATOS PARA LA INTERFAZ
+  // ========================================
+
+  const cantidadPeriodos = periodos.length;
+
+  const cantidadConfigurados = periodos.filter(
+    (periodo) => periodo.activo
+  ).length;
+
+  // ========================================
+  // PANTALLA DE CARGA
+  // ========================================
 
   if (cargando) {
     return (
-      <View style={styles.center}>
+      <View style={styles.loadingContainer}>
+        <View style={styles.loadingIcon}>
+          <Ionicons
+            name="calendar-outline"
+            size={34}
+            color={COLORS.blue}
+          />
+        </View>
+
         <ActivityIndicator
           size="large"
+          color={COLORS.blue}
         />
 
-        <Text style={styles.loadingText}>
-          Consultando periodos...
+        <Text style={styles.loadingTitle}>
+          Consultando períodos...
+        </Text>
+
+        <Text style={styles.loadingSubtitle}>
+          Estamos preparando la información académica.
         </Text>
       </View>
     );
   }
 
+  // ========================================
+  // INTERFAZ PRINCIPAL
+  // ========================================
+
   return (
-    <View style={styles.container}>
+    <ScrollView
+      style={styles.screen}
+      contentContainerStyle={styles.container}
+      keyboardShouldPersistTaps="handled"
+    >
+      {/* ENCABEZADO */}
+
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={onBack}
-        >
-          <Text style={styles.back}>
-            ← Volver
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.headerTop}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={onBack}
+            activeOpacity={0.8}
+          >
+            <Ionicons
+              name="arrow-back"
+              size={21}
+              color={COLORS.white}
+            />
+
+            <Text style={styles.backText}>
+              Volver
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.headerBadge}>
+            <Ionicons
+              name="school-outline"
+              size={14}
+              color={COLORS.cyan}
+            />
+
+            <Text style={styles.headerBadgeText}>
+              ACADÉMICO
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.headerIcon}>
+          <Ionicons
+            name="calendar-outline"
+            size={30}
+            color={COLORS.white}
+          />
+        </View>
 
         <Text style={styles.title}>
-          Periodos académicos
+          Períodos académicos
         </Text>
 
-        <Text style={styles.subtitle}>
-          Configure las fechas de inicio
-          y finalización de cada periodo.
+        <Text style={styles.headerSubtitle}>
+          Administra las fechas de inicio y finalización
+          de los períodos académicos de la institución.
         </Text>
       </View>
 
-      <ScrollView
-        contentContainerStyle={
-          styles.content
-        }
-      >
-        {periodos.map(
-          (periodo) => (
+      {/* RESUMEN */}
+
+      <View style={styles.summaryContainer}>
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryIcon}>
+            <Ionicons
+              name="calendar-number-outline"
+              size={23}
+              color={COLORS.blue}
+            />
+          </View>
+
+          <Text style={styles.summaryValue}>
+            {cantidadPeriodos}
+          </Text>
+
+          <Text style={styles.summaryLabel}>
+            Períodos registrados
+          </Text>
+        </View>
+
+        <View style={styles.summaryCard}>
+          <View style={styles.summaryIcon}>
+            <Ionicons
+              name="checkmark-done-outline"
+              size={23}
+              color={COLORS.green}
+            />
+          </View>
+
+          <Text style={styles.summaryValue}>
+            {cantidadConfigurados}
+          </Text>
+
+          <Text style={styles.summaryLabel}>
+            Períodos activos
+          </Text>
+        </View>
+      </View>
+
+      {/* PERÍODO ACTUAL */}
+
+      <View style={styles.currentSection}>
+        <View style={styles.currentSectionIcon}>
+          <Ionicons
+            name="time-outline"
+            size={22}
+            color={COLORS.cyan}
+          />
+        </View>
+
+        <View style={styles.currentSectionContent}>
+          <Text style={styles.currentSectionLabel}>
+            PERÍODO ACADÉMICO ACTUAL
+          </Text>
+
+          <Text style={styles.currentSectionTitle}>
+            {periodoActual?.nombre ||
+              'Sin período actual definido'}
+          </Text>
+
+          <Text style={styles.currentSectionSubtitle}>
+            Información obtenida del sistema académico.
+          </Text>
+        </View>
+      </View>
+
+      {/* TÍTULO DEL LISTADO */}
+
+      <View style={styles.listHeader}>
+        <View style={styles.listHeaderIcon}>
+          <Ionicons
+            name="list-outline"
+            size={22}
+            color={COLORS.blue}
+          />
+        </View>
+
+        <View style={styles.listHeaderContent}>
+          <Text style={styles.listTitle}>
+            Configuración de períodos
+          </Text>
+
+          <Text style={styles.listSubtitle}>
+            Actualiza las fechas de cada período.
+          </Text>
+        </View>
+      </View>
+
+      {/* LISTADO */}
+
+      {periodos.length === 0 ? (
+        <View style={styles.emptyCard}>
+          <Ionicons
+            name="calendar-clear-outline"
+            size={38}
+            color="#94A3B8"
+          />
+
+          <Text style={styles.emptyTitle}>
+            No hay períodos disponibles
+          </Text>
+
+          <Text style={styles.emptyDescription}>
+            Actualmente no se encontraron períodos
+            académicos para configurar.
+          </Text>
+        </View>
+      ) : (
+        periodos.map((periodo, index) => {
+          const esActual =
+            periodoActual?.id === periodo.id;
+
+          const estaGuardando =
+            guardandoId === periodo.id;
+
+          return (
             <View
               key={periodo.id}
-              style={styles.card}
+              style={styles.periodCard}
             >
-              <View
-                style={
-                  styles.cardHeader
-                }
-              >
-                <View>
-                  <Text
-                    style={
-                      styles.periodName
-                    }
-                  >
-                    {periodo.nombre}
+              {/* ENCABEZADO DE TARJETA */}
+
+              <View style={styles.periodHeader}>
+                <View style={styles.periodIcon}>
+                  <Ionicons
+                    name="calendar"
+                    size={22}
+                    color={COLORS.blue}
+                  />
+                </View>
+
+                <View style={styles.periodInfo}>
+                  <Text style={styles.periodIndex}>
+                    PERÍODO {index + 1}
                   </Text>
 
-                  {periodoActual?.id ===
-                  periodo.id ? (
-                    <View
-                      style={
-                        styles.currentBadge
-                      }
-                    >
-                      <Text
-                        style={
-                          styles.currentBadgeText
-                        }
-                      >
-                        PERIODO ACTUAL
-                      </Text>
-                    </View>
-                  ) : (
-                    <Text
-                      style={
-                        styles.status
-                      }
-                    >
-                      {periodo.activo
-                        ? 'Configurado'
-                        : 'Inactivo'}
-                    </Text>
-                  )}
+                  <Text style={styles.periodName}>
+                    {periodo.nombre}
+                  </Text>
                 </View>
               </View>
 
-              <Text
-                style={
-                  styles.label
-                }
-              >
+              {/* ESTADO */}
+
+              <View style={styles.statusContainer}>
+                {esActual ? (
+                  <View style={styles.currentBadge}>
+                    <Ionicons
+                      name="checkmark-circle"
+                      size={16}
+                      color={COLORS.green}
+                    />
+
+                    <Text style={styles.currentBadgeText}>
+                      PERÍODO ACTUAL
+                    </Text>
+                  </View>
+                ) : periodo.activo ? (
+                  <View style={styles.activeBadge}>
+                    <Ionicons
+                      name="checkmark-circle-outline"
+                      size={16}
+                      color={COLORS.green}
+                    />
+
+                    <Text style={styles.activeBadgeText}>
+                      Configurado
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.inactiveBadge}>
+                    <Ionicons
+                      name="pause-circle-outline"
+                      size={16}
+                      color={COLORS.orange}
+                    />
+
+                    <Text style={styles.inactiveBadgeText}>
+                      Inactivo
+                    </Text>
+                  </View>
+                )}
+              </View>
+
+              <View style={styles.divider} />
+
+              {/* FECHA DE INICIO */}
+
+              <Text style={styles.fieldLabel}>
                 Fecha de inicio
+                <Text style={styles.required}> *</Text>
               </Text>
 
-              <TextInput
-                style={styles.input}
-                value={
-                  periodo.fecha_inicio ||
-                  ''
-                }
-                placeholder="AAAA-MM-DD"
-                onChangeText={(
-                  valor
-                ) =>
-                  actualizarCampo(
-                    periodo.id,
-                    'fecha_inicio',
-                    valor
-                  )
-                }
-              />
+              <View style={styles.inputContainer}>
+                <View style={styles.inputIcon}>
+                  <Ionicons
+                    name="calendar-outline"
+                    size={20}
+                    color={COLORS.blue}
+                  />
+                </View>
 
-              <Text
-                style={
-                  styles.label
-                }
-              >
+                <TextInput
+                  style={styles.dateInput}
+                  value={periodo.fecha_inicio || ''}
+                  placeholder="AAAA-MM-DD"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={10}
+                  onChangeText={(valor) =>
+                    actualizarCampo(
+                      periodo.id,
+                      'fecha_inicio',
+                      valor
+                    )
+                  }
+                />
+              </View>
+
+              <Text style={styles.fieldHint}>
+                Formato: año-mes-día
+              </Text>
+
+              {/* FECHA DE FINALIZACIÓN */}
+
+              <Text style={styles.fieldLabel}>
                 Fecha de finalización
+                <Text style={styles.required}> *</Text>
               </Text>
 
-              <TextInput
-                style={styles.input}
-                value={
-                  periodo.fecha_fin ||
-                  ''
-                }
-                placeholder="AAAA-MM-DD"
-                onChangeText={(
-                  valor
-                ) =>
-                  actualizarCampo(
-                    periodo.id,
-                    'fecha_fin',
-                    valor
-                  )
-                }
-              />
+              <View style={styles.inputContainer}>
+                <View style={styles.inputIcon}>
+                  <Ionicons
+                    name="calendar-outline"
+                    size={20}
+                    color={COLORS.blue}
+                  />
+                </View>
+
+                <TextInput
+                  style={styles.dateInput}
+                  value={periodo.fecha_fin || ''}
+                  placeholder="AAAA-MM-DD"
+                  placeholderTextColor="#94A3B8"
+                  keyboardType="numbers-and-punctuation"
+                  maxLength={10}
+                  onChangeText={(valor) =>
+                    actualizarCampo(
+                      periodo.id,
+                      'fecha_fin',
+                      valor
+                    )
+                  }
+                />
+              </View>
+
+              <Text style={styles.fieldHint}>
+                Formato: año-mes-día
+              </Text>
+
+              {/* BOTÓN GUARDAR */}
 
               <TouchableOpacity
                 style={[
                   styles.saveButton,
-
-                  guardandoId ===
-                    periodo.id &&
+                  estaGuardando &&
                     styles.disabledButton,
                 ]}
-                disabled={
-                  guardandoId ===
-                  periodo.id
-                }
+                disabled={estaGuardando}
                 onPress={() =>
-                  guardarPeriodo(
-                    periodo
-                  )
+                  guardarPeriodo(periodo)
                 }
+                activeOpacity={0.85}
               >
-                <Text
-                  style={
-                    styles.saveText
-                  }
-                >
-                  {guardandoId ===
-                  periodo.id
-                    ? 'Guardando...'
-                    : 'Guardar cambios'}
-                </Text>
+                {estaGuardando ? (
+                  <View style={styles.buttonContent}>
+                    <ActivityIndicator
+                      size="small"
+                      color={COLORS.white}
+                    />
+
+                    <Text style={styles.saveText}>
+                      Guardando...
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.buttonContent}>
+                    <Ionicons
+                      name="save-outline"
+                      size={20}
+                      color={COLORS.white}
+                    />
+
+                    <Text style={styles.saveText}>
+                      Guardar cambios
+                    </Text>
+
+                    <Ionicons
+                      name="arrow-forward"
+                      size={18}
+                      color={COLORS.white}
+                    />
+                  </View>
+                )}
               </TouchableOpacity>
             </View>
-          )
-        )}
-      </ScrollView>
-    </View>
+          );
+        })
+      )}
+
+      {/* INFORMACIÓN FINAL */}
+
+      <View style={styles.infoCard}>
+        <Ionicons
+          name="information-circle-outline"
+          size={22}
+          color={COLORS.blue}
+        />
+
+        <Text style={styles.infoText}>
+          Las fechas configuradas se utilizan
+          para organizar los períodos académicos.
+          Verifica la información antes de guardar.
+        </Text>
+      </View>
+
+      {/* BOTÓN VOLVER */}
+
+      <TouchableOpacity
+        style={styles.bottomBackButton}
+        onPress={onBack}
+        activeOpacity={0.8}
+      >
+        <Ionicons
+          name="arrow-back-outline"
+          size={18}
+          color={COLORS.blue}
+        />
+
+        <Text style={styles.bottomBackText}>
+          Volver al panel
+        </Text>
+      </TouchableOpacity>
+
+      {/* PIE DE PÁGINA */}
+
+      <View style={styles.footer}>
+        <Ionicons
+          name="shield-checkmark-outline"
+          size={15}
+          color="#64748B"
+        />
+
+        <Text style={styles.footerText}>
+          Gestión académica · AULA-AI
+        </Text>
+      </View>
+    </ScrollView>
   );
 }
 
-const styles =
-  StyleSheet.create({
-    container: {
-      flex: 1,
-      backgroundColor:
-        '#F5F7FA',
-    },
+// ========================================
+// ESTILOS PREMIUM
+// ========================================
 
-    header: {
-      backgroundColor:
-        '#FFFFFF',
-      paddingHorizontal: 20,
-      paddingTop: 55,
-      paddingBottom: 20,
-      borderBottomWidth: 1,
-      borderBottomColor:
-        '#E5EAF0',
-    },
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+  },
 
-    back: {
-      fontSize: 15,
-      fontWeight: '700',
-      color: '#1F4E79',
-      marginBottom: 14,
-    },
+  container: {
+    paddingHorizontal: 24,
+    paddingBottom: 55,
+  },
 
-    title: {
-      fontSize: 27,
-      fontWeight: '900',
-      color: '#1F2937',
-    },
+  // ENCABEZADO
 
-    subtitle: {
-      marginTop: 7,
-      fontSize: 14,
-      lineHeight: 20,
-      color: '#607D8B',
-    },
+  header: {
+    backgroundColor: COLORS.navy,
+    marginHorizontal: -24,
+    paddingHorizontal: 24,
+    paddingTop: 55,
+    paddingBottom: 34,
+    marginBottom: 24,
+  },
 
-    content: {
-      padding: 20,
-      paddingBottom: 40,
-    },
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 26,
+  },
 
-    card: {
-      backgroundColor:
-        '#FFFFFF',
-      borderRadius: 18,
-      padding: 18,
-      marginBottom: 16,
-      borderWidth: 1,
-      borderColor:
-        '#E0E6ED',
-    },
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
+  },
 
-    cardHeader: {
-      marginBottom: 16,
-    },
+  backText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.white,
+  },
 
-    periodName: {
-      fontSize: 18,
-      fontWeight: '900',
-      color: '#1F4E79',
-    },
+  headerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255,255,255,0.08)',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
 
-    status: {
-      marginTop: 4,
-      fontSize: 12,
-      fontWeight: '700',
-      color: '#607D8B',
-    },
+  headerBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.white,
+  },
 
-    currentBadge: {
-      alignSelf: 'flex-start',
-      marginTop: 6,
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 20,
-      backgroundColor: '#E8F5E9',
-    },
+  headerIcon: {
+    width: 58,
+    height: 58,
+    borderRadius: 17,
+    backgroundColor: COLORS.blue,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 19,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
 
-    currentBadgeText: {
-      fontSize: 11,
-      fontWeight: '800',
-      color: '#2E7D32',
-    },
+  title: {
+    fontSize: 27,
+    fontWeight: '800',
+    color: COLORS.white,
+    marginBottom: 10,
+  },
 
-    label: {
-      marginTop: 12,
-      marginBottom: 6,
-      fontSize: 13,
-      fontWeight: '700',
-      color: '#455A64',
-    },
+  headerSubtitle: {
+    fontSize: 13,
+    lineHeight: 21,
+    color: '#D6E4F2',
+  },
 
-    input: {
-      height: 48,
-      borderWidth: 1,
-      borderColor:
-        '#D8E0E8',
-      borderRadius: 10,
-      backgroundColor:
-        '#F8FAFC',
-      paddingHorizontal: 14,
-      fontSize: 15,
-      color: '#1F2937',
-    },
+  // RESUMEN
 
-    saveButton: {
-      marginTop: 18,
-      backgroundColor:
-        '#1F4E79',
-      paddingVertical: 14,
-      borderRadius: 11,
-      alignItems: 'center',
-    },
+  summaryContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 20,
+  },
 
-    disabledButton: {
-      opacity: 0.6,
-    },
+  summaryCard: {
+    flex: 1,
+    backgroundColor: COLORS.white,
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#E5ECF4',
+    elevation: 2,
+  },
 
-    saveText: {
-      color: '#FFFFFF',
-      fontSize: 14,
-      fontWeight: '800',
-    },
+  summaryIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: COLORS.pale,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 13,
+  },
 
-    center: {
-      flex: 1,
-      justifyContent:
-        'center',
-      alignItems: 'center',
-      backgroundColor:
-        '#F5F7FA',
-    },
+  summaryValue: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: COLORS.navy,
+    marginBottom: 6,
+  },
 
-    loadingText: {
-      marginTop: 12,
-      color: '#607D8B',
+  summaryLabel: {
+    fontSize: 11,
+    lineHeight: 16,
+    fontWeight: '600',
+    color: COLORS.muted,
+  },
+
+  // PERÍODO ACTUAL
+
+  currentSection: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: COLORS.blue,
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 28,
+  },
+
+  currentSectionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: 'rgba(255,255,255,0.10)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 13,
+  },
+
+  currentSectionContent: {
+    flex: 1,
+  },
+
+  currentSectionLabel: {
+    color: COLORS.cyan,
+    fontSize: 10,
+    fontWeight: '900',
+    marginBottom: 7,
+  },
+
+  currentSectionTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: COLORS.white,
+    marginBottom: 6,
+  },
+
+  currentSectionSubtitle: {
+    fontSize: 11,
+    lineHeight: 17,
+    color: '#D6E4F2',
+  },
+
+  // LISTADO
+
+  listHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 17,
+  },
+
+  listHeaderIcon: {
+    width: 43,
+    height: 43,
+    borderRadius: 13,
+    backgroundColor: COLORS.pale,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  listHeaderContent: {
+    flex: 1,
+  },
+
+  listTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: COLORS.navy,
+    marginBottom: 5,
+  },
+
+  listSubtitle: {
+    fontSize: 12,
+    color: COLORS.muted,
+  },
+
+  // TARJETAS DE PERÍODOS
+
+  periodCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: '#E5ECF4',
+    shadowColor: COLORS.navy,
+    shadowOffset: {
+      width: 0,
+      height: 4,
     },
-  });
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+
+  periodHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+
+  periodIcon: {
+    width: 49,
+    height: 49,
+    borderRadius: 15,
+    backgroundColor: COLORS.pale,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 13,
+  },
+
+  periodInfo: {
+    flex: 1,
+  },
+
+  periodIndex: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORS.muted,
+    marginBottom: 5,
+  },
+
+  periodName: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: COLORS.navy,
+  },
+
+  statusContainer: {
+    flexDirection: 'row',
+    marginBottom: 14,
+  },
+
+  currentBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.greenBackground,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+
+  currentBadgeText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: COLORS.green,
+  },
+
+  activeBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.greenBackground,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+
+  activeBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.green,
+  },
+
+  inactiveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    backgroundColor: COLORS.orangeBackground,
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+
+  inactiveBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: COLORS.orange,
+  },
+
+  divider: {
+    height: 1,
+    backgroundColor: '#EDF2F7',
+    marginBottom: 17,
+  },
+
+  // CAMPOS DE FECHAS
+
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORS.text,
+    marginBottom: 9,
+    marginTop: 9,
+  },
+
+  required: {
+    color: '#E11D48',
+    fontWeight: '900',
+  },
+
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minHeight: 54,
+    backgroundColor: '#F8FAFD',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 13,
+    paddingHorizontal: 13,
+  },
+
+  inputIcon: {
+    width: 34,
+    height: 34,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 7,
+  },
+
+  dateInput: {
+    flex: 1,
+    fontSize: 14,
+    color: COLORS.navy,
+    paddingVertical: 13,
+  },
+
+  fieldHint: {
+    fontSize: 11,
+    color: '#94A3B8',
+    marginTop: 7,
+    marginBottom: 12,
+  },
+
+  // GUARDAR
+
+  saveButton: {
+    minHeight: 55,
+    backgroundColor: COLORS.blue,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 17,
+    paddingHorizontal: 12,
+  },
+
+  disabledButton: {
+    opacity: 0.6,
+  },
+
+  buttonContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 10,
+  },
+
+  saveText: {
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '800',
+  },
+
+  // ESTADO VACÍO
+
+  emptyCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: 20,
+  },
+
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: COLORS.navy,
+    marginTop: 15,
+    marginBottom: 9,
+    textAlign: 'center',
+  },
+
+  emptyDescription: {
+    fontSize: 12,
+    lineHeight: 19,
+    color: COLORS.muted,
+    textAlign: 'center',
+  },
+
+  // INFORMACIÓN
+
+  infoCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: '#EAF3FC',
+    borderRadius: 15,
+    padding: 16,
+    marginTop: 5,
+    marginBottom: 18,
+    gap: 10,
+  },
+
+  infoText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 19,
+    color: '#475569',
+  },
+
+  // VOLVER
+
+  bottomBackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 52,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 14,
+    gap: 9,
+  },
+
+  bottomBackText: {
+    color: COLORS.blue,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  // PIE DE PÁGINA
+
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 24,
+    gap: 7,
+  },
+
+  footerText: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#64748B',
+  },
+
+  // CARGA
+
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: COLORS.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+
+  loadingIcon: {
+    width: 76,
+    height: 76,
+    borderRadius: 23,
+    backgroundColor: COLORS.pale,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+
+  loadingTitle: {
+    marginTop: 18,
+    fontSize: 15,
+    fontWeight: '800',
+    color: COLORS.navy,
+    textAlign: 'center',
+  },
+
+  loadingSubtitle: {
+    fontSize: 12,
+    lineHeight: 19,
+    color: COLORS.muted,
+    textAlign: 'center',
+    marginTop: 8,
+  },
+});

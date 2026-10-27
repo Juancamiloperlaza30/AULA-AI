@@ -195,11 +195,44 @@ export default function TeacherGradesScreen({
           actividad
         );
 
+        const listaEstudiantes =
+          data.estudiantes || [];
+
         setEstudiantes(
-          data.estudiantes || []
+          listaEstudiantes
         );
 
-        setCalificaciones({});
+        const calificacionesIniciales =
+          {};
+
+        listaEstudiantes.forEach(
+          (estudiante) => {
+            const nota =
+              estudiante.calificacion;
+
+            calificacionesIniciales[
+              estudiante.usuario_id
+            ] = {
+              valor:
+                nota?.valor !==
+                  undefined &&
+                nota?.valor !== null
+                  ? String(
+                      nota.valor
+                    )
+                  : '',
+
+              retroalimentacion:
+                nota
+                  ?.retroalimentacion ||
+                '',
+            };
+          }
+        );
+
+        setCalificaciones(
+          calificacionesIniciales
+        );
       } catch (error) {
         console.log(
           'Error consultando estudiantes:',
@@ -248,7 +281,8 @@ export default function TeacherGradesScreen({
                 ];
 
               if (
-                !datos?.valor ||
+                datos?.valor === undefined ||
+                datos?.valor === null ||
                 !String(
                   datos.valor
                 ).trim()
@@ -301,7 +335,7 @@ export default function TeacherGradesScreen({
         if (tieneNotaInvalida) {
           Alert.alert(
             'Calificación inválida',
-            'Las calificaciones deben estar entre 0.00 y 5.00.'
+            'No se permiten notas negativas. Las calificaciones deben estar entre 0.00 y 5.00.'
           );
 
           return;
@@ -349,7 +383,9 @@ export default function TeacherGradesScreen({
             'Calificaciones registradas correctamente.'
         );
 
-        setCalificaciones({});
+        await seleccionarActividad(
+          actividadSeleccionada
+        );
       } catch (error) {
         console.log(
           'Error guardando calificaciones:',

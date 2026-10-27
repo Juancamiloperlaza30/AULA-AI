@@ -1,163 +1,493 @@
-import { useState } from 'react';
+import React, {
+  useState,
+} from 'react';
 
 import {
-  Alert,
-  StyleSheet,
+  View,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  StyleSheet,
+  Alert,
+  ActivityIndicator,
+  ScrollView,
 } from 'react-native';
 
-export default function ResetPasswordScreen({
-  onActualizarPassword,
-  onCancelar,
-}) {
-  const [password, setPassword] = useState('');
-  const [confirmacion, setConfirmacion] =
-    useState('');
+import {
+  supabase,
+  supabaseConfigurado,
+} from '../../supabaseClient';
 
-  const handleGuardar = async () => {
-    if (!password.trim()) {
-      Alert.alert(
-        'Campo obligatorio',
-        'Ingrese la nueva contraseña.'
-      );
-      return;
-    }
+const ResetPasswordScreen = ({
+  apiUrl,
+  recoveryEmail,
+  recoverySession,
+  onPasswordChanged,
+}) => {
+  const [
+    codigoRecuperacion,
+    setCodigoRecuperacion,
+  ] = useState('');
 
-    if (password.length < 8) {
-      Alert.alert(
-        'Contraseña no válida',
-        'La contraseña debe tener al menos 8 caracteres.'
-      );
-      return;
-    }
+  const [
+    nuevaContrasena,
+    setNuevaContrasena,
+  ] = useState('');
 
-    if (password !== confirmacion) {
-      Alert.alert(
-        'Las contraseñas no coinciden',
-        'Verifique la confirmación de la contraseña.'
-      );
-      return;
-    }
+  const [
+    confirmarContrasena,
+    setConfirmarContrasena,
+  ] = useState('');
 
-    await onActualizarPassword(password);
-  };
+  const [
+    guardando,
+    setGuardando,
+  ] = useState(false);
+
+  const [
+    sesionVerificada,
+    setSesionVerificada,
+  ] = useState(Boolean(recoverySession));
+
+  const finalizarRecuperacion =
+    async () => {
+      try {
+        const {
+          error,
+        } = await supabase.auth.signOut();
+
+        if (error) {
+          console.error(
+            'Error cerrando sesión de recuperación:',
+            error.message
+          );
+        }
+      } catch (error) {
+        console.error(
+          'Error cerrando sesión de recuperación:',
+          error
+        );
+      } finally {
+        await onPasswordChanged();
+      }
+    };
+
+  const cambiarPassword =
+    async () => {
+      if (
+        !supabaseConfigurado ||
+        !supabase
+      ) {
+        Alert.alert(
+          'Configuración incompleta',
+          'La recuperación de contraseña no está disponible en esta versión de AULA-AI.'
+        );
+
+        return;
+      }
+
+      if (
+        !recoverySession &&
+        !sesionVerificada &&
+        !codigoRecuperacion.trim()
+      ) {
+        Alert.alert(
+          'Código obligatorio',
+          'Ingresa el código de recuperación que recibiste por correo.'
+        );
+
+        return;
+      }
+
+      if (
+        !nuevaContrasena.trim()
+      ) {
+        Alert.alert(
+          'Campo obligatorio',
+          'Ingrese una nueva contraseña.'
+        );
+
+        return;
+      }
+
+      if (
+        !confirmarContrasena.trim()
+      ) {
+        Alert.alert(
+          'Campo obligatorio',
+          'Confirme la nueva contraseña.'
+        );
+
+        return;
+      }
+
+      if (
+        nuevaContrasena.length < 8
+      ) {
+        Alert.alert(
+          'Contraseña no segura',
+          'La contraseña debe tener mínimo 8 caracteres.'
+        );
+
+        return;
+      }
+
+      const tieneMayuscula =
+        /[A-Z]/.test(
+          nuevaContrasena
+        );
+
+      const tieneMinuscula =
+        /[a-z]/.test(
+          nuevaContrasena
+        );
+
+      const tieneNumero =
+        /[0-9]/.test(
+          nuevaContrasena
+        );
+
+      if (
+        !tieneMayuscula ||
+        !tieneMinuscula ||
+        !tieneNumero
+      ) {
+        Alert.alert(
+          'Contraseña no segura',
+          'Debe incluir al menos una mayúscula, una minúscula y un número.'
+        );
+
+        return;
+      }
+
+      if (
+        nuevaContrasena !==
+        confirmarContrasena
+      ) {
+        Alert.alert(
+          'Las contraseñas no coinciden',
+          'Verifique la nueva contraseña y su confirmación.'
+        );
+
+        return;
+      }
+
+      try {
+        setGuardando(true);
+
+        if (
+          !recoverySession &&
+          !sesionVerificada
+        ) {
+          if (!recoveryEmail) {
+            throw new Error(
+              'No se encontró el correo asociado a la solicitud. Inicia nuevamente la recuperación.'
+            );
+          }
+
+          const {
+            data: recoveryData,
+            error: recoveryError,
+          } =
+            await supabase.auth.verifyOtp({
+              email: recoveryEmail,
+              token:
+                codigoRecuperacion.trim(),
+              type: 'recovery',
+            });
+
+          if (recoveryError) {
+            throw recoveryError;
+          }
+
+          if (!recoveryData?.session) {
+            throw new Error(
+              'El código no generó una sesión de recuperación válida. Verifica el código o solicita uno nuevo.'
+            );
+          }
+
+          setSesionVerificada(true);
+        }
+
+        const {
+          error: updateError,
+        } =
+          await supabase.auth.updateUser({
+            password:
+              nuevaContrasena,
+          });
+
+        if (updateError) {
+          throw updateError;
+        }
+
+        const {
+          data: sessionData,
+          error: sessionError,
+        } =
+          await supabase.auth.getSession();
+
+        if (sessionError) {
+          throw sessionError;
+        }
+
+        const recoveryAccessToken =
+          sessionData?.session
+            ?.access_token;
+
+        if (!recoveryAccessToken) {
+          throw new Error(
+            'No se encontró la sesión segura de recuperación.'
+          );
+        }
+
+        const response =
+          await fetch(
+            `${apiUrl}/api/auth/confirmar-recuperacion-password`,
+            {
+              method: 'PUT',
+              headers: {
+                Authorization:
+                  `Bearer ${recoveryAccessToken}`,
+                'Content-Type':
+                  'application/json',
+              },
+            }
+          );
+
+        const data =
+          await response.json();
+
+        if (!response.ok) {
+          console.log(
+            'Error sincronizando recuperación:',
+            data
+          );
+
+          Alert.alert(
+            'Contraseña actualizada',
+            'La contraseña fue cambiada en Supabase, pero no fue posible finalizar la sincronización del perfil. Intente nuevamente.'
+          );
+
+          return;
+        }
+
+        Alert.alert(
+          'Contraseña actualizada',
+          'Tu contraseña fue restablecida correctamente. Ya puedes iniciar sesión con tu nueva contraseña.',
+          [
+            {
+              text: 'Ir al inicio de sesión',
+              onPress: finalizarRecuperacion,
+            },
+          ]
+        );
+      } catch (error) {
+        console.log(
+          'Error restableciendo contraseña:',
+          error
+        );
+
+        Alert.alert(
+          'No fue posible cambiar la contraseña',
+          error.message ||
+            'El código puede ser incorrecto o haber vencido. Solicita una nueva recuperación.'
+        );
+      } finally {
+        setGuardando(false);
+      }
+    };
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.title}>
-        Nueva contraseña
-      </Text>
-
-      <Text style={styles.subtitle}>
-        Establezca una nueva contraseña para su cuenta de AULA-AI.
-      </Text>
-
-      <Text style={styles.label}>
-        Nueva contraseña
-      </Text>
-
-      <TextInput
-        style={styles.input}
-        secureTextEntry
-        value={password}
-        onChangeText={setPassword}
-        placeholder="Ingrese la nueva contraseña"
-      />
-
-      <Text style={styles.label}>
-        Confirmar contraseña
-      </Text>
-
-      <TextInput
-        style={styles.input}
-        secureTextEntry
-        value={confirmacion}
-        onChangeText={setConfirmacion}
-        placeholder="Repita la nueva contraseña"
-      />
-
-      <TouchableOpacity
-        style={styles.button}
-        onPress={handleGuardar}
-      >
-        <Text style={styles.buttonText}>
-          Actualizar contraseña
+    <ScrollView
+      contentContainerStyle={
+        styles.container
+      }
+      keyboardShouldPersistTaps="handled"
+    >
+      <View style={styles.card}>
+        <Text style={styles.logo}>
+          AULA-AI
         </Text>
-      </TouchableOpacity>
 
-      <TouchableOpacity
-        onPress={onCancelar}
-      >
-        <Text style={styles.cancelText}>
-          Cancelar
+        <Text style={styles.title}>
+          Restablecer contraseña
         </Text>
-      </TouchableOpacity>
-    </View>
+
+        <Text style={styles.description}>
+          Ingresa el código enviado a
+          {` ${recoveryEmail || 'tu correo'}`}
+          {' '}y crea una nueva contraseña
+          segura para tu cuenta.
+        </Text>
+
+        {!recoverySession &&
+          !sesionVerificada && (
+            <>
+              <Text style={styles.label}>
+                Código de recuperación
+              </Text>
+
+              <TextInput
+                style={styles.input}
+                value={codigoRecuperacion}
+                onChangeText={
+                  setCodigoRecuperacion
+                }
+                placeholder="Código recibido por correo"
+                keyboardType="number-pad"
+                autoCapitalize="none"
+                editable={!guardando}
+              />
+            </>
+          )}
+
+        <Text style={styles.label}>
+          Nueva contraseña
+        </Text>
+
+        <TextInput
+          style={styles.input}
+          value={nuevaContrasena}
+          onChangeText={
+            setNuevaContrasena
+          }
+          placeholder="Nueva contraseña"
+          secureTextEntry
+          autoCapitalize="none"
+        />
+
+        <Text style={styles.label}>
+          Confirmar nueva contraseña
+        </Text>
+
+        <TextInput
+          style={styles.input}
+          value={confirmarContrasena}
+          onChangeText={
+            setConfirmarContrasena
+          }
+          placeholder="Repita la nueva contraseña"
+          secureTextEntry
+          autoCapitalize="none"
+        />
+
+        <Text style={styles.help}>
+          Mínimo 8 caracteres, una
+          mayúscula, una minúscula y un
+          número.
+        </Text>
+
+        <TouchableOpacity
+          style={[
+            styles.button,
+            guardando &&
+              styles.buttonDisabled,
+          ]}
+          onPress={
+            cambiarPassword
+          }
+          disabled={guardando}
+        >
+          {guardando ? (
+            <ActivityIndicator
+              color="#FFFFFF"
+            />
+          ) : (
+            <Text
+              style={
+                styles.buttonText
+              }
+            >
+              Guardar nueva contraseña
+            </Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
   );
-}
+};
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F5F7FA',
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-  },
+const styles =
+  StyleSheet.create({
+    container: {
+      flexGrow: 1,
+      justifyContent: 'center',
+      padding: 24,
+      backgroundColor: '#F4F7FB',
+    },
 
-  title: {
-    fontSize: 30,
-    fontWeight: 'bold',
-    color: '#1F4E79',
-    textAlign: 'center',
-    marginBottom: 10,
-  },
+    card: {
+      backgroundColor: '#FFFFFF',
+      borderRadius: 24,
+      padding: 24,
+      elevation: 3,
+    },
 
-  subtitle: {
-    fontSize: 15,
-    color: '#5F6B7A',
-    textAlign: 'center',
-    marginBottom: 30,
-    lineHeight: 22,
-  },
+    logo: {
+      fontSize: 18,
+      fontWeight: '800',
+      color: '#1D4E7A',
+      marginBottom: 24,
+    },
 
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#263238',
-    marginBottom: 8,
-  },
+    title: {
+      fontSize: 26,
+      fontWeight: '800',
+      color: '#172B4D',
+      marginBottom: 12,
+    },
 
-  input: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#D5DCE5',
-    borderRadius: 10,
-    paddingHorizontal: 14,
-    paddingVertical: 13,
-    fontSize: 16,
-    marginBottom: 20,
-  },
+    description: {
+      fontSize: 15,
+      lineHeight: 22,
+      color: '#52667A',
+      marginBottom: 26,
+    },
 
-  button: {
-    backgroundColor: '#1F4E79',
-    paddingVertical: 15,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
+    label: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: '#263D52',
+      marginBottom: 7,
+    },
 
-  buttonText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
+    input: {
+      height: 52,
+      borderWidth: 1,
+      borderColor: '#D8E0E8',
+      borderRadius: 14,
+      paddingHorizontal: 15,
+      fontSize: 16,
+      color: '#172B4D',
+      backgroundColor: '#FAFBFC',
+      marginBottom: 18,
+    },
 
-  cancelText: {
-    textAlign: 'center',
-    marginTop: 20,
-    color: '#607D8B',
-    fontSize: 14,
-  },
-});
+    help: {
+      fontSize: 12,
+      lineHeight: 18,
+      color: '#75879A',
+      marginBottom: 20,
+    },
+
+    button: {
+      minHeight: 52,
+      borderRadius: 14,
+      backgroundColor: '#1D4E7A',
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+
+    buttonDisabled: {
+      opacity: 0.6,
+    },
+
+    buttonText: {
+      color: '#FFFFFF',
+      fontSize: 16,
+      fontWeight: '800',
+    },
+  });
+
+export default ResetPasswordScreen;

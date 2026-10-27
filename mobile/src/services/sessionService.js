@@ -1,15 +1,37 @@
+import { Platform } from 'react-native';
 import * as SecureStore from 'expo-secure-store';
 
 const SESSION_KEY = 'aula_ai_session';
 
 /**
- * Guarda la sesión del usuario de forma segura.
+ * Guarda la sesión del usuario.
+ *
+ * Android/iOS: utiliza SecureStore.
+ * Web: utiliza sessionStorage.
+ *
+ * En web, la sesión se conserva durante la sesión
+ * de la pestaña, pero no es almacenamiento cifrado.
  */
 export const guardarSesion = async (sesion) => {
   try {
+    const sessionString = JSON.stringify(sesion);
+
+    if (Platform.OS === 'web') {
+      if (typeof window === 'undefined') {
+        return false;
+      }
+
+      window.sessionStorage.setItem(
+        SESSION_KEY,
+        sessionString
+      );
+
+      return true;
+    }
+
     await SecureStore.setItemAsync(
       SESSION_KEY,
-      JSON.stringify(sesion)
+      sessionString
     );
 
     return true;
@@ -24,8 +46,21 @@ export const guardarSesion = async (sesion) => {
  */
 export const obtenerSesion = async () => {
   try {
-    const sessionString =
-      await SecureStore.getItemAsync(SESSION_KEY);
+    let sessionString = null;
+
+    if (Platform.OS === 'web') {
+      if (typeof window === 'undefined') {
+        return null;
+      }
+
+      sessionString = window.sessionStorage.getItem(
+        SESSION_KEY
+      );
+    } else {
+      sessionString = await SecureStore.getItemAsync(
+        SESSION_KEY
+      );
+    }
 
     if (!sessionString) {
       return null;
@@ -43,6 +78,15 @@ export const obtenerSesion = async () => {
  */
 export const eliminarSesion = async () => {
   try {
+    if (Platform.OS === 'web') {
+      if (typeof window === 'undefined') {
+        return false;
+      }
+
+      window.sessionStorage.removeItem(SESSION_KEY);
+      return true;
+    }
+
     await SecureStore.deleteItemAsync(SESSION_KEY);
     return true;
   } catch (error) {

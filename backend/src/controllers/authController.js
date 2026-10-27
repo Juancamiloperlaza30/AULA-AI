@@ -100,7 +100,9 @@ const login = async (req, res) => {
         apellidos,
         correo,
         rol,
-        activo
+        activo,
+        debe_cambiar_password,
+        password_cambiado_at
       `)
       .eq('id', authData.user.id)
       .maybeSingle();
@@ -180,6 +182,10 @@ const login = async (req, res) => {
         apellidos: usuario.apellidos,
         correo: usuario.correo,
         rol: usuario.rol,
+        debeCambiarPassword:
+          usuario.debe_cambiar_password === true,
+        passwordCambiadoAt:
+          usuario.password_cambiado_at || null,
       },
 
       session: {
@@ -279,7 +285,10 @@ const recuperarPassword = async (
   res
 ) => {
   try {
-    const { correo } = req.body;
+    const {
+      correo,
+      redirectTo,
+    } = req.body;
 
     if (!correo || !correo.trim()) {
       return res.status(400).json({
@@ -292,6 +301,28 @@ const recuperarPassword = async (
     const correoNormalizado =
       correo.trim().toLowerCase();
 
+    let urlRedireccion =
+      'aulaai://reset-password';
+
+    if (
+      typeof redirectTo === 'string' &&
+      (
+        redirectTo.startsWith(
+          'exp://'
+        ) ||
+        redirectTo ===
+          'aulaai://reset-password'
+      )
+    ) {
+      urlRedireccion =
+        redirectTo;
+    }
+
+    console.log(
+      'URL RECUPERACION UTILIZADA:',
+      urlRedireccion
+    );
+
     const {
       error,
     } =
@@ -299,7 +330,8 @@ const recuperarPassword = async (
         .resetPasswordForEmail(
           correoNormalizado,
           {
-            redirectTo: 'aulaai://reset-password',
+            redirectTo:
+              urlRedireccion,
           }
         );
 
@@ -312,6 +344,12 @@ const recuperarPassword = async (
         'Error enviando recuperación:',
         error.message
       );
+
+      return res.status(502).json({
+        success: false,
+        message:
+          'No fue posible enviar el correo de recuperación. Intente nuevamente más tarde.',
+      });
     }
 
     return res.status(200).json({
@@ -376,7 +414,7 @@ const renovarSesion = async (req, res) => {
     } = await supabaseAdmin
       .from('usuarios')
       .select(
-        'id, nombres, apellidos, correo, rol, activo'
+        'id, nombres, apellidos, correo, rol, activo, debe_cambiar_password, password_cambiado_at'
       )
       .eq('id', data.user.id)
       .maybeSingle();
@@ -408,6 +446,10 @@ const renovarSesion = async (req, res) => {
         correo: usuario.correo,
         rol: usuario.rol,
         activo: usuario.activo,
+        debeCambiarPassword:
+          usuario.debe_cambiar_password === true,
+        passwordCambiadoAt:
+          usuario.password_cambiado_at || null,
       },
 
       session: {
@@ -534,10 +576,398 @@ const actualizarPassword = async (
   }
 };
 
+const cambiarPasswordInicial =
+  async (req, res) => {
+    try {
+      const usuarioId =
+        req.usuario.id;
+
+      const {
+        nuevaContrasena,
+        confirmarContrasena,
+      } = req.body;
+
+      // =====================================
+      // 1. Validar campos
+      // =====================================
+
+      if (
+        !nuevaContrasena ||
+        !nuevaContrasena.trim()
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'La nueva contraseña es obligatoria.',
+        });
+      }
+
+      if (
+        !confirmarContrasena ||
+        !confirmarContrasena.trim()
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Debe confirmar la nueva contraseña.',
+        });
+      }
+
+      if (
+        nuevaContrasena !==
+        confirmarContrasena
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Las contraseñas no coinciden.',
+        });
+      }
+
+      // =====================================
+      // 2. Validar seguridad
+      // =====================================
+
+      if (
+        nuevaContrasena.length < 8
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'La contraseña debe tener mínimo 8 caracteres.',
+        });
+      }
+
+      const tieneMayuscula =
+        /[A-Z]/.test(
+          nuevaContrasena
+        );
+
+      const tieneMinuscula =
+        /[a-z]/.test(
+          nuevaContrasena
+        );
+
+      const tieneNumero =
+        /[0-9]/.test(
+          nuevaContrasena
+        );
+
+      if (
+        !tieneMayuscula ||
+        !tieneMinuscula ||
+        !tieneNumero
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'La contraseña debe incluir al menos una letra mayúscula, una minúscula y un número.',
+        });
+      }
+
+      // =====================================
+      // 3. Consultar usuario
+      // =====================================
+
+      const {
+        data: usuario,
+        error: usuarioError,
+      } = await supabaseAdmin
+        .from('usuarios')
+        .select(`
+          id,
+          correo,
+          rol,
+          numero_documento,
+          debe_cambiar_password
+        `)
+        .eq(
+          'id',
+          usuarioId
+        )
+        .maybeSingle();
+
+      if (
+        usuarioError ||
+        !usuario
+      ) {
+        console.error(
+          'Error consultando usuario:',
+          usuarioError?.message
+        );
+
+        return res.status(404).json({
+          success: false,
+          message:
+            'No fue posible encontrar el usuario.',
+        });
+      }
+
+      // =====================================
+      // 4. Verificar cambio obligatorio
+      // =====================================
+
+      if (
+        usuario.debe_cambiar_password !==
+        true
+      ) {
+        return res.status(409).json({
+          success: false,
+          message:
+            'El usuario no tiene un cambio obligatorio de contraseña pendiente.',
+        });
+      }
+
+      // =====================================
+      // 5. No permitir usar el documento
+      // =====================================
+
+      if (
+        nuevaContrasena ===
+        usuario.numero_documento
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'La nueva contraseña no puede ser igual al número de documento.',
+        });
+      }
+
+      // =====================================
+      // 6. Actualizar contraseña en Auth
+      // =====================================
+
+      const {
+        error: authError,
+      } =
+        await supabaseAdmin
+          .auth
+          .admin
+          .updateUserById(
+            usuarioId,
+            {
+              password:
+                nuevaContrasena,
+            }
+          );
+
+      if (authError) {
+        console.error(
+          'Error actualizando contraseña en Auth:',
+          authError.message
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            'No fue posible actualizar la contraseña.',
+        });
+      }
+
+      // =====================================
+      // 7. Actualizar estado del perfil
+      // =====================================
+
+      const fechaCambio =
+        new Date().toISOString();
+
+      const {
+        error: perfilError,
+      } = await supabaseAdmin
+        .from('usuarios')
+        .update({
+          debe_cambiar_password:
+            false,
+          password_cambiado_at:
+            fechaCambio,
+        })
+        .eq(
+          'id',
+          usuarioId
+        );
+
+      if (perfilError) {
+        console.error(
+          'Error actualizando estado de contraseña:',
+          perfilError.message
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            'La contraseña fue actualizada, pero no fue posible finalizar el proceso. Intente iniciar sesión nuevamente.',
+        });
+      }
+
+      // =====================================
+      // 8. Auditoría
+      // =====================================
+
+      await registrarAuditoria({
+        usuarioId:
+          usuario.id,
+        correo:
+          usuario.correo,
+        evento:
+          'PASSWORD_INICIAL_CAMBIADA',
+        descripcion:
+          'El usuario cambió correctamente su contraseña temporal.',
+        rol:
+          usuario.rol,
+        direccionIp:
+          req.ip,
+        dispositivo:
+          req.headers[
+            'user-agent'
+          ] || null,
+      });
+
+      // =====================================
+      // 9. Respuesta
+      // =====================================
+
+      return res
+        .status(200)
+        .json({
+          success: true,
+          message:
+            'Contraseña actualizada correctamente.',
+          usuario: {
+            debeCambiarPassword:
+              false,
+            passwordCambiadoAt:
+              fechaCambio,
+          },
+        });
+    } catch (error) {
+      console.error(
+        'Error inesperado cambiando contraseña inicial:',
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          'Ocurrió un error al cambiar la contraseña.',
+      });
+    }
+  };
+
+const confirmarRecuperacionPassword =
+  async (req, res) => {
+    try {
+      const usuarioId =
+        req.usuario.id;
+
+      const {
+        data: usuario,
+        error: usuarioError,
+      } = await supabaseAdmin
+        .from('usuarios')
+        .select(`
+          id,
+          correo,
+          rol
+        `)
+        .eq(
+          'id',
+          usuarioId
+        )
+        .maybeSingle();
+
+      if (
+        usuarioError ||
+        !usuario
+      ) {
+        console.error(
+          'Error consultando usuario:',
+          usuarioError?.message
+        );
+
+        return res.status(404).json({
+          success: false,
+          message:
+            'No fue posible encontrar el usuario.',
+        });
+      }
+
+      const fechaCambio =
+        new Date().toISOString();
+
+      const {
+        error: updateError,
+      } = await supabaseAdmin
+        .from('usuarios')
+        .update({
+          debe_cambiar_password:
+            false,
+          password_cambiado_at:
+            fechaCambio,
+        })
+        .eq(
+          'id',
+          usuarioId
+        );
+
+      if (updateError) {
+        console.error(
+          'Error actualizando recuperación:',
+          updateError.message
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            'No fue posible finalizar la recuperación de contraseña.',
+        });
+      }
+
+      await registrarAuditoria({
+        usuarioId:
+          usuario.id,
+        correo:
+          usuario.correo,
+        evento:
+          'PASSWORD_RECUPERADA',
+        descripcion:
+          'El usuario restableció su contraseña mediante recuperación por correo.',
+        rol:
+          usuario.rol,
+        direccionIp:
+          req.ip,
+        dispositivo:
+          req.headers[
+            'user-agent'
+          ] || null,
+      });
+
+      return res.status(200).json({
+        success: true,
+        message:
+          'Recuperación de contraseña finalizada correctamente.',
+        passwordCambiadoAt:
+          fechaCambio,
+      });
+    } catch (error) {
+      console.error(
+        'Error confirmando recuperación:',
+        error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          'Ocurrió un error al finalizar la recuperación.',
+      });
+    }
+  };
+
 module.exports = {
   login,
   logout,
   recuperarPassword,
   renovarSesion,
   actualizarPassword,
+  cambiarPasswordInicial,
+  confirmarRecuperacionPassword,
 };

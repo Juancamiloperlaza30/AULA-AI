@@ -1,3 +1,4 @@
+
 const express = require('express');
 
 const router = express.Router();
@@ -30,6 +31,15 @@ const {
 
   listarEntregasActividadDocente,
 } = require('../controllers/activityController');
+
+// ======================================================
+// HU-08 - CLASIFICACION ACADEMICA
+// ======================================================
+
+const {
+  consultarClasificacionActividad,
+  actualizarClasificacionActividad,
+} = require('../controllers/activityClassificationController');
 
 // ======================================================
 // DOCENTE - ASIGNACIONES
@@ -76,6 +86,28 @@ router.get(
     'coordinador'
   ),
   listarActividadesAdministrativas
+);
+
+// ======================================================
+// HU-08 - CONSULTAR CLASIFICACION E HISTORIAL
+// ADMINISTRADOR / COORDINADOR
+// ======================================================
+
+router.get(
+  '/:id/clasificacion',
+  verificarToken,
+  permitirRoles(
+    'administrador',
+    'coordinador'
+  ),
+  consultarClasificacionActividad
+);
+
+router.patch(
+  '/:id/clasificacion',
+  verificarToken,
+  permitirRoles('coordinador'),
+  actualizarClasificacionActividad
 );
 
 // ======================================================

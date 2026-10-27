@@ -32,6 +32,7 @@ const registrarUsuario = async (req, res) => {
       rol,
       gradoId,
       grupoId,
+      ambitosOrientador,
       estudiantesVinculados = [],
     } = req.body;
 
@@ -109,6 +110,143 @@ const registrarUsuario = async (req, res) => {
       }
     }
 
+    let ambitosOrientadorNormalizados = [];
+
+    if (rol === 'orientador') {
+      if (
+        !Array.isArray(ambitosOrientador) ||
+        ambitosOrientador.length === 0
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'El orientador debe tener al menos un grado y grupo asignado.',
+        });
+      }
+
+      ambitosOrientadorNormalizados =
+        ambitosOrientador.map((ambito) => {
+          const gradoIdTexto =
+            String(ambito?.gradoId ?? '');
+          const grupoIdTexto =
+            String(ambito?.grupoId ?? '');
+
+          if (
+            !/^[1-9]\d*$/.test(gradoIdTexto) ||
+            !/^[1-9]\d*$/.test(grupoIdTexto)
+          ) {
+            return null;
+          }
+
+          const gradoIdNumero =
+            Number(gradoIdTexto);
+          const grupoIdNumero =
+            Number(grupoIdTexto);
+
+          if (
+            !Number.isSafeInteger(gradoIdNumero) ||
+            !Number.isSafeInteger(grupoIdNumero)
+          ) {
+            return null;
+          }
+
+          return {
+            grado_id: gradoIdNumero,
+            grupo_id: grupoIdNumero,
+          };
+        });
+
+      if (
+        ambitosOrientadorNormalizados.some(
+          (ambito) => !ambito
+        )
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Uno o más grados o grupos asignados no son válidos.',
+        });
+      }
+
+      const paresAmbitos = new Set(
+        ambitosOrientadorNormalizados.map(
+          ({ grado_id, grupo_id }) =>
+            `${grado_id}:${grupo_id}`
+        )
+      );
+
+      if (
+        paresAmbitos.size !==
+        ambitosOrientadorNormalizados.length
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'No se permiten asignaciones de grado y grupo duplicadas.',
+        });
+      }
+
+      const gruposIds = [
+        ...new Set(
+          ambitosOrientadorNormalizados.map(
+            ({ grupo_id }) => grupo_id
+          )
+        ),
+      ];
+
+      const {
+        data: gruposAsignados,
+        error: gruposAsignadosError,
+      } = await supabaseAdmin
+        .from('grupos')
+        .select('id, grado_id, activo')
+        .in('id', gruposIds);
+
+      if (gruposAsignadosError) {
+        console.error(
+          'Error validando ámbitos del orientador:',
+          gruposAsignadosError.message
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            'No fue posible validar los grupos asignados al orientador.',
+        });
+      }
+
+      const gruposAsignadosPorId = new Map(
+        (gruposAsignados || []).map((grupo) => [
+          String(grupo.id),
+          grupo,
+        ])
+      );
+
+      const ambitosValidos =
+        ambitosOrientadorNormalizados.every(
+          ({ grado_id, grupo_id }) => {
+            const grupo = gruposAsignadosPorId.get(
+              String(grupo_id)
+            );
+
+            return (
+              grupo &&
+              String(grupo.grado_id) ===
+                String(grado_id) &&
+              grupo.activo === true
+            );
+          }
+        );
+
+      if (!ambitosValidos) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Uno o más grupos no están activos o no pertenecen al grado indicado.',
+        });
+      }
+    }
+
     // =====================================
     // 4. Validar duplicados
     // =====================================
@@ -146,35 +284,46 @@ const registrarUsuario = async (req, res) => {
     }
 
     // =====================================
-    // 5. Crear cuenta y enviar invitación
+    // 5. Crear cuenta con contraseña temporal
     // =====================================
+
+    const passwordTemporal =
+      numeroDocumento.trim();
+
+    if (passwordTemporal.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'El número de documento debe tener al menos 6 caracteres para utilizarlo como contraseña temporal.',
+      });
+    }
 
     const {
       data: authData,
       error: authError,
-    } = await supabaseAdmin.auth.admin.inviteUserByEmail(
-      correoNormalizado,
-      {
-        data: {
+    } =
+      await supabaseAdmin.auth.admin.createUser({
+        email: correoNormalizado,
+        password: passwordTemporal,
+        email_confirm: true,
+        user_metadata: {
           nombres: nombres.trim(),
           apellidos: apellidos.trim(),
           rol,
+          debe_cambiar_password: true,
         },
-
-        redirectTo: 'aulaai://activate-account',
-      }
-    );
+      });
 
     if (authError || !authData?.user) {
       console.error(
-        'Error enviando invitación:',
+        'Error creando usuario en Auth:',
         authError?.message
       );
 
       return res.status(500).json({
         success: false,
         message:
-          'No fue posible crear la cuenta o enviar la invitación.',
+          'No fue posible crear la cuenta del usuario.',
       });
     }
 
@@ -199,6 +348,8 @@ const registrarUsuario = async (req, res) => {
         telefono: telefono.trim(),
         rol,
         activo: true,
+        debe_cambiar_password: true,
+        password_cambiado_at: null,
       });
 
     if (perfilError) {
@@ -333,7 +484,44 @@ const registrarUsuario = async (req, res) => {
     }
 
     // =====================================
-    // 9. Registrar auditoría
+    // 9. Asignar ámbitos del orientador
+    // =====================================
+
+    if (rol === 'orientador') {
+      const ambitosParaInsertar =
+        ambitosOrientadorNormalizados.map(
+          ({ grado_id, grupo_id }) => ({
+            orientador_id: userId,
+            grado_id,
+            grupo_id,
+            activo: true,
+          })
+        );
+
+      const {
+        error: ambitosError,
+      } = await supabaseAdmin
+        .from('orientador_ambito')
+        .insert(ambitosParaInsertar);
+
+      if (ambitosError) {
+        console.error(
+          'Error asignando ámbitos al orientador:',
+          ambitosError.message
+        );
+
+        await limpiarUsuarioCreado(userId);
+
+        return res.status(500).json({
+          success: false,
+          message:
+            'No fue posible asignar los grados y grupos al orientador.',
+        });
+      }
+    }
+
+    // =====================================
+    // 10. Registrar auditoría
     // =====================================
 
     await registrarAuditoria({
@@ -353,7 +541,7 @@ const registrarUsuario = async (req, res) => {
     });
 
     // =====================================
-    // 10. Respuesta
+    // 11. Respuesta
     // =====================================
 
     return res.status(201).json({
@@ -361,13 +549,14 @@ const registrarUsuario = async (req, res) => {
       message:
         'Usuario registrado con éxito.',
       activationMessage:
-        'Se envió un enlace de activación al correo institucional registrado.',
+        'El usuario fue creado con una contraseña temporal y deberá cambiarla en su primer inicio de sesión.',
       usuario: {
         id: userId,
         nombres: nombres.trim(),
         apellidos: apellidos.trim(),
         correo: correoNormalizado,
         rol,
+        debeCambiarPassword: true,
       },
     });
   } catch (error) {

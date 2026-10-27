@@ -17,6 +17,8 @@ export default function CoordinatorDashboard({
 	onRegisterUser,
 	onManageSubjects,
 	onManagePeriods,
+	onMyCommunications,
+	onPublishCommunication,
 }) {
 	return (
 		<ScrollView
@@ -91,6 +93,44 @@ export default function CoordinatorDashboard({
 					de los periodos académicos.
 				</Text>
 			</TouchableOpacity>
+
+			{/* HU-12 | PUBLICAR COMUNICADO */}
+			{typeof onPublishCommunication === 'function' && (
+			  <TouchableOpacity
+			    style={styles.card}
+			    onPress={onPublishCommunication}
+			    activeOpacity={0.85}
+			    accessibilityRole="button"
+			    accessibilityLabel="Publicar comunicado institucional"
+			  >
+			    <Text style={styles.cardTitle}>
+			      📝 Publicar comunicado
+			    </Text>
+			    <Text style={styles.cardText}>
+			      Redactar y enviar comunicados institucionales
+			      a los destinatarios autorizados.
+			    </Text>
+			  </TouchableOpacity>
+			)}
+
+			{typeof onMyCommunications === 'function' && (
+				<TouchableOpacity
+					style={styles.card}
+					onPress={onMyCommunications}
+					activeOpacity={0.85}
+					accessibilityRole="button"
+					accessibilityLabel="Consultar mis comunicados institucionales"
+				>
+					<Text style={styles.cardTitle}>
+						📢 Mis comunicados
+					</Text>
+
+					<Text style={styles.cardText}>
+						Consulta los avisos, novedades y comunicados
+						institucionales dirigidos a ti.
+					</Text>
+				</TouchableOpacity>
+			)}
 
 			<TouchableOpacity
 				style={styles.logoutButton}

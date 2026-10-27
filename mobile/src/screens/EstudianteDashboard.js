@@ -1,9 +1,12 @@
-import {
+
+import React, {
+  useCallback,
   useEffect,
   useState,
 } from 'react';
 
 import {
+  ActivityIndicator,
   ScrollView,
   StyleSheet,
   Text,
@@ -14,6 +17,171 @@ import {
 import ProfileDashboardHeader
   from '../components/ProfileDashboardHeader';
 
+import StudentAcademicReminders
+  from '../components/StudentAcademicReminders';
+
+import StudentAcademicRecommendations
+  from '../components/StudentAcademicRecommendations';
+
+import {
+  obtenerMateriasLocales,
+  obtenerActividadesLocales,
+  obtenerCalificacionesLocales,
+} from '../../database/localDatabase';
+
+// ================================================
+// AULA-AI | HU-07
+// PANEL DEL ESTUDIANTE ONLINE Y OFFLINE
+// ================================================
+
+const TIEMPO_LIMITE = 8000;
+
+const esEntregaCompletada = (estado) =>
+  ['entregada', 'entregada_tarde'].includes(
+    String(estado || '').toLowerCase()
+  );
+
+const primero = (valor) =>
+  Array.isArray(valor) ? valor[0] : valor;
+
+const obtenerPeriodoNumero = (nombre) => {
+  const coincidencia = String(
+    nombre || ''
+  ).match(/\d+/);
+
+  return coincidencia
+    ? coincidencia[0]
+    : '-';
+};
+
+const obtenerPromedioSimple = (notas) => {
+  const valores = notas
+    .map((nota) => Number(nota.valor))
+    .filter(Number.isFinite);
+
+  if (!valores.length) return null;
+
+  return (
+    valores.reduce(
+      (total, valor) => total + valor,
+      0
+    ) / valores.length
+  );
+};
+
+// Solicitud con límite de tiempo y cancelación.
+const consultarApi = async (
+  url,
+  token,
+  signal
+) => {
+  const controller = new AbortController();
+
+  const cancelar = () =>
+    controller.abort();
+
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort();
+    } else {
+      signal.addEventListener(
+        'abort',
+        cancelar,
+        { once: true }
+      );
+    }
+  }
+
+  let temporizador;
+
+  try {
+    const consulta = fetch(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        Accept: 'application/json',
+      },
+      signal: controller.signal,
+    }).then(async (response) => {
+      if (!response.ok) {
+        const error = new Error(
+          'Consulta académica no disponible.'
+        );
+
+        error.status = response.status;
+        throw error;
+      }
+
+      return response.json();
+    });
+
+    const controlada = consulta.then(
+      (data) => ({
+        tipo: 'ok',
+        data,
+      }),
+      (error) => ({
+        tipo: 'error',
+        error,
+      })
+    );
+
+    const limite = new Promise((resolve) => {
+      temporizador = setTimeout(() => {
+        controller.abort();
+        resolve({ tipo: 'timeout' });
+      }, TIEMPO_LIMITE);
+    });
+
+    const resultado = await Promise.race([
+      controlada,
+      limite,
+    ]);
+
+    if (resultado.tipo === 'timeout') {
+      throw new Error(
+        'Tiempo de espera agotado.'
+      );
+    }
+
+    if (resultado.tipo === 'error') {
+      throw resultado.error;
+    }
+
+    return resultado.data;
+  } finally {
+    clearTimeout(temporizador);
+
+    if (signal) {
+      signal.removeEventListener(
+        'abort',
+        cancelar
+      );
+    }
+  }
+};
+
+const valorResumen = (valor) => {
+  if (
+    valor === null ||
+    valor === undefined ||
+    valor === ''
+  ) {
+    return '-';
+  }
+
+  return String(valor);
+};
+
+const RESUMEN_INICIAL = {
+  grado: '-',
+  grupo: '-',
+  totalMaterias: null,
+  pendientes: null,
+  periodo: '-',
+  promedio: null,
+  promedioEstimado: false,
+};
+
 export default function EstudianteDashboard({
   usuario,
   apiUrl,
@@ -22,137 +190,371 @@ export default function EstudianteDashboard({
   onMySubjects,
   onMyActivities,
   onMyGrades,
+  onMyAttendance,
+  onMyCommunications,
 }) {
-  const [
-    resumenAcademico,
-    setResumenAcademico,
-  ] = useState(null);
+  const [resumen, setResumen] =
+    useState(RESUMEN_INICIAL);
 
-  const [
-    actividadesPendientes,
-    setActividadesPendientes,
-  ] = useState(null);
+  const [origen, setOrigen] =
+    useState(null);
 
-  const [
-    periodoActual,
-    setPeriodoActual,
-  ] = useState(null);
+  const [cargandoResumen, setCargandoResumen] =
+    useState(true);
 
-  useEffect(() => {
-    const cargarResumenAcademico =
-      async () => {
-        try {
-          const response = await fetch(
-            `${apiUrl}/api/subjects/mis-materias-estudiante`,
-            {
-              headers: {
-                Authorization:
-                  `Bearer ${accessToken}`,
-              },
-            }
-          );
+  const [actualizando, setActualizando] =
+    useState(false);
 
-          const data =
-            await response.json();
+  const [aviso, setAviso] =
+    useState('');
 
-          if (
-            response.ok &&
-            data.resumenAcademico
-          ) {
-            setResumenAcademico(
-              data.resumenAcademico
-            );
-          }
-        } catch (error) {
-          console.log(
-            'Error cargando resumen académico:',
-            error
-          );
-        }
+  const cargarResumen = useCallback(
+    async (signal) => {
+      const usuarioId = usuario?.id;
+
+      if (!usuarioId || !accessToken) {
+        setCargandoResumen(false);
+        return;
+      }
+
+      setCargandoResumen(true);
+      setAviso('');
+
+      let hayCopia = false;
+      let resumenLocal = {
+        ...RESUMEN_INICIAL,
       };
 
-    cargarResumenAcademico();
-  }, [apiUrl, accessToken]);
+      // ========================================
+      // PASO 1: MOSTRAR DATOS DE SQLITE
+      // ========================================
 
-  useEffect(() => {
-    const cargarActividadesPendientes =
-      async () => {
-        try {
-          const response = await fetch(
-            `${apiUrl}/api/activities/mis-actividades-estudiante`,
-            {
-              headers: {
-                Authorization:
-                  `Bearer ${accessToken}`,
-              },
-            }
+      try {
+        const resultados = await Promise.allSettled([
+          obtenerMateriasLocales(usuarioId),
+          obtenerActividadesLocales(usuarioId),
+          obtenerCalificacionesLocales(usuarioId),
+        ]);
+
+        if (signal.aborted) return;
+
+        const materias =
+          resultados[0].status === 'fulfilled'
+            ? resultados[0].value
+            : [];
+
+        const actividades =
+          resultados[1].status === 'fulfilled'
+            ? resultados[1].value
+            : [];
+
+        const notas =
+          resultados[2].status === 'fulfilled'
+            ? resultados[2].value
+            : [];
+
+        const hayMaterias =
+          Array.isArray(materias) &&
+          materias.length > 0;
+
+        const hayActividades =
+          Array.isArray(actividades) &&
+          actividades.length > 0;
+
+        const hayNotas =
+          Array.isArray(notas) &&
+          notas.length > 0;
+
+        hayCopia =
+          hayMaterias ||
+          hayActividades ||
+          hayNotas;
+
+        if (hayCopia) {
+          // Las materias corresponden a asignaciones
+          // de materia, grupo y periodo.
+          const materiasUnicas = new Set(
+            materias.map((item) =>
+              String(item.nombre || item.id)
+            )
           );
 
-          const data =
-            await response.json();
+          // Recuperar periodo desde las materias.
+          // No inventar un periodo cuando falte.
+          const materiaConPeriodo =
+            materias.find(
+              (item) =>
+                item.periodo_id != null
+            );
 
-          if (!response.ok) {
-            return;
-          }
+          const periodoId =
+            materiaConPeriodo?.periodo_id ??
+            null;
 
-          const actividades =
-            data.actividades || [];
+          const periodoNombre =
+            materiaConPeriodo?.periodo || '';
 
+          const pendientes = actividades.filter(
+            (actividad) => {
+              if (
+                actividad.estado &&
+                actividad.estado !== 'publicada'
+              ) {
+                return false;
+              }
+
+              return !esEntregaCompletada(
+                actividad.entrega_estado
+              );
+            }
+          ).length;
+
+          const notasPeriodo =
+            periodoId == null
+              ? notas
+              : notas.filter(
+                  (nota) =>
+                    String(nota.periodo_id) ===
+                    String(periodoId)
+                );
+
+          resumenLocal = {
+            grado:
+              materias[0]?.grado || '-',
+            grupo:
+              materias[0]?.grupo || '-',
+            totalMaterias: hayMaterias
+              ? materiasUnicas.size
+              : null,
+            pendientes: hayActividades
+              ? pendientes
+              : null,
+            periodo:
+              obtenerPeriodoNumero(
+                periodoNombre
+              ),
+            promedio: hayNotas
+              ? obtenerPromedioSimple(
+                  notasPeriodo
+                )
+              : null,
+            promedioEstimado: hayNotas,
+          };
+
+          setResumen(resumenLocal);
+          setOrigen('sqlite');
+          setCargandoResumen(false);
+        }
+      } catch (errorLocal) {
+        console.warn(
+          'HU-07: error consultando resumen SQLite:',
+          errorLocal.message
+        );
+      }
+
+      // ========================================
+      // PASO 2: ACTUALIZAR DESDE EL BACKEND
+      // ========================================
+
+      try {
+        const [
+          materiasResult,
+          actividadesResult,
+          periodoResult,
+        ] = await Promise.allSettled([
+          consultarApi(
+            `${apiUrl}/api/subjects/mis-materias-estudiante`,
+            accessToken,
+            signal
+          ),
+          consultarApi(
+            `${apiUrl}/api/activities/mis-actividades-estudiante`,
+            accessToken,
+            signal
+          ),
+          consultarApi(
+            `${apiUrl}/api/academic/periodo-actual`,
+            accessToken,
+            signal
+          ),
+        ]);
+
+        if (signal.aborted) return;
+
+        const materiasData =
+          materiasResult.status === 'fulfilled'
+            ? materiasResult.value
+            : null;
+
+        const actividadesData =
+          actividadesResult.status === 'fulfilled'
+            ? actividadesResult.value
+            : null;
+
+        const periodoData =
+          periodoResult.status === 'fulfilled'
+            ? periodoResult.value
+            : null;
+
+        const datosOnline =
+          Boolean(materiasData) ||
+          Boolean(actividadesData) ||
+          Boolean(periodoData);
+
+        if (!datosOnline) {
+          setAviso(
+            hayCopia
+              ? 'Sin conexión. Mostrando el resumen guardado.'
+              : 'No se pudo consultar el resumen académico.'
+          );
+          return;
+        }
+
+        let nuevoResumen = {
+          ...resumenLocal,
+        };
+
+        if (materiasData?.resumenAcademico) {
+          const academico =
+            materiasData.resumenAcademico;
+
+          nuevoResumen = {
+            ...nuevoResumen,
+            grado:
+              academico.grado ??
+              nuevoResumen.grado,
+            grupo:
+              academico.grupo ??
+              nuevoResumen.grupo,
+            totalMaterias:
+              academico.totalMaterias ??
+              nuevoResumen.totalMaterias,
+          };
+        }
+
+        if (
+          Array.isArray(
+            actividadesData?.actividades
+          )
+        ) {
           const pendientes =
-            actividades.filter(
-              (actividad) =>
-                !actividad.entrega
+            actividadesData.actividades.filter(
+              (actividad) => {
+                if (
+                  actividad.estado &&
+                  actividad.estado !== 'publicada'
+                ) {
+                  return false;
+                }
+
+                const entrega = primero(
+                  actividad.entrega
+                );
+
+                return !esEntregaCompletada(
+                  entrega?.estado
+                );
+              }
             ).length;
 
-          setActividadesPendientes(
-            pendientes
-          );
-        } catch (error) {
-          console.log(
-            'Error cargando actividades pendientes:',
-            error
-          );
+          nuevoResumen.pendientes =
+            pendientes;
         }
-      };
 
-    cargarActividadesPendientes();
-  }, [apiUrl, accessToken]);
+        const periodoActual =
+          periodoData?.periodo;
 
-  useEffect(() => {
-    const cargarPeriodoActual =
-      async () => {
-        try {
-          const response = await fetch(
-            `${apiUrl}/api/academic/periodo-actual`,
-            {
-              headers: {
-                Authorization:
-                  `Bearer ${accessToken}`,
-              },
-            }
-          );
+        if (periodoActual) {
+          nuevoResumen.periodo =
+            obtenerPeriodoNumero(
+              periodoActual.nombre
+            );
+        }
 
-          const data =
-            await response.json();
+        setResumen(nuevoResumen);
+        setOrigen('servidor');
 
-          if (
-            response.ok &&
-            data.periodo
-          ) {
-            setPeriodoActual(
-              data.periodo
+        // Recuperar el promedio oficial únicamente
+        // cuando exista un periodo actual válido.
+        if (periodoActual?.id) {
+          try {
+            const notasData =
+              await consultarApi(
+                `${apiUrl}/api/grades/estudiante/mis-calificaciones?periodoId=${encodeURIComponent(periodoActual.id)}`,
+                accessToken,
+                signal
+              );
+
+            if (signal.aborted) return;
+
+            // Respetamos el valor devuelto
+            // por el backend. No inventamos nota.
+            const promedioOficial =
+              notasData.resumen?.promedio ??
+              notasData.promediosPeriodos?.find(
+                (periodo) =>
+                  String(periodo.periodoId) ===
+                  String(periodoActual.id)
+              )?.promedio ??
+              null;
+
+            setResumen((anterior) => ({
+              ...anterior,
+              promedio: promedioOficial,
+              promedioEstimado: false,
+            }));
+          } catch (errorPromedio) {
+            // Si no existe promedio oficial,
+            // conservamos los datos locales,
+            // identificados como estimados.
+            console.log(
+              'HU-07: promedio oficial no disponible:',
+              errorPromedio.message
             );
           }
-        } catch (error) {
-          console.log(
-            'Error cargando periodo actual:',
-            error
+        }
+      } catch (error) {
+        if (!signal.aborted) {
+          setAviso(
+            hayCopia
+              ? 'Resumen recuperado desde SQLite.'
+              : 'No fue posible consultar el resumen.'
           );
         }
-      };
+      } finally {
+        if (!signal.aborted) {
+          setCargandoResumen(false);
+          setActualizando(false);
+        }
+      }
+    },
+    [
+      usuario?.id,
+      apiUrl,
+      accessToken,
+    ]
+  );
 
-    cargarPeriodoActual();
-  }, [apiUrl, accessToken]);
+  useEffect(() => {
+    const controller = new AbortController();
+
+    cargarResumen(controller.signal);
+
+    return () => {
+      controller.abort();
+    };
+  }, [cargarResumen]);
+
+  const promedioTexto =
+    resumen.promedio !== null &&
+    resumen.promedio !== undefined &&
+    Number.isFinite(
+      Number(resumen.promedio)
+    )
+      ? Number(
+          resumen.promedio
+        ).toFixed(2)
+      : '-';
 
   return (
     <ScrollView
@@ -162,6 +564,8 @@ export default function EstudianteDashboard({
       }
       showsVerticalScrollIndicator={false}
     >
+      {/* CABECERA EXISTENTE */}
+
       <ProfileDashboardHeader
         apiUrl={apiUrl}
         accessToken={accessToken}
@@ -169,9 +573,10 @@ export default function EstudianteDashboard({
         <View style={styles.academicSummary}>
           <View style={styles.summaryItem}>
             <Text style={styles.summaryValue}>
-              {resumenAcademico?.grado || '-'}
+              {valorResumen(
+                resumen.grado
+              )}
             </Text>
-
             <Text style={styles.summaryLabel}>
               Grado
             </Text>
@@ -179,9 +584,10 @@ export default function EstudianteDashboard({
 
           <View style={styles.summaryItem}>
             <Text style={styles.summaryValue}>
-              {resumenAcademico?.grupo || '-'}
+              {valorResumen(
+                resumen.grupo
+              )}
             </Text>
-
             <Text style={styles.summaryLabel}>
               Grupo
             </Text>
@@ -189,9 +595,10 @@ export default function EstudianteDashboard({
 
           <View style={styles.summaryItem}>
             <Text style={styles.summaryValue}>
-              {resumenAcademico?.totalMaterias ?? '-'}
+              {valorResumen(
+                resumen.totalMaterias
+              )}
             </Text>
-
             <Text style={styles.summaryLabel}>
               Materias
             </Text>
@@ -199,34 +606,83 @@ export default function EstudianteDashboard({
 
           <View style={styles.summaryItem}>
             <Text style={styles.summaryValue}>
-              {actividadesPendientes ?? '-'}
+              {valorResumen(
+                resumen.pendientes
+              )}
             </Text>
-
-            <Text
-              style={styles.summaryLabel}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-            >
+            <Text style={styles.summaryLabel}>
               Pendientes
             </Text>
           </View>
 
           <View style={styles.summaryItem}>
             <Text style={styles.summaryValue}>
-              {periodoActual?.nombre
-                ?.match(/\d+/)?.[0] || '-'}
+              {resumen.periodo}
             </Text>
-
-            <Text
-              style={styles.summaryLabel}
-              numberOfLines={1}
-              adjustsFontSizeToFit
-            >
+            <Text style={styles.summaryLabel}>
               Periodo
             </Text>
           </View>
+
+          <View style={styles.summaryItem}>
+            <Text style={styles.summaryValue}>
+              {promedioTexto}
+            </Text>
+
+            <Text style={styles.summaryLabel}>
+              Promedio
+            </Text>
+
+            {resumen.promedioEstimado &&
+              resumen.promedio !== null && (
+                <Text style={styles.estimado}>
+                  Estimado
+                </Text>
+              )}
+          </View>
         </View>
       </ProfileDashboardHeader>
+
+      {/* ESTADO DEL RESUMEN */}
+
+      <View style={styles.estadoResumen}>
+        <View
+          style={[
+            styles.estadoPunto,
+            {
+              backgroundColor:
+                origen === 'servidor'
+                  ? '#21845B'
+                  : origen === 'sqlite'
+                    ? '#C18A29'
+                    : '#A0AAB6',
+            },
+          ]}
+        />
+
+        <Text style={styles.estadoTexto}>
+          {origen === 'servidor'
+            ? 'Resumen consultado con el servidor'
+            : origen === 'sqlite'
+              ? 'Resumen local · puede estar desactualizado'
+              : 'Resumen académico no disponible'}
+        </Text>
+
+        {cargandoResumen && (
+          <ActivityIndicator
+            size="small"
+            color="#1F4E79"
+          />
+        )}
+      </View>
+
+      {aviso ? (
+        <Text style={styles.aviso}>
+          {aviso}
+        </Text>
+      ) : null}
+
+      {/* INFORMACIÓN ACADÉMICA */}
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>
@@ -238,22 +694,35 @@ export default function EstudianteDashboard({
         </Text>
       </View>
 
+      {/* RECORDATORIOS HU-07 */}
+
+      <StudentAcademicReminders
+        usuarioId={usuario?.id}
+        apiUrl={apiUrl}
+        accessToken={accessToken}
+        onViewActivities={onMyActivities}
+      />
+
+      {/* ACCESOS EXISTENTES */}
+
       <TouchableOpacity
         style={styles.card}
         onPress={onMySubjects}
+        accessibilityRole="button"
       >
         <Text style={styles.cardTitle}>
           Mis materias
         </Text>
 
         <Text style={styles.cardText}>
-          Consulte las materias correspondientes a su grado y grupo.
+          Consulta las materias correspondientes a tu grado y grupo.
         </Text>
       </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.card}
         onPress={onMyActivities}
+        accessibilityRole="button"
       >
         <Text style={styles.cardTitle}>
           Mis actividades
@@ -267,6 +736,7 @@ export default function EstudianteDashboard({
       <TouchableOpacity
         style={styles.card}
         onPress={onMyGrades}
+        accessibilityRole="button"
       >
         <Text style={styles.cardTitle}>
           Mis calificaciones
@@ -277,19 +747,54 @@ export default function EstudianteDashboard({
         </Text>
       </TouchableOpacity>
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>
-          Recomendaciones
-        </Text>
+      {typeof onMyAttendance === 'function' && (
+        <TouchableOpacity
+          style={styles.card}
+          onPress={onMyAttendance}
+          accessibilityRole="button"
+          accessibilityLabel="Consultar mi asistencia"
+        >
+          <Text style={styles.cardTitle}>
+            Mi asistencia
+          </Text>
 
-        <Text style={styles.cardText}>
-          Herramientas de acompañamiento académico.
-        </Text>
-      </View>
+          <Text style={styles.cardText}>
+            Consulta tus asistencias, inasistencias
+            y llegadas tarde, organizadas por
+            fecha y materia.
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {typeof onMyCommunications === 'function' && (
+        <TouchableOpacity
+          style={styles.card}
+          onPress={onMyCommunications}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Consultar mis comunicados institucionales"
+        >
+          <Text style={styles.cardTitle}>
+            📢 Mis comunicados
+          </Text>
+
+          <Text style={styles.cardText}>
+            Consulta los avisos, novedades y comunicados
+            publicados por tu institución educativa.
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      <StudentAcademicRecommendations
+        estudianteId={usuario?.id}
+        apiUrl={apiUrl}
+        accessToken={accessToken}
+      />
 
       <TouchableOpacity
         style={styles.logoutButton}
         onPress={onLogout}
+        accessibilityRole="button"
       >
         <Text style={styles.logoutText}>
           Cerrar sesión
@@ -309,22 +814,6 @@ const styles = StyleSheet.create({
     paddingTop: 70,
     paddingBottom: 50,
   },
-  title: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#1F4E79',
-    marginBottom: 10,
-  },
-  welcome: {
-    fontSize: 20,
-    fontWeight: '600',
-    color: '#263238',
-  },
-  role: {
-    fontSize: 14,
-    color: '#607D8B',
-    marginBottom: 30,
-  },
   card: {
     backgroundColor: '#FFFFFF',
     borderRadius: 12,
@@ -342,6 +831,7 @@ const styles = StyleSheet.create({
   cardText: {
     fontSize: 14,
     color: '#455A64',
+    lineHeight: 21,
   },
   logoutButton: {
     marginTop: 30,
@@ -357,11 +847,12 @@ const styles = StyleSheet.create({
   },
   academicSummary: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
   },
   summaryItem: {
-    flex: 1,
+    width: '33.33%',
     alignItems: 'center',
+    marginBottom: 12,
   },
   summaryValue: {
     fontSize: 20,
@@ -374,5 +865,38 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#607D8B',
     textAlign: 'center',
+  },
+  estimado: {
+    marginTop: 3,
+    fontSize: 9,
+    color: '#9A6A18',
+    fontWeight: '700',
+  },
+  estadoResumen: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 15,
+    gap: 9,
+  },
+  estadoPunto: {
+    height: 8,
+    width: 8,
+    borderRadius: 4,
+  },
+  estadoTexto: {
+    flex: 1,
+    color: '#607D8B',
+    fontSize: 11,
+    fontWeight: '600',
+  },
+  aviso: {
+    color: '#91651D',
+    fontSize: 12,
+    marginBottom: 15,
+    lineHeight: 18,
   },
 });

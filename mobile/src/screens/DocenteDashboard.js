@@ -22,6 +22,9 @@ export default function DocenteDashboard({
   onMySubjects,
   onAcademicActivities,
   onGrades,
+  onAttendance,
+  onReviewExcuses,
+  onMyCommunications,
 }) {
   const [
     resumenDocente,
@@ -150,6 +153,20 @@ export default function DocenteDashboard({
 
       <TouchableOpacity
         style={styles.card}
+        onPress={onReviewExcuses}
+      >
+        <Text style={styles.cardTitle}>
+          Revisión de excusas
+        </Text>
+
+        <Text style={styles.cardText}>
+          Consulta las excusas de tus estudiantes,
+          revisa sus soportes y registra una decisión.
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.card}
         onPress={onAcademicActivities}
       >
         <Text style={styles.cardTitle}>
@@ -174,6 +191,42 @@ export default function DocenteDashboard({
           de tus estudiantes.
         </Text>
       </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.card}
+        onPress={onAttendance}
+      >
+        <Text style={styles.cardTitle}>
+          Asistencia
+        </Text>
+
+        <Text style={styles.cardText}>
+          Registra y consulta la asistencia de tus grupos asignados.
+        </Text>
+      </TouchableOpacity>
+
+      {/* =====================================================
+          HU-12 | COMUNICADOS INSTITUCIONALES
+      ===================================================== */}
+
+      {typeof onMyCommunications === 'function' && (
+        <TouchableOpacity
+          style={styles.card}
+          onPress={onMyCommunications}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Consultar mis comunicados institucionales"
+        >
+          <Text style={styles.cardTitle}>
+            📢 Mis comunicados
+          </Text>
+
+          <Text style={styles.cardText}>
+            Consulta los avisos, novedades y comunicados
+            institucionales dirigidos a ti.
+          </Text>
+        </TouchableOpacity>
+      )}
 
       <View style={styles.card}>
         <Text style={styles.cardTitle}>

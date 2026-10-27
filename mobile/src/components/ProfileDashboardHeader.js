@@ -1,3 +1,4 @@
+
 import React, {
   useCallback,
   useEffect,
@@ -16,195 +17,473 @@ import {
 
 import * as DocumentPicker
   from 'expo-document-picker';
+
 import {
   File,
   UploadType,
 } from 'expo-file-system';
 
-const ProfileDashboardHeader = ({
+import {
+  obtenerSesion,
+} from '../services/sessionService';
+
+// ================================================
+// AULA-AI | HU-07
+// ENCABEZADO DE PERFIL ONLINE / OFFLINE
+//
+// Conserva:
+// - Datos del usuario.
+// - Foto de perfil.
+// - Cambio de foto.
+// - Rol institucional.
+// - Contenido académico recibido como children.
+// - Botón de acceso al perfil.
+//
+// Mejoras:
+// - Muestra datos locales inmediatamente.
+// - No bloquea el resumen académico.
+// - Consulta el servidor con timeout.
+// - Identifica los datos sin conexión.
+// - Evita actualizar después de desmontarse.
+// ================================================
+
+const TIMEOUT_MS = 8000;
+
+const obtenerIniciales = (perfil) => {
+  const nombres = String(
+    perfil?.nombres || ''
+  ).trim();
+
+  const apellidos = String(
+    perfil?.apellidos || ''
+  ).trim();
+
+  const inicialNombre =
+    nombres.charAt(0);
+
+  const inicialApellido =
+    apellidos.charAt(0);
+
+  return (
+    `${inicialNombre}${inicialApellido}`
+      .toUpperCase() || 'U'
+  );
+};
+
+const formatearRol = (rol) => {
+  const valor = String(rol || '');
+
+  if (!valor) return 'Usuario';
+
+  return (
+    valor.charAt(0).toUpperCase() +
+    valor.slice(1)
+  );
+};
+
+const normalizarPerfil = (datos) => {
+  if (!datos) return null;
+
+  return {
+    ...datos,
+
+    nombres:
+      datos.nombres || '',
+
+    apellidos:
+      datos.apellidos || '',
+
+    correo:
+      datos.correo ||
+      datos.email ||
+      '',
+
+    rol:
+      datos.rol || '',
+
+    fotoPerfilUrl:
+      datos.fotoPerfilUrl ||
+      datos.foto_perfil_url ||
+      null,
+  };
+};
+
+const consultarPerfilRemoto = async ({
+  apiUrl,
+  accessToken,
+  signal,
+}) => {
+  const controller =
+    new AbortController();
+
+  const cancelar = () =>
+    controller.abort();
+
+  if (signal) {
+    if (signal.aborted) {
+      controller.abort();
+    } else {
+      signal.addEventListener(
+        'abort',
+        cancelar,
+        { once: true }
+      );
+    }
+  }
+
+  let temporizador;
+
+  try {
+    const consulta = (async () => {
+      const response = await fetch(
+        `${apiUrl}/api/profile/me`,
+        {
+          method: 'GET',
+          headers: {
+            Authorization:
+              `Bearer ${accessToken}`,
+            Accept: 'application/json',
+          },
+          signal: controller.signal,
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        const error = new Error(
+          data.message ||
+          'No fue posible consultar el perfil.'
+        );
+
+        error.status = response.status;
+        throw error;
+      }
+
+      if (!data.perfil) {
+        throw new Error(
+          'El servidor no devolvió un perfil válido.'
+        );
+      }
+
+      return data.perfil;
+    })();
+
+    const controlada = consulta.then(
+      (perfil) => ({
+        tipo: 'ok',
+        perfil,
+      }),
+      (error) => ({
+        tipo: 'error',
+        error,
+      })
+    );
+
+    const limite = new Promise(
+      (resolve) => {
+        temporizador = setTimeout(
+          () => {
+            controller.abort();
+
+            resolve({
+              tipo: 'timeout',
+            });
+          },
+          TIMEOUT_MS
+        );
+      }
+    );
+
+    const resultado = await Promise.race([
+      controlada,
+      limite,
+    ]);
+
+    if (resultado.tipo === 'timeout') {
+      throw new Error(
+        'El servidor no respondió a tiempo.'
+      );
+    }
+
+    if (resultado.tipo === 'error') {
+      throw resultado.error;
+    }
+
+    return resultado.perfil;
+  } finally {
+    clearTimeout(temporizador);
+
+    if (signal) {
+      signal.removeEventListener(
+        'abort',
+        cancelar
+      );
+    }
+  }
+};
+
+export default function ProfileDashboardHeader({
   apiUrl,
   accessToken,
   onOpenProfile,
   children,
-}) => {
-  const [
-    perfil,
-    setPerfil,
-  ] = useState(null);
+}) {
+  const [perfil, setPerfil] =
+    useState(null);
 
-  const [
-    cargando,
-    setCargando,
-  ] = useState(true);
+  const [origen, setOrigen] =
+    useState(null);
+
+  const [cargando, setCargando] =
+    useState(true);
 
   const [
     subiendoFoto,
     setSubiendoFoto,
   ] = useState(false);
 
-  const cargarPerfil =
-    useCallback(
-      async () => {
-        try {
-          const response =
-            await fetch(
-              `${apiUrl}/api/profile/me`,
-              {
-                headers: {
-                  Authorization:
-                    `Bearer ${accessToken}`,
-                },
-              }
-            );
+  const [aviso, setAviso] =
+    useState('');
 
-          const data =
-            await response.json();
+  const cargarPerfil = useCallback(
+    async (signal) => {
+      setCargando(true);
+      setAviso('');
 
-          if (!response.ok) {
-            throw new Error(
-              data.message ||
-                'No fue posible consultar el perfil.'
-            );
-          }
+      let tienePerfilLocal = false;
 
+      // ========================================
+      // PASO 1: RECUPERAR PERFIL DE LA SESIÓN
+      // ========================================
+
+      try {
+        const datos =
+          await obtenerSesion();
+
+        if (signal?.aborted) return;
+
+        const tokenGuardado =
+          datos?.session?.accessToken;
+
+        const usuarioGuardado =
+          datos?.usuario;
+
+        // Únicamente utilizar la información
+        // que corresponda al token de la sesión
+        // activa. Evita mezclar cuentas.
+        if (
+          usuarioGuardado &&
+          tokenGuardado &&
+          tokenGuardado === accessToken
+        ) {
           setPerfil(
-            data.perfil
+            normalizarPerfil(
+              usuarioGuardado
+            )
           );
-        } catch (error) {
-          console.log(
-            'Error cargando perfil:',
-            error
-          );
-        } finally {
+
+          setOrigen('local');
+          tienePerfilLocal = true;
+
+          // El contenido académico puede
+          // mostrarse desde este momento.
           setCargando(false);
         }
-      },
-      [
-        accessToken,
-        apiUrl,
-      ]
-    );
-
-  useEffect(() => {
-    Promise.resolve().then(
-      cargarPerfil
-    );
-  }, [cargarPerfil]);
-
-  const obtenerIniciales =
-    () => {
-      if (!perfil) {
-        return 'U';
-      }
-
-      const nombre =
-        perfil.nombres
-          ?.trim()
-          ?.charAt(0) || '';
-
-      const apellido =
-        perfil.apellidos
-          ?.trim()
-          ?.charAt(0) || '';
-
-      return `${nombre}${apellido}`
-        .toUpperCase();
-    };
-
-  const formatearRol =
-    (rol) => {
-      if (!rol) {
-        return '';
-      }
-
-      return (
-        rol.charAt(0).toUpperCase() +
-        rol.slice(1)
-      );
-    };
-
-  const subirFoto =
-    async (imagen) => {
-      try {
-        setSubiendoFoto(
-          true
+      } catch (errorLocal) {
+        console.log(
+          'HU-07: perfil de sesión no disponible:',
+          errorLocal.message
         );
+      }
 
-        const tipo =
-          imagen.mimeType ||
-          'image/jpeg';
+      if (signal?.aborted) return;
 
-        const archivo =
-          new File(imagen.uri);
+      // ========================================
+      // PASO 2: ACTUALIZAR PERFIL ONLINE
+      // ========================================
 
-        const tareaSubida =
-          archivo.createUploadTask(
-            `${apiUrl}/api/profile/me/foto`,
-            {
-              httpMethod: 'PUT',
-              uploadType:
-                UploadType.MULTIPART,
-              fieldName: 'foto',
-              mimeType: tipo,
-              headers: {
-                Authorization:
-                  `Bearer ${accessToken}`,
-              },
-            }
-          );
-
-        const resultadoSubida =
-          await tareaSubida.uploadAsync();
-
-        let data = {};
-
-        try {
-          data =
-            resultadoSubida.body
-              ? JSON.parse(
-                  resultadoSubida.body
-                )
-              : {};
-        } catch (errorJson) {
-          console.error(
-            'Respuesta no JSON al subir foto de perfil:',
-            errorJson
+      try {
+        if (!apiUrl || !accessToken) {
+          throw new Error(
+            'No existe una sesión válida.'
           );
         }
+
+        const perfilRemoto =
+          await consultarPerfilRemoto({
+            apiUrl,
+            accessToken,
+            signal,
+          });
+
+        if (signal?.aborted) return;
+
+        setPerfil(
+          normalizarPerfil(
+            perfilRemoto
+          )
+        );
+
+        setOrigen('servidor');
+        setAviso('');
+      } catch (error) {
+        if (signal?.aborted) return;
+
+        console.log(
+          'HU-07: perfil remoto no disponible:',
+          error.message
+        );
 
         if (
-          resultadoSubida.status < 200 ||
-          resultadoSubida.status >= 300
+          error.status === 401 ||
+          error.status === 403
         ) {
-          throw new Error(
-            data.message ||
-              'No fue posible actualizar la foto.'
+          // No mostrar información de perfil
+          // si el servidor rechaza la sesión.
+          setPerfil(null);
+          setOrigen(null);
+
+          setAviso(
+            'Tu sesión debe validarse nuevamente.'
+          );
+        } else if (tienePerfilLocal) {
+          setOrigen('local');
+
+          setAviso(
+            'Perfil recuperado desde la sesión guardada.'
+          );
+        } else {
+          setAviso(
+            'No fue posible cargar el perfil. Inténtalo cuando tengas conexión.'
           );
         }
-
-        Alert.alert(
-          'Perfil actualizado',
-          'Foto de perfil actualizada correctamente.'
-        );
-
-        await cargarPerfil();
-      } catch (error) {
-        console.log(
-          'Error subiendo foto:',
-          error
-        );
-
-        Alert.alert(
-          'Error',
-          error.message ||
-            'No fue posible actualizar la foto de perfil.'
-        );
       } finally {
-        setSubiendoFoto(
-          false
+        if (!signal?.aborted) {
+          setCargando(false);
+        }
+      }
+    },
+    [
+      apiUrl,
+      accessToken,
+    ]
+  );
+
+  // ================================================
+  // CARGA INICIAL
+  // ================================================
+
+  useEffect(() => {
+    const controller =
+      new AbortController();
+
+    cargarPerfil(controller.signal);
+
+    return () => {
+      controller.abort();
+    };
+  }, [cargarPerfil]);
+
+  // ================================================
+  // ACTUALIZACIÓN DE FOTO DE PERFIL
+  // Se mantiene la funcionalidad original.
+  // ================================================
+
+  const subirFoto = async (imagen) => {
+    if (!accessToken || !apiUrl) {
+      Alert.alert(
+        'Sesión no disponible',
+        'Inicia sesión para actualizar tu foto.'
+      );
+
+      return;
+    }
+
+    try {
+      setSubiendoFoto(true);
+
+      const tipo =
+        imagen.mimeType ||
+        'image/jpeg';
+
+      const archivo =
+        new File(imagen.uri);
+
+      const tareaSubida =
+        archivo.createUploadTask(
+          `${apiUrl}/api/profile/me/foto`,
+          {
+            httpMethod: 'PUT',
+            uploadType:
+              UploadType.MULTIPART,
+            fieldName: 'foto',
+            mimeType: tipo,
+            headers: {
+              Authorization:
+                `Bearer ${accessToken}`,
+            },
+          }
+        );
+
+      const resultadoSubida =
+        await tareaSubida.uploadAsync();
+
+      let data = {};
+
+      try {
+        data = resultadoSubida.body
+          ? JSON.parse(
+              resultadoSubida.body
+            )
+          : {};
+      } catch (errorJson) {
+        console.log(
+          'La respuesta de foto no es JSON:',
+          errorJson.message
         );
       }
-    };
+
+      if (
+        resultadoSubida.status < 200 ||
+        resultadoSubida.status >= 300
+      ) {
+        throw new Error(
+          data.message ||
+          'No fue posible actualizar la foto.'
+        );
+      }
+
+      Alert.alert(
+        'Perfil actualizado',
+        'Foto de perfil actualizada correctamente.'
+      );
+
+      const controller =
+        new AbortController();
+
+      await cargarPerfil(
+        controller.signal
+      );
+    } catch (error) {
+      console.log(
+        'Error subiendo foto:',
+        error
+      );
+
+      Alert.alert(
+        'No se pudo actualizar la foto',
+        error.message ||
+        'Comprueba tu conexión a internet.'
+      );
+    } finally {
+      setSubiendoFoto(false);
+    }
+  };
+
+  // ================================================
+  // SELECCIÓN DE FOTOGRAFÍA
+  // ================================================
 
   const seleccionarConDocumentPicker =
     async () => {
@@ -228,268 +507,256 @@ const ProfileDashboardHeader = ({
       );
     };
 
-  const seleccionarFoto =
-    async () => {
+  const seleccionarFoto = async () => {
+    if (subiendoFoto) return;
+
+    try {
+      let imagePicker = null;
+
       try {
-        let imagePicker = null;
-
-        try {
-          imagePicker =
-            await import(
-              'expo-image-picker'
-            );
-        } catch (error) {
-          console.warn(
-            'ImagePicker no está disponible en este runtime; se usará el selector de documentos.',
-            error
+        imagePicker =
+          await import(
+            'expo-image-picker'
           );
-        }
+      } catch (error) {
+        console.warn(
+          'ImagePicker no está disponible:',
+          error.message
+        );
+      }
 
-        if (!imagePicker) {
-          await seleccionarConDocumentPicker();
+      if (!imagePicker) {
+        await seleccionarConDocumentPicker();
+        return;
+      }
+
+      try {
+        const permiso =
+          await imagePicker
+            .requestMediaLibraryPermissionsAsync();
+
+        if (
+          permiso.status !== 'granted'
+        ) {
+          Alert.alert(
+            'Permiso requerido',
+            'Debes permitir el acceso a tus fotos.'
+          );
+
           return;
         }
 
-        try {
-          const permiso =
-            await imagePicker
-              .requestMediaLibraryPermissionsAsync();
+        const resultado =
+          await imagePicker
+            .launchImageLibraryAsync({
+              mediaTypes: ['images'],
+              allowsEditing: true,
+              aspect: [1, 1],
+              quality: 0.8,
+            });
 
-          if (
-            permiso.status !==
-            'granted'
-          ) {
-            Alert.alert(
-              'Permiso requerido',
-              'Debes permitir el acceso a tus fotos para seleccionar una imagen de perfil.'
-            );
+        if (
+          resultado.canceled ||
+          !resultado.assets?.[0]
+        ) {
+          return;
+        }
 
-            return;
-          }
-
-          const resultado =
-            await imagePicker
-              .launchImageLibraryAsync({
-                mediaTypes:
-                  ['images'],
-
-                allowsEditing:
-                  true,
-
-                aspect:
-                  [1, 1],
-
-                quality:
-                  0.8,
-              });
-
-          if (
-            resultado.canceled
-          ) {
-            return;
-          }
-
-          const imagen =
-            resultado.assets[0];
-
-          await subirFoto(
-            imagen
-          );
-        } catch (error) {
-          const mensaje =
-            String(error?.message || error);
-
-          if (
-            !mensaje.includes(
-              'ExponentImagePicker'
-            ) &&
-            !mensaje.includes(
-              'Cannot find native module'
-            )
-          ) {
-            throw error;
-          }
-
-          console.warn(
-            'ImagePicker no está integrado en este runtime; se usará el selector de documentos.',
+        await subirFoto(
+          resultado.assets[0]
+        );
+      } catch (error) {
+        const mensaje =
+          String(
+            error?.message ||
             error
           );
 
-          await seleccionarConDocumentPicker();
+        if (
+          !mensaje.includes(
+            'ExponentImagePicker'
+          ) &&
+          !mensaje.includes(
+            'Cannot find native module'
+          )
+        ) {
+          throw error;
         }
-      } catch (error) {
-        console.log(
-          'Error seleccionando imagen:',
-          error
-        );
 
-        Alert.alert(
-          'Error',
-          'No fue posible seleccionar la imagen.'
-        );
+        await seleccionarConDocumentPicker();
       }
-    };
+    } catch (error) {
+      console.log(
+        'Error seleccionando foto:',
+        error
+      );
 
-  if (cargando) {
-    return (
-      <View
-        style={
-          styles.loading
-        }
-      >
-        <ActivityIndicator />
-      </View>
-    );
-  }
+      Alert.alert(
+        'Error',
+        'No fue posible seleccionar la imagen.'
+      );
+    }
+  };
+
+  // ================================================
+  // PRESENTACIÓN
+  //
+  // Nunca ocultar children durante la carga.
+  // ================================================
 
   return (
-    <View
-      style={
-        styles.container
-      }
-    >
-      <View
-        style={
-          styles.profileRow
-        }
-      >
+    <View style={styles.container}>
+      <View style={styles.profileRow}>
         <TouchableOpacity
-          style={
-            styles.avatarContainer
-          }
-          onPress={
-            seleccionarFoto
-          }
-          disabled={
-            subiendoFoto
-          }
+          style={styles.avatarContainer}
+          onPress={seleccionarFoto}
+          disabled={subiendoFoto}
+          accessibilityRole="button"
+          accessibilityLabel="Cambiar foto de perfil"
         >
           {perfil?.fotoPerfilUrl ? (
             <Image
               source={{
-                uri:
-                  perfil.fotoPerfilUrl,
+                uri: perfil.fotoPerfilUrl,
               }}
-              style={
-                styles.avatar
-              }
+              style={styles.avatar}
             />
           ) : (
             <View
-              style={
-                styles.initialAvatar
-              }
+              style={styles.initialAvatar}
             >
               <Text
-                style={
-                  styles.initialText
-                }
+                style={styles.initialText}
               >
-                {
-                  obtenerIniciales()
-                }
+                {obtenerIniciales(
+                  perfil
+                )}
               </Text>
             </View>
           )}
 
-          <View
-            style={
-              styles.cameraBadge
-            }
-          >
-            <Text
-              style={
-                styles.cameraText
-              }
-            >
+          <View style={styles.cameraBadge}>
+            <Text style={styles.cameraText}>
               +
             </Text>
           </View>
 
           {subiendoFoto && (
-            <View
-              style={
-                styles.uploadOverlay
-              }
-            >
+            <View style={styles.uploadOverlay}>
               <ActivityIndicator
                 size="small"
+                color="#1F4E79"
               />
             </View>
           )}
         </TouchableOpacity>
 
-        <View
-          style={
-            styles.userInfo
-          }
-        >
-          <Text
-            style={
-              styles.welcome
-            }
-          >
+        <View style={styles.userInfo}>
+          <Text style={styles.welcome}>
             Bienvenido
           </Text>
 
           <Text
-            style={
-              styles.name
-            }
+            style={styles.name}
+            numberOfLines={2}
           >
-            {perfil?.nombres}{' '}
-            {perfil?.apellidos}
+            {perfil
+              ? `${perfil.nombres} ${perfil.apellidos}`.trim()
+              : 'AULA-AI'}
           </Text>
 
-          <View
-            style={
-              styles.roleBadge
-            }
-          >
+          {perfil?.rol ? (
+            <View style={styles.roleBadge}>
+              <Text style={styles.roleText}>
+                {formatearRol(
+                  perfil.rol
+                )}
+              </Text>
+            </View>
+          ) : null}
+
+          {perfil?.correo ? (
             <Text
-              style={
-                styles.roleText
-              }
+              style={styles.email}
+              numberOfLines={2}
             >
-              {formatearRol(
-                perfil?.rol
-              )}
+              {perfil.correo}
             </Text>
-          </View>
-
-          <Text
-            style={
-              styles.email
-            }
-          >
-            {perfil?.correo}
-          </Text>
+          ) : null}
         </View>
       </View>
 
-      {children ? (
+      {/* INDICADOR NO BLOQUEANTE */}
+
+      <View style={styles.estadoFila}>
         <View
-          style={
-            styles.extraContent
-          }
-        >
+          style={[
+            styles.estadoPunto,
+            {
+              backgroundColor:
+                origen === 'servidor'
+                  ? '#24855E'
+                  : origen === 'local'
+                    ? '#B9872F'
+                    : '#9AA8B6',
+            },
+          ]}
+        />
+
+        <Text style={styles.estadoTexto}>
+          {origen === 'servidor'
+            ? 'Perfil actualizado'
+            : origen === 'local'
+              ? 'Perfil de sesión guardada'
+              : 'Perfil pendiente de consulta'}
+        </Text>
+
+        {cargando && (
+          <ActivityIndicator
+            size="small"
+            color="#1F4E79"
+          />
+        )}
+
+        {!cargando &&
+          origen !== 'servidor' && (
+            <TouchableOpacity
+              onPress={() =>
+                cargarPerfil()
+              }
+              accessibilityRole="button"
+            >
+              <Text style={styles.reintentarTexto}>
+                Reintentar
+              </Text>
+            </TouchableOpacity>
+          )}
+      </View>
+
+      {aviso &&
+        origen !== 'servidor' ? (
+          <Text style={styles.aviso}>
+            {aviso}
+          </Text>
+        ) : null}
+
+      {/* EL RESUMEN ACADÉMICO SIEMPRE
+          SE MUESTRA, AUNQUE NO HAYA RED */}
+
+      {children ? (
+        <View style={styles.extraContent}>
           {children}
         </View>
       ) : null}
 
       {onOpenProfile ? (
         <TouchableOpacity
-          style={
-            styles.profileButton
-          }
-          onPress={
-            onOpenProfile
-          }
+          style={styles.profileButton}
+          onPress={onOpenProfile}
+          accessibilityRole="button"
         >
           <Text
-            style={
-              styles.profileButtonText
-            }
+            style={styles.profileButtonText}
           >
             Ver mi perfil
           </Text>
@@ -497,175 +764,173 @@ const ProfileDashboardHeader = ({
       ) : null}
     </View>
   );
-};
+}
 
-const styles =
-  StyleSheet.create({
-    container: {
-      backgroundColor:
-        '#FFFFFF',
-      borderRadius: 24,
-      padding: 20,
-      marginBottom: 20,
-      borderWidth: 1,
-      borderColor:
-        '#E6EBF2',
-    },
+const styles = StyleSheet.create({
+  container: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#E6EBF2',
+  },
 
-    profileRow: {
-      flexDirection: 'row',
-      alignItems: 'center',
-    },
+  profileRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
 
-    avatarContainer: {
-      width: 82,
-      height: 82,
-      marginRight: 16,
-      position: 'relative',
-    },
+  avatarContainer: {
+    width: 82,
+    height: 82,
+    marginRight: 16,
+    position: 'relative',
+  },
 
-    avatar: {
-      width: 82,
-      height: 82,
-      borderRadius: 26,
-    },
+  avatar: {
+    width: 82,
+    height: 82,
+    borderRadius: 26,
+  },
 
-    initialAvatar: {
-      width: 82,
-      height: 82,
-      borderRadius: 26,
-      backgroundColor:
-        '#E9EEF5',
-      justifyContent:
-        'center',
-      alignItems:
-        'center',
-    },
+  initialAvatar: {
+    width: 82,
+    height: 82,
+    borderRadius: 26,
+    backgroundColor: '#E9EEF5',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
-    initialText: {
-      fontSize: 27,
-      fontWeight: '900',
-      color:
-        '#2D405D',
-    },
+  initialText: {
+    fontSize: 27,
+    fontWeight: '900',
+    color: '#2D405D',
+  },
 
-    cameraBadge: {
-      position: 'absolute',
-      right: -3,
-      bottom: -3,
-      width: 29,
-      height: 29,
-      borderRadius: 10,
-      backgroundColor:
-        '#2D405D',
-      borderWidth: 3,
-      borderColor:
-        '#FFFFFF',
-      justifyContent:
-        'center',
-      alignItems:
-        'center',
-    },
+  cameraBadge: {
+    position: 'absolute',
+    right: -3,
+    bottom: -3,
+    width: 29,
+    height: 29,
+    borderRadius: 10,
+    backgroundColor: '#2D405D',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
-    cameraText: {
-      color:
-        '#FFFFFF',
-      fontSize: 20,
-      fontWeight: '700',
-      lineHeight: 21,
-    },
+  cameraText: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
+    lineHeight: 21,
+  },
 
-    uploadOverlay: {
-      position: 'absolute',
-      width: 82,
-      height: 82,
-      borderRadius: 26,
-      backgroundColor:
-        'rgba(255,255,255,0.75)',
-      justifyContent:
-        'center',
-      alignItems:
-        'center',
-    },
+  uploadOverlay: {
+    position: 'absolute',
+    width: 82,
+    height: 82,
+    borderRadius: 26,
+    backgroundColor:
+      'rgba(255,255,255,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
 
-    userInfo: {
-      flex: 1,
-    },
+  userInfo: {
+    flex: 1,
+  },
 
-    welcome: {
-      fontSize: 12,
-      color:
-        '#7B8794',
-      fontWeight: '600',
-    },
+  welcome: {
+    fontSize: 12,
+    color: '#7B8794',
+    fontWeight: '600',
+  },
 
-    name: {
-      marginTop: 3,
-      fontSize: 21,
-      fontWeight: '900',
-      color:
-        '#1B2733',
-    },
+  name: {
+    marginTop: 3,
+    fontSize: 21,
+    fontWeight: '900',
+    color: '#1B2733',
+  },
 
-    roleBadge: {
-      alignSelf:
-        'flex-start',
-      marginTop: 7,
-      paddingHorizontal: 10,
-      paddingVertical: 5,
-      borderRadius: 20,
-      backgroundColor:
-        '#E9EEF5',
-    },
+  roleBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 7,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+    backgroundColor: '#E9EEF5',
+  },
 
-    roleText: {
-      fontSize: 11,
-      fontWeight: '800',
-      color:
-        '#2D405D',
-      textTransform:
-        'uppercase',
-    },
+  roleText: {
+    fontSize: 11,
+    fontWeight: '800',
+    color: '#2D405D',
+    textTransform: 'uppercase',
+  },
 
-    email: {
-      marginTop: 8,
-      fontSize: 12,
-      color:
-        '#607D8B',
-    },
+  email: {
+    marginTop: 8,
+    fontSize: 12,
+    color: '#607D8B',
+  },
 
-    extraContent: {
-      marginTop: 18,
-      paddingTop: 16,
-      borderTopWidth: 1,
-      borderTopColor:
-        '#EEF1F5',
-    },
+  estadoFila: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 16,
+  },
 
-    profileButton: {
-      marginTop: 16,
-      paddingVertical: 11,
-      borderRadius: 12,
-      backgroundColor:
-        '#F0F4F8',
-      alignItems:
-        'center',
-    },
+  estadoPunto: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
 
-    profileButtonText: {
-      color:
-        '#2D405D',
-      fontWeight: '800',
-      fontSize: 13,
-    },
+  estadoTexto: {
+    flex: 1,
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#718399',
+  },
 
-    loading: {
-      minHeight: 120,
-      justifyContent:
-        'center',
-      alignItems:
-        'center',
-    },
-  });
+  reintentarTexto: {
+    color: '#1F4E79',
+    fontWeight: '800',
+    fontSize: 11,
+  },
 
-export default ProfileDashboardHeader;
+  aviso: {
+    marginTop: 9,
+    fontSize: 11,
+    color: '#92661F',
+    lineHeight: 17,
+  },
+
+  extraContent: {
+    marginTop: 18,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: '#EEF1F5',
+  },
+
+  profileButton: {
+    marginTop: 16,
+    paddingVertical: 11,
+    borderRadius: 12,
+    backgroundColor: '#F0F4F8',
+    alignItems: 'center',
+  },
+
+  profileButtonText: {
+    color: '#2D405D',
+    fontWeight: '800',
+    fontSize: 13,
+  },
+});

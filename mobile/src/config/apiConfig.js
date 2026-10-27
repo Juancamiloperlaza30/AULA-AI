@@ -1,6 +1,17 @@
+import Constants from 'expo-constants';
+
+const hostUri = Constants.expoConfig?.hostUri;
+const hostDesarrollo = hostUri
+  ? new URL(`http://${hostUri}`).hostname
+  : null;
+
 const apiUrlConfigurada =
-  process.env.EXPO_PUBLIC_API_URL ||
-  'http://192.168.1.22:3000';
+  process.env.EXPO_PUBLIC_API_URL?.trim();
+
+const apiUrlPorDefecto = hostDesarrollo
+  ? `http://${hostDesarrollo}:3000`
+  : 'http://localhost:3000';
 
 export const API_URL =
-  apiUrlConfigurada.replace(/\/+$/, '');
+  (apiUrlConfigurada || apiUrlPorDefecto)
+    .replace(/\/+$/, '');
