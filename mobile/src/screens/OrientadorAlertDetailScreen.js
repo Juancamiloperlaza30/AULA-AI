@@ -13,6 +13,8 @@ import {
   View,
 } from 'react-native';
 
+import { Ionicons } from '@expo/vector-icons';
+
 import {
   obtenerAlertaOrientador,
   listarSeguimientosOrientador,
@@ -184,8 +186,13 @@ export default function OrientadorAlertDetailScreen({
         onPress={onVolver}
         accessibilityRole="button"
       >
+        <Ionicons
+          name="arrow-back"
+          size={18}
+          color="#123B73"
+        />
         <Text style={styles.volverTexto}>
-          ‹ Volver a las alertas
+          Volver a las alertas
         </Text>
       </TouchableOpacity>
 
@@ -193,7 +200,7 @@ export default function OrientadorAlertDetailScreen({
         <View style={styles.centro}>
           <ActivityIndicator
             size="large"
-            color="#2563EB"
+            color="#123B73"
           />
           <Text style={styles.mensaje}>
             Consultando información académica...
@@ -209,6 +216,11 @@ export default function OrientadorAlertDetailScreen({
             style={styles.actualizarBoton}
             onPress={cargarDetalle}
           >
+            <Ionicons
+              name="refresh-outline"
+              size={17}
+              color="#FFFFFF"
+            />
             <Text style={styles.actualizarTexto}>
               Reintentar
             </Text>
@@ -416,39 +428,52 @@ export default function OrientadorAlertDetailScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7FB',
+    backgroundColor: '#F4F7FB',
   },
   contenido: {
-    padding: 20,
-    paddingBottom: 40,
+    paddingHorizontal: 20,
+    paddingTop: 58,
+    paddingBottom: 45,
   },
   volverBoton: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
     marginBottom: 16,
-    paddingVertical: 10,
+    paddingVertical: 9,
+    paddingHorizontal: 12,
+    backgroundColor: '#EAF3FC',
+    borderRadius: 12,
   },
   volverTexto: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: '#2563EB',
+    fontSize: 13,
+    fontWeight: '800',
+    color: '#123B73',
   },
   tarjeta: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 18,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E6EAF0',
-    padding: 18,
+    borderColor: '#DFE7F0',
+    padding: 19,
     marginBottom: 16,
+    shadowColor: '#091D3A',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 9,
+    elevation: 2,
   },
   seccionTitulo: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#1D2A3A',
+    fontSize: 18,
+    fontWeight: '900',
+    color: '#091D3A',
     marginBottom: 12,
   },
   alertaTitulo: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#344054',
+    color: '#263B53',
     marginBottom: 12,
   },
   nivelBadge: {
@@ -491,15 +516,21 @@ const styles = StyleSheet.create({
     color: '#344054',
   },
   actualizarBoton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 10,
-    backgroundColor: '#EEF4FF',
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: '#123B73',
+    alignSelf: 'flex-start',
+    marginTop: 14,
   },
   actualizarTexto: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#2563EB',
+    color: '#FFFFFF',
   },
   centro: {
     paddingVertical: 50,
@@ -508,12 +539,12 @@ const styles = StyleSheet.create({
   mensaje: {
     fontSize: 13,
     lineHeight: 20,
-    color: '#667085',
+    color: '#718096',
     marginTop: 8,
   },
   errorTexto: {
     fontSize: 13,
     lineHeight: 20,
-    color: '#B42318',
+    color: '#A52A22',
   },
 });

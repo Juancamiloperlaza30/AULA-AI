@@ -18,6 +18,8 @@ import {
   View,
 } from 'react-native';
 
+import { Ionicons } from '@expo/vector-icons';
+
 import {
   guardarActividadesLocales,
   obtenerActividadesLocales,
@@ -996,35 +998,73 @@ export default function StudentActivitiesScreen({
         />
       }
     >
-      <TouchableOpacity
-        style={styles.topBackButton}
-        onPress={
-          materiaSeleccionada
-            ? () =>
-                setMateriaSeleccionada(null)
-            : onBack
-        }
-      >
-        <Text style={styles.backText}>
-          ← Volver
+      <View style={styles.hero}>
+        <View style={styles.heroTop}>
+          <TouchableOpacity
+            style={styles.topBackButton}
+            onPress={
+              materiaSeleccionada
+                ? () =>
+                    setMateriaSeleccionada(null)
+                : onBack
+            }
+            accessibilityRole="button"
+          >
+            <Ionicons
+              name="arrow-back"
+              size={19}
+              color="#FFFFFF"
+            />
+
+            <Text style={styles.backText}>
+              Volver
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.heroBadge}>
+            <Ionicons
+              name="school-outline"
+              size={14}
+              color="#27C4E8"
+            />
+
+            <Text style={styles.heroBadgeText}>
+              AULA-AI
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.heroIcon}>
+          <Ionicons
+            name="clipboard-outline"
+            size={29}
+            color="#FFFFFF"
+          />
+        </View>
+
+        <Text style={styles.title}>
+          {materiaSeleccionada ||
+            'Mis actividades'}
         </Text>
-      </TouchableOpacity>
 
-      <Text style={styles.title}>
-        {materiaSeleccionada ||
-          'Mis actividades'}
-      </Text>
-
-      <Text style={styles.subtitle}>
-        {materiaSeleccionada
-          ? 'Consulta las actividades, tareas y exámenes de esta materia.'
-          : 'Selecciona una materia para consultar tus actividades.'}
-      </Text>
+        <Text style={styles.subtitle}>
+          {materiaSeleccionada
+            ? 'Consulta las actividades, tareas y exámenes de esta materia.'
+            : 'Selecciona una materia para consultar tus actividades.'}
+        </Text>
+      </View>
 
       {/* ESTADO DE LA INFORMACIÓN */}
 
       {origen === 'sqlite' && (
         <View style={styles.offlineBanner}>
+          <Ionicons
+            name="cloud-offline-outline"
+            size={21}
+            color="#805A19"
+          />
+
+          <View style={styles.bannerContent}>
           <Text style={styles.offlineBannerTitle}>
             Copia local de SQLite — puede estar desactualizada
           </Text>
@@ -1037,11 +1077,19 @@ export default function StudentActivitiesScreen({
               )}
             </Text>
           )}
+          </View>
         </View>
       )}
 
       {origen === 'servidor' && (
         <View style={styles.onlineBanner}>
+          <Ionicons
+            name="cloud-done-outline"
+            size={21}
+            color="#21845B"
+          />
+
+          <View style={styles.bannerContent}>
           <Text style={styles.onlineBannerTitle}>
             Información actualizada desde el servidor
           </Text>
@@ -1052,6 +1100,7 @@ export default function StudentActivitiesScreen({
               ultimaActualizacion
             )}
           </Text>
+          </View>
         </View>
       )}
 
@@ -1220,13 +1269,30 @@ export default function StudentActivitiesScreen({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: '#F4F7FB',
   },
 
   container: {
-    padding: 20,
-    paddingTop: 55,
+    paddingHorizontal: 20,
     paddingBottom: 50,
+  },
+
+  hero: {
+    backgroundColor: '#091D3A',
+    marginHorizontal: -20,
+    paddingHorizontal: 24,
+    paddingTop: 48,
+    paddingBottom: 26,
+    marginBottom: 22,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+
+  heroTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 23,
   },
 
   center: {
@@ -1242,37 +1308,71 @@ const styles = StyleSheet.create({
   },
 
   topBackButton: {
-    alignSelf: 'flex-start',
-    marginBottom: 18,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
   },
 
   backText: {
-    color: '#1F4E79',
+    color: '#FFFFFF',
+    marginLeft: 8,
     fontWeight: '700',
-    fontSize: 16,
+    fontSize: 14,
+  },
+
+  heroBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.09)',
+    paddingHorizontal: 11,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+
+  heroBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '800',
+    marginLeft: 6,
+  },
+
+  heroIcon: {
+    width: 54,
+    height: 54,
+    borderRadius: 16,
+    backgroundColor: '#123B73',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
   },
 
   title: {
-    fontSize: 27,
-    fontWeight: '800',
-    color: '#1F4E79',
-    marginBottom: 7,
+    fontSize: 26,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    marginBottom: 8,
   },
 
   subtitle: {
-    fontSize: 14,
-    color: '#607D8B',
+    fontSize: 12,
+    color: '#D6E4F2',
     lineHeight: 21,
-    marginBottom: 20,
+  },
+
+  bannerContent: {
+    flex: 1,
+    marginLeft: 11,
   },
 
   offlineBanner: {
     backgroundColor: '#FFF3DC',
     borderWidth: 1,
     borderColor: '#EDD6A5',
-    borderRadius: 12,
-    padding: 14,
+    borderRadius: 14,
+    padding: 15,
     marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
 
   offlineBannerTitle: {
@@ -1288,16 +1388,18 @@ const styles = StyleSheet.create({
   },
 
   onlineBanner: {
-    backgroundColor: '#E8F2FA',
+    backgroundColor: '#EAF7EF',
     borderWidth: 1,
-    borderColor: '#C8DDEB',
-    borderRadius: 12,
-    padding: 14,
+    borderColor: '#C7E9D3',
+    borderRadius: 14,
+    padding: 15,
     marginBottom: 16,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
   },
 
   onlineBannerTitle: {
-    color: '#1F4E79',
+    color: '#21845B',
     fontWeight: '700',
     fontSize: 13,
   },
@@ -1351,19 +1453,27 @@ const styles = StyleSheet.create({
   subjectCard: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E0E5EB',
-    borderRadius: 16,
+    borderColor: '#DFE7F0',
+    borderRadius: 18,
     padding: 16,
     marginBottom: 14,
     flexDirection: 'row',
     alignItems: 'center',
+    shadowColor: '#091D3A',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
 
   subjectIcon: {
     width: 48,
     height: 48,
     borderRadius: 15,
-    backgroundColor: '#E9EEF5',
+    backgroundColor: '#EAF3FC',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 14,
@@ -1372,7 +1482,7 @@ const styles = StyleSheet.create({
   subjectIconText: {
     fontSize: 20,
     fontWeight: '800',
-    color: '#2D405D',
+    color: '#123B73',
   },
 
   subjectInfoBox: {
@@ -1382,7 +1492,7 @@ const styles = StyleSheet.create({
   subjectTitle: {
     fontSize: 17,
     fontWeight: '800',
-    color: '#1F2D3D',
+    color: '#091D3A',
   },
 
   subjectInfo: {
@@ -1415,10 +1525,18 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
-    borderColor: '#E0E5EB',
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 14,
+    borderColor: '#DFE7F0',
+    borderRadius: 18,
+    padding: 18,
+    marginBottom: 15,
+    shadowColor: '#091D3A',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
 
   cardHeader: {
@@ -1440,9 +1558,9 @@ const styles = StyleSheet.create({
   },
 
   activityTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#1F2D3D',
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#091D3A',
     marginBottom: 8,
   },
 
@@ -1522,9 +1640,9 @@ const styles = StyleSheet.create({
 
   deliverySection: {
     marginTop: 14,
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: '#F5F7FA',
+    padding: 14,
+    borderRadius: 13,
+    backgroundColor: '#F4F7FB',
   },
 
   deliveryPending: {
@@ -1626,9 +1744,9 @@ const styles = StyleSheet.create({
 
   submitButton: {
     marginTop: 14,
-    backgroundColor: '#2D405D',
-    borderRadius: 10,
-    padding: 12,
+    backgroundColor: '#123B73',
+    borderRadius: 13,
+    padding: 14,
     alignItems: 'center',
   },
 

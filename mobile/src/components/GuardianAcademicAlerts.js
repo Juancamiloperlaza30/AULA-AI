@@ -33,18 +33,18 @@ import GuardianAlertHistory from './GuardianAlertHistory';
 const C = {
   blanco: '#FFFFFF',
   fondo: '#F4F7FB',
-  azul: '#1F4E79',
-  azulOscuro: '#132F4A',
-  azulSuave: '#EAF2FA',
-  texto: '#263B4D',
-  gris: '#687B8B',
-  borde: '#DFE7EF',
-  verde: '#18764C',
-  verdeSuave: '#E8F6EE',
-  rojo: '#B3261E',
-  rojoSuave: '#FDECEA',
-  amarillo: '#94620F',
-  amarilloSuave: '#FFF4DC',
+  azul: '#123B73',
+  azulOscuro: '#091D3A',
+  azulSuave: '#EAF3FC',
+  texto: '#263B53',
+  gris: '#718096',
+  borde: '#DFE7F0',
+  verde: '#21845B',
+  verdeSuave: '#EAF7EF',
+  rojo: '#A52A22',
+  rojoSuave: '#FFF4F2',
+  amarillo: '#B7791F',
+  amarilloSuave: '#FFF5DF',
 };
 
 const FILTROS = [
@@ -1359,9 +1359,16 @@ const styles = StyleSheet.create({
 
   resumenCard: {
     backgroundColor: C.azulOscuro,
-    padding: 21,
-    borderRadius: 18,
+    padding: 22,
+    borderRadius: 21,
     marginBottom: 16,
+    borderBottomWidth: 3,
+    borderBottomColor: '#27C4E8',
+    shadowColor: C.azulOscuro,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
+    elevation: 3,
   },
 
   resumenEtiqueta: {
@@ -1394,9 +1401,14 @@ const styles = StyleSheet.create({
     backgroundColor: C.blanco,
     borderColor: C.borde,
     borderWidth: 1,
-    borderRadius: 13,
+    borderRadius: 16,
     paddingVertical: 16,
     paddingHorizontal: 5,
+    shadowColor: C.azulOscuro,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 7,
+    elevation: 1,
   },
 
   indicadorNumero: {
@@ -1416,9 +1428,14 @@ const styles = StyleSheet.create({
     backgroundColor: C.blanco,
     borderWidth: 1,
     borderColor: C.borde,
-    borderRadius: 15,
+    borderRadius: 17,
     padding: 16,
     marginBottom: 12,
+    shadowColor: C.azulOscuro,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
   },
 
   materiaNombre: {
@@ -1544,9 +1561,14 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: C.borde,
     borderLeftWidth: 4,
-    borderRadius: 15,
+    borderRadius: 17,
     padding: 16,
     marginBottom: 13,
+    shadowColor: C.azulOscuro,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
 
   alertaTitulo: {

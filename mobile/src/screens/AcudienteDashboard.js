@@ -16,6 +16,8 @@ import {
   View,
 } from 'react-native';
 
+import { Ionicons } from '@expo/vector-icons';
+
 import DateTimePicker from
   '@react-native-community/datetimepicker';
 
@@ -45,27 +47,28 @@ import GuardianExcuses from
 const C = {
   fondo: '#F4F7FB',
   blanco: '#FFFFFF',
-  azul: '#1F4E79',
-  azulOscuro: '#132F4A',
-  azulSuave: '#EAF2FA',
-  texto: '#263B4D',
-  gris: '#687B8B',
-  borde: '#DFE7EF',
-  verde: '#18764C',
-  verdeSuave: '#E8F6EE',
-  rojo: '#B3261E',
-  rojoSuave: '#FDECEA',
-  amarillo: '#94620F',
-  amarilloSuave: '#FFF4DC',
+  azul: '#123B73',
+  azulOscuro: '#091D3A',
+  azulSuave: '#EAF3FC',
+  cyan: '#27C4E8',
+  texto: '#263B53',
+  gris: '#718096',
+  borde: '#DFE7F0',
+  verde: '#21845B',
+  verdeSuave: '#EAF7EF',
+  rojo: '#A52A22',
+  rojoSuave: '#FFF4F2',
+  amarillo: '#B7791F',
+  amarilloSuave: '#FFF5DF',
 };
 
 const PESTANAS = [
-  ['resumen', 'Resumen'],
-  ['notas', 'Calificaciones'],
-  ['actividades', 'Actividades'],
-  ['asistencia', 'Asistencia'],
-  ['excusas', 'Excusas'],
-  ['alertas', 'Alertas'],
+  ['resumen', 'Resumen', 'grid-outline'],
+  ['notas', 'Calificaciones', 'ribbon-outline'],
+  ['actividades', 'Actividades', 'clipboard-outline'],
+  ['asistencia', 'Asistencia', 'calendar-outline'],
+  ['excusas', 'Excusas', 'document-text-outline'],
+  ['alertas', 'Alertas', 'notifications-outline'],
 ];
 
 const TIPOS = [
@@ -1016,47 +1019,99 @@ export default function AcudienteDashboard({
 
   const renderInicio = () => (
     <>
+      <View style={styles.welcomePanel}>
+        <View style={styles.welcomeIcon}>
+          <Ionicons
+            name="people-outline"
+            size={24}
+            color={C.cyan}
+          />
+        </View>
+
+        <Text style={styles.welcomeEyebrow}>
+          ACOMPAÑAMIENTO FAMILIAR
+        </Text>
+
+        <Text style={styles.welcomeTitle}>
+          Seguimiento académico
+        </Text>
+
+        <Text style={styles.welcomeDescription}>
+          Consulta de forma segura la información
+          académica de tus estudiantes vinculados.
+        </Text>
+      </View>
+
       <TouchableOpacity
         style={styles.menuCard}
         onPress={() =>
           setPantalla('estudiantes')
         }
+        activeOpacity={0.85}
+        accessibilityRole="button"
       >
-        <View style={styles.fila}>
-          <Text style={styles.menuTitulo}>
-            Estudiantes a cargo
-          </Text>
+        <View style={styles.menuCardTop}>
+          <View style={[styles.menuIcon, styles.menuIconBlue]}>
+            <Ionicons
+              name="people-outline"
+              size={24}
+              color={C.azul}
+            />
+          </View>
 
-          <Text style={styles.flecha}>›</Text>
+          <View style={styles.menuTextContainer}>
+            <Text style={styles.menuTitulo}>
+              Estudiantes a cargo
+            </Text>
+
+            <Text style={styles.menuDescripcion}>
+              Seguimiento académico, calificaciones,
+              actividades y asistencia.
+            </Text>
+          </View>
+
+          <Ionicons
+            name="arrow-forward-circle-outline"
+            size={24}
+            color={C.cyan}
+          />
         </View>
-
-        <Text style={styles.menuDescripcion}>
-          Seguimiento académico, calificaciones,
-          actividades y asistencia.
-        </Text>
       </TouchableOpacity>
 
       <TouchableOpacity
         style={styles.menuCard}
         onPress={abrirAlertas}
+        activeOpacity={0.85}
+        accessibilityRole="button"
       >
-        <View style={styles.fila}>
-          <Text style={styles.menuTitulo}>
-            Alertas y notificaciones
-          </Text>
+        <View style={styles.menuCardTop}>
+          <View style={[styles.menuIcon, styles.menuIconAmber]}>
+            <Ionicons
+              name="notifications-outline"
+              size={24}
+              color={C.amarillo}
+            />
+          </View>
 
-          <Text style={styles.flecha}>›</Text>
+          <View style={styles.menuTextContainer}>
+            <Text style={styles.menuTitulo}>
+              Alertas y notificaciones
+            </Text>
+
+            <Text style={styles.menuDescripcion}>
+              Avisos académicos e institucionales.
+            </Text>
+          </View>
+
+          <Ionicons
+            name="arrow-forward-circle-outline"
+            size={24}
+            color={C.cyan}
+          />
         </View>
-
-        <Text style={styles.menuDescripcion}>
-          Avisos académicos e institucionales.
-        </Text>
       </TouchableOpacity>
 
-      {/* =====================================================
-          HU-12 | COMUNICADOS INSTITUCIONALES
-      ===================================================== */}
-
+      {/* HU-12 | COMUNICADOS INSTITUCIONALES */}
       {typeof onMyCommunications === 'function' && (
         <TouchableOpacity
           style={styles.menuCard}
@@ -1065,18 +1120,32 @@ export default function AcudienteDashboard({
           accessibilityRole="button"
           accessibilityLabel="Consultar mis comunicados institucionales"
         >
-          <View style={styles.fila}>
-            <Text style={styles.menuTitulo}>
-              📢 Mis comunicados
-            </Text>
+          <View style={styles.menuCardTop}>
+            <View style={[styles.menuIcon, styles.menuIconPurple]}>
+              <Ionicons
+                name="megaphone-outline"
+                size={24}
+                color="#7353B6"
+              />
+            </View>
 
-            <Text style={styles.flecha}>›</Text>
+            <View style={styles.menuTextContainer}>
+              <Text style={styles.menuTitulo}>
+                Mis comunicados
+              </Text>
+
+              <Text style={styles.menuDescripcion}>
+                Consulta los avisos, novedades y comunicados
+                institucionales dirigidos a ti.
+              </Text>
+            </View>
+
+            <Ionicons
+              name="arrow-forward-circle-outline"
+              size={24}
+              color={C.cyan}
+            />
           </View>
-
-          <Text style={styles.menuDescripcion}>
-            Consulta los avisos, novedades y comunicados
-            institucionales dirigidos a ti.
-          </Text>
         </TouchableOpacity>
       )}
     </>
@@ -1156,7 +1225,11 @@ export default function AcudienteDashboard({
               </Text>
             </View>
 
-            <Text style={styles.flecha}>›</Text>
+            <Ionicons
+              name="arrow-forward-circle-outline"
+              size={25}
+              color={C.cyan}
+            />
           </TouchableOpacity>
         ))}
 
@@ -1914,7 +1987,7 @@ export default function AcudienteDashboard({
       </TouchableOpacity>
 
       <View style={styles.estudianteResumen}>
-        <View style={styles.avatar}>
+      <View style={[styles.avatar, styles.avatarPremium]}>
           <Text style={styles.avatarTexto}>
             {nombreCompleto(estudiante)
               .charAt(0)
@@ -1944,7 +2017,7 @@ export default function AcudienteDashboard({
       </View>
 
       <View style={styles.pestanas}>
-        {PESTANAS.map(([id, nombre]) => (
+        {PESTANAS.map(([id, nombre, icono]) => (
           <TouchableOpacity
             key={id}
             style={[
@@ -1952,7 +2025,14 @@ export default function AcudienteDashboard({
               tab === id && styles.pestanaActiva,
             ]}
             onPress={() => setTab(id)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: tab === id }}
           >
+            <Ionicons
+              name={icono}
+              size={15}
+              color={tab === id ? C.blanco : C.azul}
+            />
             <Text
               style={[
                 styles.pestanaTexto,
@@ -2118,6 +2198,7 @@ export default function AcudienteDashboard({
         key={usuario?.id}
         apiUrl={apiUrl}
         accessToken={accessToken}
+        guardianPremium
       />
 
       {pantalla !== 'inicio' && (
@@ -2190,28 +2271,95 @@ const styles = StyleSheet.create({
   },
   contenedor: {
     paddingHorizontal: 20,
-    paddingTop: 70,
+    paddingTop: 58,
     paddingBottom: 55,
+  },
+  welcomePanel: {
+    backgroundColor: C.azulOscuro,
+    borderRadius: 22,
+    padding: 21,
+    marginBottom: 17,
+    overflow: 'hidden',
+    borderBottomWidth: 3,
+    borderBottomColor: C.cyan,
+  },
+  welcomeIcon: {
+    width: 46,
+    height: 46,
+    borderRadius: 15,
+    backgroundColor: '#17375B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+  welcomeEyebrow: {
+    color: '#78DDF1',
+    fontSize: 10,
+    fontWeight: '800',
+    letterSpacing: 1.1,
+  },
+  welcomeTitle: {
+    color: C.blanco,
+    fontSize: 23,
+    lineHeight: 29,
+    fontWeight: '900',
+    marginTop: 7,
+  },
+  welcomeDescription: {
+    color: '#C5D5E5',
+    fontSize: 13,
+    lineHeight: 20,
+    marginTop: 8,
   },
   menuCard: {
     backgroundColor: C.blanco,
-    borderRadius: 17,
-    padding: 20,
+    borderRadius: 19,
+    padding: 17,
     borderWidth: 1,
     borderColor: C.borde,
     marginBottom: 15,
+    shadowColor: C.azulOscuro,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  menuCardTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  menuIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  menuIconBlue: {
+    backgroundColor: C.azulSuave,
+  },
+  menuIconAmber: {
+    backgroundColor: C.amarilloSuave,
+  },
+  menuIconPurple: {
+    backgroundColor: '#F1ECFA',
+  },
+  menuTextContainer: {
+    flex: 1,
+    minWidth: 0,
   },
   menuTitulo: {
-    color: C.azul,
+    color: C.azulOscuro,
     fontWeight: '800',
-    fontSize: 18,
-    flex: 1,
+    fontSize: 16,
+    lineHeight: 21,
   },
   menuDescripcion: {
     color: C.gris,
-    fontSize: 14,
-    lineHeight: 21,
-    marginTop: 8,
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 5,
   },
   fila: {
     flexDirection: 'row',
@@ -2236,14 +2384,16 @@ const styles = StyleSheet.create({
     color: C.azul,
     fontSize: 14,
     fontWeight: '700',
+    paddingVertical: 5,
   },
   encabezado: {
     marginBottom: 20,
+    marginTop: 5,
   },
   tituloPagina: {
     color: C.azulOscuro,
-    fontSize: 23,
-    fontWeight: '800',
+    fontSize: 25,
+    fontWeight: '900',
   },
   descripcionPagina: {
     color: C.gris,
@@ -2258,6 +2408,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     marginBottom: 17,
+    shadowColor: C.azulOscuro,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   totalNumero: {
     color: C.azul,
@@ -2273,17 +2428,22 @@ const styles = StyleSheet.create({
   },
   estudianteCard: {
     backgroundColor: C.blanco,
-    borderRadius: 16,
-    padding: 17,
+    borderRadius: 18,
+    padding: 16,
     borderWidth: 1,
     borderColor: C.borde,
-    marginBottom: 12,
+    marginBottom: 13,
     flexDirection: 'row',
     alignItems: 'center',
+    shadowColor: C.azulOscuro,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
   estudianteResumen: {
     backgroundColor: C.blanco,
-    borderRadius: 16,
+    borderRadius: 19,
     padding: 17,
     borderWidth: 1,
     borderColor: C.borde,
@@ -2299,6 +2459,12 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 13,
+  },
+  avatarPremium: {
+    width: 54,
+    height: 54,
+    borderRadius: 18,
+    backgroundColor: '#E8F5FC',
   },
   avatarTexto: {
     fontSize: 22,
@@ -2328,18 +2494,25 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 8,
     marginBottom: 18,
+    backgroundColor: '#EAF0F7',
+    borderRadius: 17,
+    padding: 8,
   },
   pestana: {
     backgroundColor: C.blanco,
     borderColor: C.borde,
     borderWidth: 1,
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 11,
+    borderRadius: 12,
+    paddingHorizontal: 11,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   pestanaActiva: {
-    backgroundColor: C.azul,
-    borderColor: C.azul,
+    backgroundColor: C.azulOscuro,
+    borderColor: C.azulOscuro,
+    elevation: 2,
   },
   pestanaTexto: {
     color: C.azul,
@@ -2351,11 +2524,16 @@ const styles = StyleSheet.create({
   },
   contenido: {
     backgroundColor: C.blanco,
-    borderRadius: 17,
+    borderRadius: 20,
     borderWidth: 1,
     borderColor: C.borde,
     padding: 18,
     marginBottom: 15,
+    shadowColor: C.azulOscuro,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 9,
+    elevation: 1,
   },
   bloqueTitulo: {
     marginBottom: 18,

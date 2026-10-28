@@ -18,6 +18,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 
 export default function SubjectManagementScreen({
+  rol,
   accessToken,
   apiUrl,
   onBack,
@@ -131,7 +132,11 @@ export default function SubjectManagementScreen({
             style={styles.backButton}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel="Volver al panel de administración"
+            accessibilityLabel={
+              rol === 'coordinador'
+                ? 'Volver al panel del coordinador'
+                : 'Volver al panel de administración'
+            }
           >
             <Ionicons
               name="arrow-back"
@@ -152,7 +157,9 @@ export default function SubjectManagementScreen({
             />
 
             <Text style={styles.headerBadgeText}>
-              ADMIN
+              {rol === 'coordinador'
+                ? 'COORDINADOR'
+                : 'ADMIN'}
             </Text>
           </View>
         </View>

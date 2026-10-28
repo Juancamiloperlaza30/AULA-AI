@@ -2,8 +2,8 @@
 
 // ======================================================
 // AULA-AI | HU-12
-// PANTALLA DE COMUNICADOS INSTITUCIONALES
-// CONSULTA, DETALLE Y REGISTRO DE LECTURA
+// COMUNICADOS INSTITUCIONALES
+// REDISEÑO PREMIUM - LISTADO, DETALLE Y LECTURA
 // ======================================================
 
 import React, {
@@ -23,6 +23,8 @@ import {
   View,
 } from 'react-native';
 
+import { Ionicons } from '@expo/vector-icons';
+
 import {
   consultarMisComunicados,
   consultarDetalleComunicado,
@@ -30,10 +32,28 @@ import {
 } from '../services/comunicadoService';
 
 // ======================================================
-// CONFIGURACION
+// CONFIGURACIÓN
 // ======================================================
 
 const LIMITE_PAGINA = 20;
+
+const COLORS = {
+  navy: '#091D3A',
+  blue: '#123B73',
+  cyan: '#27C4E8',
+  background: '#F4F7FB',
+  white: '#FFFFFF',
+  text: '#263B53',
+  muted: '#718096',
+  border: '#DFE7F0',
+  pale: '#EAF3FC',
+  green: '#21845B',
+  greenLight: '#EAF7EF',
+  amber: '#B7791F',
+  amberLight: '#FFF5DF',
+  red: '#A52A22',
+  redLight: '#FFF4F2',
+};
 
 // ======================================================
 // FUNCIONES AUXILIARES
@@ -65,6 +85,115 @@ const obtenerMensajeError = (error) => {
 };
 
 // ======================================================
+// COMPONENTE: ENCABEZADO
+// ======================================================
+
+function HeaderComunicados({
+  detalle = false,
+  onBack,
+  disabled = false,
+}) {
+  return (
+    <View style={styles.header}>
+      <View style={styles.headerTop}>
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={onBack}
+          disabled={disabled}
+          accessibilityRole="button"
+        >
+          <Ionicons
+            name="arrow-back"
+            size={20}
+            color={COLORS.white}
+          />
+
+          <Text style={styles.backButtonText}>
+            {detalle ? 'Mis comunicados' : 'Volver'}
+          </Text>
+        </TouchableOpacity>
+
+        <View style={styles.headerBadge}>
+          <Ionicons
+            name="megaphone-outline"
+            size={14}
+            color={COLORS.cyan}
+          />
+
+          <Text style={styles.headerBadgeText}>
+            AULA-AI
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.heroIcon}>
+        <Ionicons
+          name={
+            detalle
+              ? 'document-text-outline'
+              : 'mail-open-outline'
+          }
+          size={30}
+          color={COLORS.white}
+        />
+      </View>
+
+      <Text style={styles.headerTitle}>
+        {detalle
+          ? 'Detalle del comunicado'
+          : 'Mis comunicados'}
+      </Text>
+
+      <Text style={styles.headerDescription}>
+        {detalle
+          ? 'Consulta la información publicada por tu institución educativa.'
+          : 'Mantente al día con las novedades, avisos e información institucional dirigida a ti.'}
+      </Text>
+    </View>
+  );
+}
+
+// ======================================================
+// COMPONENTE: ESTADO DE LECTURA
+// ======================================================
+
+function EstadoLectura({ leido }) {
+  return (
+    <View
+      style={[
+        styles.statusBadge,
+        leido
+          ? styles.statusBadgeRead
+          : styles.statusBadgePending,
+      ]}
+    >
+      <Ionicons
+        name={
+          leido
+            ? 'checkmark-circle'
+            : 'time-outline'
+        }
+        size={14}
+        color={
+          leido ? COLORS.green : COLORS.amber
+        }
+      />
+
+      <Text
+        style={[
+          styles.statusBadgeText,
+          leido
+            ? styles.statusTextRead
+            : styles.statusTextPending,
+        ]}
+      >
+        {leido ? 'Leído' : 'No leído'}
+      </Text>
+    </View>
+  );
+}
+
+// ======================================================
 // COMPONENTE PRINCIPAL
 // ======================================================
 
@@ -73,26 +202,43 @@ export default function StudentCommunicationsScreen({
   accessToken,
   onBack,
 }) {
-  // ----------------------------------------------------
-  // ESTADOS
-  // ----------------------------------------------------
+  // ====================================================
+  // ESTADOS ORIGINALES
+  // ====================================================
 
   const [comunicados, setComunicados] = useState([]);
-  const [comunicadoSeleccionado, setComunicadoSeleccionado] =
-    useState(null);
+
+  const [
+    comunicadoSeleccionado,
+    setComunicadoSeleccionado,
+  ] = useState(null);
+
   const [cargando, setCargando] = useState(true);
-  const [actualizando, setActualizando] = useState(false);
-  const [cargandoDetalle, setCargandoDetalle] = useState(false);
+
+  const [actualizando, setActualizando] =
+    useState(false);
+
+  const [cargandoDetalle, setCargandoDetalle] =
+    useState(false);
+
   const [registrandoLectura, setRegistrandoLectura] =
     useState(false);
-  const [cargandoMas, setCargandoMas] = useState(false);
-  const [paginaActual, setPaginaActual] = useState(1);
-  const [totalPaginas, setTotalPaginas] = useState(1);
-  const [errorConsulta, setErrorConsulta] = useState('');
 
-  // ----------------------------------------------------
+  const [cargandoMas, setCargandoMas] =
+    useState(false);
+
+  const [paginaActual, setPaginaActual] =
+    useState(1);
+
+  const [totalPaginas, setTotalPaginas] =
+    useState(1);
+
+  const [errorConsulta, setErrorConsulta] =
+    useState('');
+
+  // ====================================================
   // CONSULTAR COMUNICADOS
-  // ----------------------------------------------------
+  // ====================================================
 
   const cargarComunicados = useCallback(
     async ({
@@ -111,14 +257,16 @@ export default function StudentCommunicationsScreen({
       setErrorConsulta('');
 
       try {
-        const resultado = await consultarMisComunicados({
-          apiUrl,
-          accessToken,
-          pagina,
-          limite: LIMITE_PAGINA,
-        });
+        const resultado =
+          await consultarMisComunicados({
+            apiUrl,
+            accessToken,
+            pagina,
+            limite: LIMITE_PAGINA,
+          });
 
-        const nuevosComunicados = resultado.comunicados;
+        const nuevosComunicados =
+          resultado.comunicados;
 
         if (agregar) {
           setComunicados((anteriores) => {
@@ -139,14 +287,19 @@ export default function StudentCommunicationsScreen({
         }
 
         setPaginaActual(pagina);
+
         setTotalPaginas(
           Math.max(
             1,
-            Number(resultado.paginacion?.totalPaginas) || 1
+            Number(
+              resultado.paginacion?.totalPaginas
+            ) || 1
           )
         );
       } catch (error) {
-        setErrorConsulta(obtenerMensajeError(error));
+        setErrorConsulta(
+          obtenerMensajeError(error)
+        );
       } finally {
         setCargando(false);
         setActualizando(false);
@@ -156,9 +309,9 @@ export default function StudentCommunicationsScreen({
     [apiUrl, accessToken]
   );
 
-  // ----------------------------------------------------
+  // ====================================================
   // CARGA INICIAL
-  // ----------------------------------------------------
+  // ====================================================
 
   useEffect(() => {
     const temporizador = setTimeout(() => {
@@ -167,12 +320,14 @@ export default function StudentCommunicationsScreen({
       });
     }, 0);
 
-    return () => clearTimeout(temporizador);
+    return () => {
+      clearTimeout(temporizador);
+    };
   }, [cargarComunicados]);
 
-  // ----------------------------------------------------
+  // ====================================================
   // ACTUALIZAR LISTA
-  // ----------------------------------------------------
+  // ====================================================
 
   const actualizarComunicados = async () => {
     await cargarComunicados({
@@ -181,9 +336,9 @@ export default function StudentCommunicationsScreen({
     });
   };
 
-  // ----------------------------------------------------
-  // CARGAR MAS COMUNICADOS
-  // ----------------------------------------------------
+  // ====================================================
+  // CARGAR MÁS COMUNICADOS
+  // ====================================================
 
   const cargarMasComunicados = async () => {
     if (
@@ -201,9 +356,9 @@ export default function StudentCommunicationsScreen({
     });
   };
 
-  // ----------------------------------------------------
+  // ====================================================
   // CONSULTAR DETALLE
-  // ----------------------------------------------------
+  // ====================================================
 
   const abrirComunicado = async (comunicadoId) => {
     if (cargandoDetalle) {
@@ -213,11 +368,12 @@ export default function StudentCommunicationsScreen({
     setCargandoDetalle(true);
 
     try {
-      const detalle = await consultarDetalleComunicado({
-        apiUrl,
-        accessToken,
-        comunicadoId,
-      });
+      const detalle =
+        await consultarDetalleComunicado({
+          apiUrl,
+          accessToken,
+          comunicadoId,
+        });
 
       setComunicadoSeleccionado(detalle);
     } catch (error) {
@@ -230,9 +386,9 @@ export default function StudentCommunicationsScreen({
     }
   };
 
-  // ----------------------------------------------------
-  // MARCAR COMO LEIDO
-  // ----------------------------------------------------
+  // ====================================================
+  // MARCAR COMO LEÍDO
+  // ====================================================
 
   const registrarLectura = async () => {
     if (
@@ -246,11 +402,13 @@ export default function StudentCommunicationsScreen({
     setRegistrandoLectura(true);
 
     try {
-      const resultado = await marcarComunicadoComoLeido({
-        apiUrl,
-        accessToken,
-        comunicadoId: comunicadoSeleccionado.id,
-      });
+      const resultado =
+        await marcarComunicadoComoLeido({
+          apiUrl,
+          accessToken,
+          comunicadoId:
+            comunicadoSeleccionado.id,
+        });
 
       if (resultado.leido !== true) {
         throw new Error(
@@ -258,7 +416,8 @@ export default function StudentCommunicationsScreen({
         );
       }
 
-      const comunicadoId = comunicadoSeleccionado.id;
+      const comunicadoId =
+        comunicadoSeleccionado.id;
 
       setComunicadoSeleccionado((anterior) => {
         if (!anterior) {
@@ -268,20 +427,25 @@ export default function StudentCommunicationsScreen({
         return {
           ...anterior,
           leido: true,
-          fechaLectura: resultado.fechaLectura || null,
+          fechaLectura:
+            resultado.fechaLectura || null,
         };
       });
 
       setComunicados((anteriores) =>
         anteriores.map((item) => {
-          if (String(item.id) !== String(comunicadoId)) {
+          if (
+            String(item.id) !==
+            String(comunicadoId)
+          ) {
             return item;
           }
 
           return {
             ...item,
             leido: true,
-            fechaLectura: resultado.fechaLectura || null,
+            fechaLectura:
+              resultado.fechaLectura || null,
           };
         })
       );
@@ -300,9 +464,9 @@ export default function StudentCommunicationsScreen({
     }
   };
 
-  // ----------------------------------------------------
+  // ====================================================
   // REGRESAR DESDE EL DETALLE
-  // ----------------------------------------------------
+  // ====================================================
 
   const regresarALista = () => {
     if (registrandoLectura) {
@@ -313,72 +477,90 @@ export default function StudentCommunicationsScreen({
   };
 
   // ====================================================
+  // RESUMEN VISUAL
+  // ====================================================
+
+  const totalCargados = comunicados.length;
+
+  const totalLeidos = comunicados.filter(
+    (item) => item.leido
+  ).length;
+
+  const totalPendientes = comunicados.filter(
+    (item) => !item.leido
+  ).length;
+
+  // ====================================================
   // VISTA DE DETALLE
   // ====================================================
 
   if (comunicadoSeleccionado) {
     return (
       <ScrollView
-        style={styles.container}
-        contentContainerStyle={styles.contentContainer}
+        style={styles.screen}
+        contentContainerStyle={
+          styles.contentContainer
+        }
         showsVerticalScrollIndicator={false}
       >
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={regresarALista}
-          accessibilityRole="button"
-        >
-          <Text style={styles.backButtonText}>
-            ← Volver a mis comunicados
-          </Text>
-        </TouchableOpacity>
-
-        <View style={styles.headerCard}>
-          <Text style={styles.headerSubtitle}>
-            AULA-AI | HU-12
-          </Text>
-
-          <Text style={styles.headerTitle}>
-            Comunicado institucional
-          </Text>
-
-          <Text style={styles.headerDescription}>
-            Información publicada por tu institución educativa.
-          </Text>
-        </View>
+        <HeaderComunicados
+          detalle
+          onBack={regresarALista}
+          disabled={registrandoLectura}
+        />
 
         <View style={styles.detailCard}>
           <View style={styles.detailTop}>
-            <Text
-              style={[
-                styles.statusText,
+            <View style={styles.detailIcon}>
+              <Ionicons
+                name="document-text-outline"
+                size={24}
+                color={COLORS.blue}
+              />
+            </View>
+
+            <EstadoLectura
+              leido={
                 comunicadoSeleccionado.leido
-                  ? styles.statusRead
-                  : styles.statusPending,
-              ]}
-            >
-              {comunicadoSeleccionado.leido
-                ? '✓ Leído'
-                : '● Pendiente de lectura'}
-            </Text>
+              }
+            />
           </View>
 
           <Text style={styles.detailTitle}>
             {comunicadoSeleccionado.titulo}
           </Text>
 
-          <Text style={styles.detailDate}>
-            Publicado el{' '}
-            {formatearFecha(
-              comunicadoSeleccionado.fechaPublicacion
-            )}
-          </Text>
+          <View style={styles.dateRow}>
+            <Ionicons
+              name="calendar-outline"
+              size={16}
+              color={COLORS.muted}
+            />
+
+            <Text style={styles.detailDate}>
+              Publicado el{' '}
+              {formatearFecha(
+                comunicadoSeleccionado
+                  .fechaPublicacion
+              )}
+            </Text>
+          </View>
 
           <View style={styles.separator} />
 
-          <Text style={styles.sectionTitle}>
-            Contenido del comunicado
-          </Text>
+          <View style={styles.contentSectionHeader}>
+            <View style={styles.contentSectionIcon}>
+              <Ionicons
+                name="reader-outline"
+                size={19}
+                color={COLORS.blue}
+              />
+            </View>
+
+            <Text style={styles.sectionTitle}>
+              Contenido del comunicado
+            </Text>
+          </View>
 
           <Text style={styles.detailContent}>
             {comunicadoSeleccionado.contenido}
@@ -387,12 +569,24 @@ export default function StudentCommunicationsScreen({
           {comunicadoSeleccionado.leido &&
             comunicadoSeleccionado.fechaLectura && (
               <View style={styles.readInfo}>
-                <Text style={styles.readInfoText}>
-                  Lectura registrada el{' '}
-                  {formatearFecha(
-                    comunicadoSeleccionado.fechaLectura
-                  )}
-                </Text>
+                <Ionicons
+                  name="checkmark-circle-outline"
+                  size={21}
+                  color={COLORS.green}
+                />
+
+                <View style={styles.readInfoContent}>
+                  <Text style={styles.readInfoTitle}>
+                    Lectura registrada
+                  </Text>
+
+                  <Text style={styles.readInfoText}>
+                    {formatearFecha(
+                      comunicadoSeleccionado
+                        .fechaLectura
+                    )}
+                  </Text>
+                </View>
               </View>
             )}
         </View>
@@ -409,14 +603,63 @@ export default function StudentCommunicationsScreen({
             accessibilityRole="button"
           >
             {registrandoLectura ? (
-              <ActivityIndicator color="#FFFFFF" />
+              <>
+                <ActivityIndicator
+                  color={COLORS.white}
+                />
+
+                <Text
+                  style={styles.primaryButtonText}
+                >
+                  Registrando lectura...
+                </Text>
+              </>
             ) : (
-              <Text style={styles.primaryButtonText}>
-                ✓ Marcar como leído
-              </Text>
+              <>
+                <Ionicons
+                  name="checkmark-done-outline"
+                  size={21}
+                  color={COLORS.white}
+                />
+
+                <Text
+                  style={styles.primaryButtonText}
+                >
+                  Marcar como leído
+                </Text>
+              </>
             )}
           </TouchableOpacity>
         )}
+
+        <TouchableOpacity
+          style={styles.secondaryButton}
+          onPress={regresarALista}
+          disabled={registrandoLectura}
+          accessibilityRole="button"
+        >
+          <Ionicons
+            name="arrow-back-outline"
+            size={18}
+            color={COLORS.blue}
+          />
+
+          <Text style={styles.secondaryButtonText}>
+            Volver a mis comunicados
+          </Text>
+        </TouchableOpacity>
+
+        <View style={styles.footer}>
+          <Ionicons
+            name="shield-checkmark-outline"
+            size={16}
+            color={COLORS.muted}
+          />
+
+          <Text style={styles.footerText}>
+            Comunicaciones institucionales · AULA-AI
+          </Text>
+        </View>
       </ScrollView>
     );
   }
@@ -427,61 +670,127 @@ export default function StudentCommunicationsScreen({
 
   return (
     <ScrollView
-      style={styles.container}
-      contentContainerStyle={styles.contentContainer}
+      style={styles.screen}
+      contentContainerStyle={
+        styles.contentContainer
+      }
       showsVerticalScrollIndicator={false}
       refreshControl={
         <RefreshControl
           refreshing={actualizando}
           onRefresh={actualizarComunicados}
-          colors={['#1F4E79']}
+          colors={[COLORS.blue]}
+          tintColor={COLORS.blue}
         />
       }
     >
-      <TouchableOpacity
-        style={styles.backButton}
-        onPress={onBack}
-        accessibilityRole="button"
-      >
-        <Text style={styles.backButtonText}>
-          ← Volver al inicio
-        </Text>
-      </TouchableOpacity>
+      {/* ENCABEZADO */}
 
-      <View style={styles.headerCard}>
-        <Text style={styles.headerSubtitle}>
-          AULA-AI | COMUNICADOS
-        </Text>
+      <HeaderComunicados onBack={onBack} />
 
-        <Text style={styles.headerTitle}>
-          Mis comunicados
-        </Text>
+      {/* RESUMEN */}
 
-        <Text style={styles.headerDescription}>
-          Consulta las novedades, avisos e información
-          institucional dirigida a ti.
-        </Text>
+      <View style={styles.summarySection}>
+        <View style={styles.summaryMainCard}>
+          <View style={styles.summaryIcon}>
+            <Ionicons
+              name="mail-outline"
+              size={24}
+              color={COLORS.white}
+            />
+          </View>
+
+          <Text style={styles.summaryLabel}>
+            Comunicados recibidos
+          </Text>
+
+          <Text style={styles.summaryNumber}>
+            {totalCargados}
+          </Text>
+
+          <Text style={styles.summaryDescription}>
+            Comunicados cargados hasta ahora
+          </Text>
+        </View>
+
+        <View style={styles.summarySideColumn}>
+          <View style={styles.summarySmallCard}>
+            <View style={styles.summarySmallTop}>
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={20}
+                color={COLORS.green}
+              />
+
+              <Text
+                style={[
+                  styles.summarySmallNumber,
+                  { color: COLORS.green },
+                ]}
+              >
+                {totalLeidos}
+              </Text>
+            </View>
+
+            <Text style={styles.summarySmallLabel}>
+              Leídos
+            </Text>
+          </View>
+
+          <View style={styles.summarySmallCard}>
+            <View style={styles.summarySmallTop}>
+              <Ionicons
+                name="time-outline"
+                size={20}
+                color={COLORS.amber}
+              />
+
+              <Text
+                style={[
+                  styles.summarySmallNumber,
+                  { color: COLORS.amber },
+                ]}
+              >
+                {totalPendientes}
+              </Text>
+            </View>
+
+            <Text style={styles.summarySmallLabel}>
+              Pendientes
+            </Text>
+          </View>
+        </View>
       </View>
 
-      <View style={styles.summaryCard}>
-        <Text style={styles.summaryTitle}>
-          Comunicados recibidos
-        </Text>
+      {/* TÍTULO DEL LISTADO */}
 
-        <Text style={styles.summaryNumber}>
-          {comunicados.length}
-        </Text>
+      <View style={styles.listHeader}>
+        <View>
+          <Text style={styles.listTitle}>
+            Bandeja de comunicados
+          </Text>
 
-        <Text style={styles.summaryDescription}>
-          Mostrando los comunicados cargados.
-        </Text>
+          <Text style={styles.listSubtitle}>
+            Selecciona un comunicado para leerlo
+          </Text>
+        </View>
+
+        <View style={styles.listHeaderIcon}>
+          <Ionicons
+            name="albums-outline"
+            size={20}
+            color={COLORS.blue}
+          />
+        </View>
       </View>
+
+      {/* CARGA INICIAL */}
 
       {cargando && (
-        <View style={styles.centerContent}>
+        <View style={styles.centerCard}>
           <ActivityIndicator
             size="large"
-            color="#1F4E79"
+            color={COLORS.blue}
           />
 
           <Text style={styles.loadingText}>
@@ -490,8 +799,18 @@ export default function StudentCommunicationsScreen({
         </View>
       )}
 
+      {/* ERROR DE CONSULTA */}
+
       {!cargando && errorConsulta ? (
         <View style={styles.errorCard}>
+          <View style={styles.errorIcon}>
+            <Ionicons
+              name="alert-circle-outline"
+              size={29}
+              color={COLORS.red}
+            />
+          </View>
+
           <Text style={styles.errorTitle}>
             No fue posible consultar los comunicados
           </Text>
@@ -507,7 +826,14 @@ export default function StudentCommunicationsScreen({
                 pagina: 1,
               })
             }
+            accessibilityRole="button"
           >
+            <Ionicons
+              name="refresh-outline"
+              size={17}
+              color={COLORS.white}
+            />
+
             <Text style={styles.retryButtonText}>
               Reintentar
             </Text>
@@ -515,24 +841,33 @@ export default function StudentCommunicationsScreen({
         </View>
       ) : null}
 
+      {/* LISTA VACÍA */}
+
       {!cargando &&
         !errorConsulta &&
         comunicados.length === 0 && (
           <View style={styles.emptyCard}>
-            <Text style={styles.emptyIcon}>
-              📭
-            </Text>
+            <View style={styles.emptyIconContainer}>
+              <Ionicons
+                name="mail-open-outline"
+                size={35}
+                color={COLORS.blue}
+              />
+            </View>
 
             <Text style={styles.emptyTitle}>
               No tienes comunicados
             </Text>
 
             <Text style={styles.emptyDescription}>
-              Cuando tu institución publique un comunicado
-              dirigido a ti, aparecerá en esta sección.
+              Cuando tu institución publique un
+              comunicado dirigido a ti, aparecerá
+              en esta sección.
             </Text>
           </View>
         )}
+
+      {/* TARJETAS DE COMUNICADOS */}
 
       {!cargando &&
         comunicados.map((comunicado) => (
@@ -551,18 +886,35 @@ export default function StudentCommunicationsScreen({
             accessibilityLabel={
               `Abrir comunicado: ${comunicado.titulo}`
             }
+            activeOpacity={0.85}
           >
-            <View style={styles.communicationHeader}>
-              <Text
-                style={styles.communicationTitle}
+            <View style={styles.communicationTop}>
+              <View
+                style={[
+                  styles.communicationIcon,
+                  !comunicado.leido &&
+                    styles.communicationIconUnread,
+                ]}
               >
-                {comunicado.titulo}
-              </Text>
+                <Ionicons
+                  name={
+                    comunicado.leido
+                      ? 'mail-open-outline'
+                      : 'mail-unread-outline'
+                  }
+                  size={22}
+                  color={COLORS.blue}
+                />
+              </View>
 
-              {!comunicado.leido && (
-                <View style={styles.unreadDot} />
-              )}
+              <EstadoLectura
+                leido={comunicado.leido}
+              />
             </View>
+
+            <Text style={styles.communicationTitle}>
+              {comunicado.titulo}
+            </Text>
 
             <Text
               style={styles.communicationPreview}
@@ -571,33 +923,46 @@ export default function StudentCommunicationsScreen({
               {comunicado.contenido}
             </Text>
 
-            <View style={styles.communicationFooter}>
-              <Text style={styles.communicationDate}>
-                {formatearFecha(
-                  comunicado.fechaPublicacion
-                )}
-              </Text>
+            <View style={styles.communicationDivider} />
 
-              <Text
-                style={[
-                  styles.communicationStatus,
-                  comunicado.leido
-                    ? styles.readLabel
-                    : styles.pendingLabel,
-                ]}
-              >
-                {comunicado.leido
-                  ? 'Leído'
-                  : 'No leído'}
-              </Text>
+            <View style={styles.communicationFooter}>
+              <View style={styles.communicationDateRow}>
+                <Ionicons
+                  name="calendar-outline"
+                  size={15}
+                  color={COLORS.muted}
+                />
+
+                <Text
+                  style={styles.communicationDate}
+                >
+                  {formatearFecha(
+                    comunicado.fechaPublicacion
+                  )}
+                </Text>
+              </View>
+
+              <View style={styles.openDetail}>
+                <Text style={styles.openDetailText}>
+                  Ver detalle
+                </Text>
+
+                <Ionicons
+                  name="chevron-forward"
+                  size={17}
+                  color={COLORS.blue}
+                />
+              </View>
             </View>
           </TouchableOpacity>
         ))}
 
+      {/* CARGANDO DETALLE */}
+
       {cargandoDetalle && (
-        <View style={styles.centerContent}>
+        <View style={styles.centerCard}>
           <ActivityIndicator
-            color="#1F4E79"
+            color={COLORS.blue}
           />
 
           <Text style={styles.loadingText}>
@@ -606,360 +971,771 @@ export default function StudentCommunicationsScreen({
         </View>
       )}
 
+      {/* PAGINACIÓN */}
+
       {!cargando &&
         paginaActual < totalPaginas && (
           <TouchableOpacity
             style={[
               styles.loadMoreButton,
-              cargandoMas && styles.disabledButton,
+              cargandoMas &&
+                styles.disabledButton,
             ]}
             onPress={cargarMasComunicados}
             disabled={cargandoMas}
             accessibilityRole="button"
           >
             {cargandoMas ? (
-              <ActivityIndicator color="#1F4E79" />
+              <>
+                <ActivityIndicator
+                  color={COLORS.blue}
+                />
+
+                <Text style={styles.loadMoreText}>
+                  Cargando comunicados...
+                </Text>
+              </>
             ) : (
-              <Text style={styles.loadMoreText}>
-                Cargar más comunicados
-              </Text>
+              <>
+                <Ionicons
+                  name="add-circle-outline"
+                  size={20}
+                  color={COLORS.blue}
+                />
+
+                <Text style={styles.loadMoreText}>
+                  Cargar más comunicados
+                </Text>
+
+                <Ionicons
+                  name="chevron-down-outline"
+                  size={17}
+                  color={COLORS.blue}
+                />
+              </>
             )}
           </TouchableOpacity>
         )}
+
+      {/* ACTUALIZAR */}
+
+      {!cargando && (
+        <TouchableOpacity
+          style={styles.refreshButton}
+          onPress={actualizarComunicados}
+          disabled={actualizando || cargandoMas}
+          accessibilityRole="button"
+        >
+          <Ionicons
+            name="refresh-outline"
+            size={18}
+            color={COLORS.blue}
+          />
+
+          <Text style={styles.refreshButtonText}>
+            Actualizar comunicados
+          </Text>
+        </TouchableOpacity>
+      )}
+
+      {/* VOLVER */}
+
+      <TouchableOpacity
+        style={styles.bottomBackButton}
+        onPress={onBack}
+        accessibilityRole="button"
+      >
+        <Ionicons
+          name="arrow-back-outline"
+          size={18}
+          color={COLORS.blue}
+        />
+
+        <Text style={styles.bottomBackText}>
+          Volver al inicio
+        </Text>
+      </TouchableOpacity>
+
+      {/* PIE DE PÁGINA */}
+
+      <View style={styles.footer}>
+        <Ionicons
+          name="shield-checkmark-outline"
+          size={16}
+          color={COLORS.muted}
+        />
+
+        <Text style={styles.footerText}>
+          Comunicaciones institucionales · AULA-AI
+        </Text>
+      </View>
     </ScrollView>
   );
 }
 
 // ======================================================
-// ESTILOS
+// ESTILOS PREMIUM
 // ======================================================
 
 const styles = StyleSheet.create({
-  container: {
+  screen: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: COLORS.background,
   },
 
   contentContainer: {
-    padding: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 55,
+  },
+
+  // ENCABEZADO
+
+  header: {
+    backgroundColor: COLORS.navy,
+    marginHorizontal: -20,
+    paddingHorizontal: 24,
     paddingTop: 55,
-    paddingBottom: 50,
+    paddingBottom: 35,
+    marginBottom: 22,
+  },
+
+  headerTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 25,
   },
 
   backButton: {
-    marginBottom: 18,
-    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
   },
 
   backButtonText: {
-    color: '#1F4E79',
+    color: COLORS.white,
     fontSize: 14,
     fontWeight: '700',
+    marginLeft: 8,
   },
 
-  headerCard: {
-    backgroundColor: '#1F4E79',
-    borderRadius: 16,
-    padding: 22,
+  headerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+    backgroundColor: 'rgba(255,255,255,0.09)',
+  },
+
+  headerBadgeText: {
+    color: COLORS.white,
+    fontSize: 11,
+    fontWeight: '800',
+    marginLeft: 7,
+  },
+
+  heroIcon: {
+    width: 59,
+    height: 59,
+    borderRadius: 18,
+    backgroundColor: COLORS.blue,
+    alignItems: 'center',
+    justifyContent: 'center',
     marginBottom: 18,
   },
 
-  headerSubtitle: {
-    color: '#BBD9F0',
-    fontSize: 11,
-    fontWeight: '800',
-    letterSpacing: 1,
-    marginBottom: 8,
-  },
-
   headerTitle: {
-    color: '#FFFFFF',
-    fontSize: 25,
-    fontWeight: '800',
-    marginBottom: 8,
+    color: COLORS.white,
+    fontSize: 27,
+    fontWeight: '900',
+    marginBottom: 10,
   },
 
   headerDescription: {
-    color: '#E5EFF7',
+    color: '#D6E4F2',
     fontSize: 13,
-    lineHeight: 20,
+    lineHeight: 21,
   },
 
-  summaryCard: {
-    backgroundColor: '#FFFFFF',
+  // RESUMEN
+
+  summarySection: {
+    flexDirection: 'row',
+    marginBottom: 25,
+  },
+
+  summaryMainCard: {
+    flex: 1.15,
+    backgroundColor: COLORS.blue,
+    borderRadius: 18,
+    padding: 17,
+    marginRight: 10,
+    justifyContent: 'center',
+  },
+
+  summaryIcon: {
+    width: 41,
+    height: 41,
     borderRadius: 12,
-    padding: 18,
-    marginBottom: 20,
-    borderWidth: 1,
-    borderColor: '#E0E6ED',
+    backgroundColor: 'rgba(255,255,255,0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
   },
 
-  summaryTitle: {
-    color: '#607D8B',
-    fontSize: 13,
-    fontWeight: '600',
+  summaryLabel: {
+    color: '#DCEBFA',
+    fontSize: 11,
+    fontWeight: '700',
   },
 
   summaryNumber: {
-    color: '#1F4E79',
-    fontSize: 28,
+    color: COLORS.white,
+    fontSize: 32,
     fontWeight: '900',
-    marginTop: 6,
+    marginTop: 5,
   },
 
   summaryDescription: {
-    color: '#78909C',
-    fontSize: 11,
-    marginTop: 4,
+    color: '#DCEBFA',
+    fontSize: 10,
+    lineHeight: 15,
+    marginTop: 5,
   },
 
+  summarySideColumn: {
+    flex: 1,
+    justifyContent: 'space-between',
+  },
+
+  summarySmallCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 15,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    padding: 13,
+    minHeight: 93,
+    justifyContent: 'center',
+    marginBottom: 7,
+  },
+
+  summarySmallTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  summarySmallNumber: {
+    fontSize: 22,
+    fontWeight: '900',
+  },
+
+  summarySmallLabel: {
+    color: COLORS.muted,
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+
+  // LISTADO
+
+  listHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+
+  listTitle: {
+    color: COLORS.navy,
+    fontSize: 17,
+    fontWeight: '900',
+    marginBottom: 5,
+  },
+
+  listSubtitle: {
+    color: COLORS.muted,
+    fontSize: 11,
+  },
+
+  listHeaderIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: COLORS.pale,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  // TARJETAS
+
   communicationCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    backgroundColor: COLORS.white,
+    borderRadius: 18,
     padding: 18,
     marginBottom: 14,
     borderWidth: 1,
-    borderColor: '#E0E6ED',
+    borderColor: COLORS.border,
+    shadowColor: COLORS.navy,
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
 
   unreadCard: {
     borderLeftWidth: 4,
-    borderLeftColor: '#1F4E79',
+    borderLeftColor: COLORS.cyan,
   },
 
-  communicationHeader: {
+  communicationTop: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 10,
+    marginBottom: 15,
+  },
+
+  communicationIcon: {
+    width: 45,
+    height: 45,
+    borderRadius: 13,
+    backgroundColor: COLORS.pale,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  communicationIconUnread: {
+    backgroundColor: '#DDF5FB',
   },
 
   communicationTitle: {
-    flex: 1,
-    color: '#263238',
+    color: COLORS.navy,
     fontSize: 16,
-    fontWeight: '800',
-    lineHeight: 22,
-  },
-
-  unreadDot: {
-    width: 9,
-    height: 9,
-    borderRadius: 5,
-    backgroundColor: '#1F4E79',
-    marginLeft: 10,
-    marginTop: 6,
+    fontWeight: '900',
+    lineHeight: 23,
+    marginBottom: 9,
   },
 
   communicationPreview: {
-    color: '#455A64',
+    color: COLORS.text,
     fontSize: 13,
-    lineHeight: 20,
-    marginBottom: 15,
+    lineHeight: 21,
+    marginBottom: 17,
+  },
+
+  communicationDivider: {
+    height: 1,
+    backgroundColor: '#E9EFF5',
+    marginBottom: 13,
   },
 
   communicationFooter: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+
+  communicationDateRow: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 8,
   },
 
   communicationDate: {
-    color: '#78909C',
-    fontSize: 11,
+    flexShrink: 1,
+    color: COLORS.muted,
+    fontSize: 10,
+    marginLeft: 6,
   },
 
-  communicationStatus: {
+  openDetail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  openDetailText: {
+    color: COLORS.blue,
     fontSize: 11,
     fontWeight: '800',
+    marginRight: 3,
   },
 
-  readLabel: {
-    color: '#21845B',
-  },
+  // ESTADOS
 
-  pendingLabel: {
-    color: '#B7791F',
-  },
-
-  centerContent: {
+  statusBadge: {
+    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 30,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 20,
+  },
+
+  statusBadgeRead: {
+    backgroundColor: COLORS.greenLight,
+  },
+
+  statusBadgePending: {
+    backgroundColor: COLORS.amberLight,
+  },
+
+  statusBadgeText: {
+    fontSize: 11,
+    fontWeight: '800',
+    marginLeft: 5,
+  },
+
+  statusTextRead: {
+    color: COLORS.green,
+  },
+
+  statusTextPending: {
+    color: COLORS.amber,
+  },
+
+  // CARGA
+
+  centerCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    padding: 28,
+    marginBottom: 18,
   },
 
   loadingText: {
     marginTop: 12,
-    color: '#607D8B',
-    fontSize: 13,
+    color: COLORS.muted,
+    fontSize: 12,
+    lineHeight: 19,
     textAlign: 'center',
   },
 
+  // ERRORES
+
   errorCard: {
-    backgroundColor: '#FFF4F2',
+    backgroundColor: COLORS.redLight,
+    borderRadius: 17,
     borderWidth: 1,
     borderColor: '#F0C6C0',
-    borderRadius: 12,
-    padding: 18,
+    padding: 21,
     marginBottom: 18,
+    alignItems: 'center',
+  },
+
+  errorIcon: {
+    width: 55,
+    height: 55,
+    borderRadius: 17,
+    backgroundColor: '#FFE4E1',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 14,
   },
 
   errorTitle: {
-    color: '#A52A22',
+    color: COLORS.red,
     fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 8,
+    fontWeight: '900',
+    textAlign: 'center',
+    marginBottom: 9,
   },
 
   errorText: {
     color: '#8A423C',
-    fontSize: 13,
-    lineHeight: 20,
-  },
-
-  retryButton: {
-    backgroundColor: '#A52A22',
-    paddingVertical: 11,
-    paddingHorizontal: 18,
-    borderRadius: 8,
-    marginTop: 15,
-    alignSelf: 'flex-start',
-  },
-
-  retryButtonText: {
-    color: '#FFFFFF',
-    fontWeight: '700',
-  },
-
-  emptyCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 14,
-    padding: 28,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: '#E0E6ED',
-  },
-
-  emptyIcon: {
-    fontSize: 38,
-    marginBottom: 12,
-  },
-
-  emptyTitle: {
-    color: '#1F4E79',
-    fontSize: 17,
-    fontWeight: '800',
-    marginBottom: 8,
-  },
-
-  emptyDescription: {
-    color: '#607D8B',
-    fontSize: 13,
+    fontSize: 12,
     lineHeight: 20,
     textAlign: 'center',
   },
 
-  loadMoreButton: {
-    backgroundColor: '#EAF2F8',
-    borderRadius: 10,
-    padding: 15,
+  retryButton: {
+    flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 10,
+    backgroundColor: COLORS.red,
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    marginTop: 18,
+  },
+
+  retryButtonText: {
+    color: COLORS.white,
+    fontSize: 12,
+    fontWeight: '800',
+    marginLeft: 8,
+  },
+
+  // VACÍO
+
+  emptyCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    alignItems: 'center',
+    padding: 29,
+    marginBottom: 18,
+  },
+
+  emptyIconContainer: {
+    width: 75,
+    height: 75,
+    borderRadius: 23,
+    backgroundColor: COLORS.pale,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 17,
+  },
+
+  emptyTitle: {
+    color: COLORS.navy,
+    fontSize: 17,
+    fontWeight: '900',
+    marginBottom: 10,
+  },
+
+  emptyDescription: {
+    color: COLORS.muted,
+    fontSize: 12,
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+
+  // PAGINACIÓN
+
+  loadMoreButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.pale,
+    borderRadius: 14,
+    padding: 16,
+    marginTop: 7,
+    marginBottom: 15,
   },
 
   loadMoreText: {
-    color: '#1F4E79',
-    fontSize: 14,
-    fontWeight: '700',
-  },
-
-  detailCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 22,
-    borderWidth: 1,
-    borderColor: '#E0E6ED',
-    marginBottom: 20,
-  },
-
-  detailTop: {
-    marginBottom: 16,
-  },
-
-  statusText: {
+    color: COLORS.blue,
     fontSize: 12,
     fontWeight: '800',
+    marginHorizontal: 9,
   },
 
-  statusRead: {
-    color: '#21845B',
-  },
-
-  statusPending: {
-    color: '#B7791F',
-  },
-
-  detailTitle: {
-    color: '#1F4E79',
-    fontSize: 21,
-    fontWeight: '900',
-    lineHeight: 29,
+  refreshButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 14,
+    padding: 15,
     marginBottom: 12,
   },
 
-  detailDate: {
-    color: '#78909C',
+  refreshButtonText: {
+    color: COLORS.blue,
     fontSize: 12,
+    fontWeight: '800',
+    marginLeft: 8,
+  },
+
+  // DETALLE
+
+  detailCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 21,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    marginBottom: 18,
+    shadowColor: COLORS.navy,
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+
+  detailTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 22,
+  },
+
+  detailIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: COLORS.pale,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  detailTitle: {
+    color: COLORS.navy,
+    fontSize: 22,
+    fontWeight: '900',
+    lineHeight: 30,
+    marginBottom: 14,
+  },
+
+  dateRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  detailDate: {
+    color: COLORS.muted,
+    fontSize: 12,
+    marginLeft: 8,
   },
 
   separator: {
     height: 1,
-    backgroundColor: '#E0E6ED',
-    marginVertical: 22,
+    backgroundColor: '#E6EDF5',
+    marginVertical: 23,
+  },
+
+  contentSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 15,
+  },
+
+  contentSectionIcon: {
+    width: 37,
+    height: 37,
+    borderRadius: 11,
+    backgroundColor: COLORS.pale,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 10,
   },
 
   sectionTitle: {
-    color: '#263238',
+    color: COLORS.navy,
     fontSize: 15,
-    fontWeight: '800',
-    marginBottom: 12,
+    fontWeight: '900',
   },
 
   detailContent: {
-    color: '#455A64',
-    fontSize: 15,
+    color: COLORS.text,
+    fontSize: 14,
     lineHeight: 25,
   },
 
   readInfo: {
-    marginTop: 22,
-    padding: 14,
-    borderRadius: 10,
-    backgroundColor: '#EAF7EF',
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: COLORS.greenLight,
+    borderRadius: 13,
+    padding: 15,
+    marginTop: 23,
+  },
+
+  readInfoContent: {
+    flex: 1,
+    marginLeft: 10,
+  },
+
+  readInfoTitle: {
+    color: COLORS.green,
+    fontSize: 12,
+    fontWeight: '900',
+    marginBottom: 5,
   },
 
   readInfoText: {
-    color: '#21845B',
+    color: COLORS.green,
     fontSize: 12,
-    fontWeight: '600',
   },
 
+  // BOTONES
+
   primaryButton: {
-    backgroundColor: '#1F4E79',
-    paddingVertical: 16,
-    borderRadius: 12,
+    minHeight: 55,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 52,
+    backgroundColor: COLORS.blue,
+    borderRadius: 14,
+    marginBottom: 13,
+    paddingHorizontal: 14,
   },
 
   primaryButtonText: {
-    color: '#FFFFFF',
-    fontSize: 15,
+    color: COLORS.white,
+    fontSize: 14,
+    fontWeight: '900',
+    marginLeft: 10,
+  },
+
+  secondaryButton: {
+    minHeight: 53,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 14,
+    marginBottom: 13,
+  },
+
+  secondaryButtonText: {
+    color: COLORS.blue,
+    fontSize: 13,
     fontWeight: '800',
+    marginLeft: 9,
+  },
+
+  bottomBackButton: {
+    minHeight: 53,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 14,
+    marginTop: 3,
+  },
+
+  bottomBackText: {
+    color: COLORS.blue,
+    fontSize: 13,
+    fontWeight: '800',
+    marginLeft: 9,
   },
 
   disabledButton: {
     opacity: 0.6,
+  },
+
+  // PIE DE PÁGINA
+
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 24,
+  },
+
+  footerText: {
+    color: COLORS.muted,
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 7,
   },
 });
 

@@ -32,18 +32,18 @@ import {
 const C = {
   blanco: '#FFFFFF',
   fondo: '#F4F7FB',
-  azul: '#1F4E79',
-  azulOscuro: '#132F4A',
-  azulSuave: '#EAF2FA',
-  texto: '#263B4D',
-  gris: '#687B8B',
-  borde: '#DFE7EF',
-  verde: '#18764C',
-  verdeSuave: '#E8F6EE',
-  rojo: '#B3261E',
-  rojoSuave: '#FDECEA',
-  amarillo: '#94620F',
-  amarilloSuave: '#FFF4DC',
+  azul: '#123B73',
+  azulOscuro: '#091D3A',
+  azulSuave: '#EAF3FC',
+  texto: '#263B53',
+  gris: '#718096',
+  borde: '#DFE7F0',
+  verde: '#21845B',
+  verdeSuave: '#EAF7EF',
+  rojo: '#A52A22',
+  rojoSuave: '#FFF4F2',
+  amarillo: '#B7791F',
+  amarilloSuave: '#FFF5DF',
 };
 
 const LIMITE = 20;
@@ -952,13 +952,20 @@ const styles = StyleSheet.create({
 
   panelResumen: {
     backgroundColor: C.azulOscuro,
-    borderRadius: 17,
-    padding: 17,
+    borderRadius: 19,
+    padding: 18,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
     marginBottom: 16,
+    borderBottomWidth: 3,
+    borderBottomColor: '#27C4E8',
+    shadowColor: C.azulOscuro,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 3,
   },
 
   resumenIzquierda: {
@@ -1076,8 +1083,13 @@ const styles = StyleSheet.create({
     backgroundColor: C.blanco,
     borderWidth: 1,
     borderColor: C.borde,
-    borderRadius: 15,
+    borderRadius: 17,
     padding: 15,
+    shadowColor: C.azulOscuro,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 1,
   },
 
   tarjetaSuperior: {

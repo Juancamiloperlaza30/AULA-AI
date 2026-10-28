@@ -326,46 +326,48 @@ const styles = StyleSheet.create({
   },
 
   aviso: {
-    padding: 12,
-    backgroundColor: '#EFF6FF',
-    borderRadius: 10,
-    marginBottom: 10,
+    padding: 13,
+    backgroundColor: '#EAF3FC',
+    borderRadius: 12,
+    borderLeftWidth: 3,
+    borderLeftColor: '#27C4E8',
+    marginBottom: 12,
   },
 
   avisoTexto: {
-    color: '#1D4ED8',
+    color: '#123B73',
     fontSize: 12,
     lineHeight: 19,
   },
 
   notaOrigen: {
-    color: '#64748B',
+    color: '#718096',
     fontSize: 12,
     lineHeight: 19,
     marginBottom: 12,
   },
 
   seccionTitulo: {
-    color: '#172033',
-    fontSize: 15,
-    fontWeight: '700',
-    marginTop: 14,
+    color: '#091D3A',
+    fontSize: 14,
+    fontWeight: '900',
+    marginTop: 16,
     marginBottom: 12,
   },
 
   tarjeta: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
-    padding: 14,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 15,
+    padding: 15,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
+    borderColor: '#DFE7F0',
     marginBottom: 12,
   },
 
   titulo: {
     fontSize: 14,
-    fontWeight: '700',
-    color: '#1E293B',
+    fontWeight: '900',
+    color: '#091D3A',
     lineHeight: 21,
     marginBottom: 10,
   },
@@ -378,30 +380,32 @@ const styles = StyleSheet.create({
   },
 
   categoria: {
-    backgroundColor: '#DBEAFE',
-    color: '#1D4ED8',
-    borderRadius: 7,
-    padding: 7,
+    backgroundColor: '#EAF3FC',
+    color: '#123B73',
+    borderRadius: 20,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 
   prioridad: {
-    backgroundColor: '#F1F5F9',
-    color: '#475569',
-    borderRadius: 7,
-    padding: 7,
+    backgroundColor: '#F4F7FB',
+    color: '#52647A',
+    borderRadius: 20,
+    paddingHorizontal: 9,
+    paddingVertical: 6,
     fontSize: 11,
-    fontWeight: '600',
+    fontWeight: '700',
   },
 
   prioridadAlta: {
-    backgroundColor: '#FEE2E2',
-    color: '#B91C1C',
+    backgroundColor: '#FFF0EE',
+    color: '#A52A22',
   },
 
   descripcion: {
-    color: '#334155',
+    color: '#52647A',
     fontSize: 13,
     lineHeight: 21,
     marginBottom: 12,
@@ -410,7 +414,7 @@ const styles = StyleSheet.create({
   accionesTitulo: {
     fontSize: 13,
     fontWeight: '700',
-    color: '#334155',
+    color: '#123B73',
     marginBottom: 8,
   },
 
@@ -422,7 +426,7 @@ const styles = StyleSheet.create({
   },
 
   punto: {
-    color: '#2563EB',
+    color: '#27C4E8',
     fontSize: 18,
     lineHeight: 20,
   },
@@ -435,16 +439,16 @@ const styles = StyleSheet.create({
   },
 
   grupoIndicador: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 10,
-    padding: 12,
+    backgroundColor: '#F4F7FB',
+    borderRadius: 12,
+    padding: 13,
     marginBottom: 10,
   },
 
   grupoTitulo: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#334155',
+    fontWeight: '800',
+    color: '#123B73',
     marginBottom: 8,
   },
 
@@ -457,25 +461,25 @@ const styles = StyleSheet.create({
 
   indicadorNombre: {
     flex: 1,
-    color: '#64748B',
+    color: '#718096',
     fontSize: 12,
     lineHeight: 18,
   },
 
   indicadorValor: {
-    color: '#1E293B',
-    fontWeight: '600',
+    color: '#091D3A',
+    fontWeight: '800',
     fontSize: 12,
     textAlign: 'right',
   },
 
   vacio: {
-    color: '#64748B',
+    color: '#718096',
     fontSize: 13,
   },
 
   notaFinal: {
-    color: '#64748B',
+    color: '#718096',
     fontSize: 11,
     lineHeight: 18,
     marginTop: 6,

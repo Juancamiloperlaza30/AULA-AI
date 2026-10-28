@@ -15,6 +15,8 @@ import {
   Alert,
 } from 'react-native';
 
+import { Ionicons } from '@expo/vector-icons';
+
 import * as DocumentPicker
   from 'expo-document-picker';
 
@@ -228,7 +230,17 @@ export default function ProfileDashboardHeader({
   accessToken,
   onOpenProfile,
   children,
+  studentPremium: studentPremiumRequested = false,
+  guardianPremium = false,
+  coordinatorPremium = false,
+  orientadorPremium = false,
 }) {
+  const studentPremium =
+    studentPremiumRequested ||
+    guardianPremium ||
+    coordinatorPremium ||
+    orientadorPremium;
+
   const [perfil, setPerfil] =
     useState(null);
 
@@ -605,10 +617,68 @@ export default function ProfileDashboardHeader({
   // ================================================
 
   return (
-    <View style={styles.container}>
+    <View
+      style={[
+        styles.container,
+        studentPremium &&
+          styles.studentPremiumContainer,
+      ]}
+    >
+      {studentPremium && (
+        <View style={styles.studentPremiumHeading}>
+          <View
+            style={styles.studentPremiumHeadingIcon}
+          >
+            <Ionicons
+              name={
+                guardianPremium
+                  ? 'people-outline'
+                  : coordinatorPremium
+                    ? 'git-network-outline'
+                    : orientadorPremium
+                      ? 'heart-outline'
+                      : 'school-outline'
+              }
+              size={19}
+              color="#27C4E8"
+            />
+          </View>
+
+          <View
+            style={styles.studentPremiumHeadingContent}
+          >
+            <Text style={styles.studentPremiumEyebrow}>
+              {guardianPremium
+                ? 'AULA-AI · PORTAL FAMILIAR'
+                : coordinatorPremium
+                  ? 'AULA-AI · GESTIÓN INSTITUCIONAL'
+                  : orientadorPremium
+                    ? 'AULA-AI · ORIENTACIÓN ACADÉMICA'
+                    : 'AULA-AI · PORTAL ACADÉMICO'}
+            </Text>
+
+            <Text
+              style={styles.studentPremiumHeadingTitle}
+            >
+              {guardianPremium
+                ? 'Panel del acudiente'
+                : coordinatorPremium
+                  ? 'Panel del coordinador'
+                  : orientadorPremium
+                    ? 'Panel del orientador'
+                    : 'Panel del estudiante'}
+            </Text>
+          </View>
+        </View>
+      )}
+
       <View style={styles.profileRow}>
         <TouchableOpacity
-          style={styles.avatarContainer}
+          style={[
+            styles.avatarContainer,
+            studentPremium &&
+              styles.studentPremiumAvatarContainer,
+          ]}
           onPress={seleccionarFoto}
           disabled={subiendoFoto}
           accessibilityRole="button"
@@ -619,14 +689,26 @@ export default function ProfileDashboardHeader({
               source={{
                 uri: perfil.fotoPerfilUrl,
               }}
-              style={styles.avatar}
+              style={[
+                styles.avatar,
+                studentPremium &&
+                  styles.studentPremiumAvatar,
+              ]}
             />
           ) : (
             <View
-              style={styles.initialAvatar}
+              style={[
+                styles.initialAvatar,
+                studentPremium &&
+                  styles.studentPremiumInitialAvatar,
+              ]}
             >
               <Text
-                style={styles.initialText}
+                style={[
+                  styles.initialText,
+                  studentPremium &&
+                    styles.studentPremiumInitialText,
+                ]}
               >
                 {obtenerIniciales(
                   perfil
@@ -642,7 +724,13 @@ export default function ProfileDashboardHeader({
           </View>
 
           {subiendoFoto && (
-            <View style={styles.uploadOverlay}>
+            <View
+              style={[
+                styles.uploadOverlay,
+                studentPremium &&
+                  styles.studentPremiumUploadOverlay,
+              ]}
+            >
               <ActivityIndicator
                 size="small"
                 color="#1F4E79"
@@ -652,22 +740,43 @@ export default function ProfileDashboardHeader({
         </TouchableOpacity>
 
         <View style={styles.userInfo}>
-          <Text style={styles.welcome}>
+          <Text
+            style={[
+              styles.welcome,
+              studentPremium &&
+                styles.studentPremiumWelcome,
+            ]}
+          >
             Bienvenido
           </Text>
 
           <Text
-            style={styles.name}
+            style={[
+              styles.name,
+              studentPremium &&
+                styles.studentPremiumName,
+            ]}
             numberOfLines={2}
           >
             {perfil
               ? `${perfil.nombres} ${perfil.apellidos}`.trim()
               : 'AULA-AI'}
           </Text>
-
           {perfil?.rol ? (
-            <View style={styles.roleBadge}>
-              <Text style={styles.roleText}>
+            <View
+              style={[
+                styles.roleBadge,
+                studentPremium &&
+                  styles.studentPremiumRoleBadge,
+              ]}
+            >
+              <Text
+                style={[
+                  styles.roleText,
+                  studentPremium &&
+                    styles.studentPremiumRoleText,
+                ]}
+              >
                 {formatearRol(
                   perfil.rol
                 )}
@@ -677,7 +786,11 @@ export default function ProfileDashboardHeader({
 
           {perfil?.correo ? (
             <Text
-              style={styles.email}
+              style={[
+                styles.email,
+                studentPremium &&
+                  styles.studentPremiumEmail,
+              ]}
               numberOfLines={2}
             >
               {perfil.correo}
@@ -703,7 +816,13 @@ export default function ProfileDashboardHeader({
           ]}
         />
 
-        <Text style={styles.estadoTexto}>
+        <Text
+          style={[
+            styles.estadoTexto,
+            studentPremium &&
+              styles.studentPremiumEstadoTexto,
+          ]}
+        >
           {origen === 'servidor'
             ? 'Perfil actualizado'
             : origen === 'local'
@@ -726,7 +845,13 @@ export default function ProfileDashboardHeader({
               }
               accessibilityRole="button"
             >
-              <Text style={styles.reintentarTexto}>
+              <Text
+                style={[
+                  styles.reintentarTexto,
+                  studentPremium &&
+                    styles.studentPremiumReintentarTexto,
+                ]}
+              >
                 Reintentar
               </Text>
             </TouchableOpacity>
@@ -735,7 +860,13 @@ export default function ProfileDashboardHeader({
 
       {aviso &&
         origen !== 'servidor' ? (
-          <Text style={styles.aviso}>
+          <Text
+            style={[
+              styles.aviso,
+              studentPremium &&
+                styles.studentPremiumAviso,
+            ]}
+          >
             {aviso}
           </Text>
         ) : null}
@@ -744,19 +875,33 @@ export default function ProfileDashboardHeader({
           SE MUESTRA, AUNQUE NO HAYA RED */}
 
       {children ? (
-        <View style={styles.extraContent}>
+        <View
+          style={[
+            styles.extraContent,
+            studentPremium &&
+              styles.studentPremiumExtraContent,
+          ]}
+        >
           {children}
         </View>
       ) : null}
 
       {onOpenProfile ? (
         <TouchableOpacity
-          style={styles.profileButton}
+          style={[
+            styles.profileButton,
+            studentPremium &&
+              styles.studentPremiumProfileButton,
+          ]}
           onPress={onOpenProfile}
           accessibilityRole="button"
         >
           <Text
-            style={styles.profileButtonText}
+            style={[
+              styles.profileButtonText,
+              studentPremium &&
+                styles.studentPremiumProfileButtonText,
+            ]}
           >
             Ver mi perfil
           </Text>
@@ -932,5 +1077,145 @@ const styles = StyleSheet.create({
     color: '#2D405D',
     fontWeight: '800',
     fontSize: 13,
+  },
+
+  // ==========================================
+  // AULA-AI | ESTUDIANTE PREMIUM
+  // ==========================================
+
+  studentPremiumContainer: {
+    backgroundColor: '#091D3A',
+    borderRadius: 22,
+    padding: 18,
+    marginBottom: 18,
+    borderWidth: 0,
+    elevation: 4,
+    shadowColor: '#091D3A',
+    shadowOpacity: 0.14,
+    shadowRadius: 10,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+  },
+
+  studentPremiumHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingBottom: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: 'rgba(255,255,255,0.12)',
+  },
+
+  studentPremiumHeadingIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: '#17375B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  studentPremiumHeadingContent: {
+    flex: 1,
+  },
+
+  studentPremiumEyebrow: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#78DDF1',
+    letterSpacing: 1.1,
+    marginBottom: 4,
+  },
+
+  studentPremiumHeadingTitle: {
+    fontSize: 19,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+
+  studentPremiumAvatarContainer: {
+    width: 68,
+    height: 68,
+    marginRight: 13,
+  },
+
+  studentPremiumAvatar: {
+    width: 68,
+    height: 68,
+    borderRadius: 20,
+  },
+
+  studentPremiumInitialAvatar: {
+    width: 68,
+    height: 68,
+    borderRadius: 20,
+    backgroundColor: '#23486D',
+  },
+
+  studentPremiumInitialText: {
+    fontSize: 23,
+    color: '#FFFFFF',
+  },
+
+  studentPremiumWelcome: {
+    fontSize: 11,
+    color: '#B8CADF',
+  },
+
+  studentPremiumName: {
+    fontSize: 18,
+    color: '#FFFFFF',
+    marginTop: 3,
+  },
+
+  studentPremiumRoleBadge: {
+    backgroundColor: '#173E62',
+    marginTop: 8,
+    paddingHorizontal: 11,
+    paddingVertical: 5,
+  },
+
+  studentPremiumRoleText: {
+    color: '#80DDF1',
+    fontSize: 10,
+  },
+
+  studentPremiumEmail: {
+    color: '#C5D5E5',
+    fontSize: 11,
+    marginTop: 8,
+  },
+
+  studentPremiumUploadOverlay: {
+    width: 68,
+    height: 68,
+    borderRadius: 20,
+  },
+
+  studentPremiumEstadoTexto: {
+    color: '#C5D5E5',
+  },
+
+  studentPremiumReintentarTexto: {
+    color: '#80DDF1',
+  },
+
+  studentPremiumAviso: {
+    color: '#F6D38A',
+  },
+
+  studentPremiumExtraContent: {
+    borderTopColor: 'rgba(255,255,255,0.12)',
+  },
+
+  studentPremiumProfileButton: {
+    backgroundColor: '#17375B',
+  },
+
+  studentPremiumProfileButtonText: {
+    color: '#80DDF1',
   },
 });

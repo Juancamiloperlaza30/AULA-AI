@@ -24,6 +24,8 @@ import {
   guardarMateriasOffline,
 } from '../database/offlineDatabase';
 
+import { Ionicons } from '@expo/vector-icons';
+
 // AULA-AI | HU-07
 // Consulta de materias con soporte offline.
 // Conserva la consulta del docente de HU-03.
@@ -577,35 +579,123 @@ export default function MySubjectsScreen({
       Number(periodoSeleccionado)
   );
 
+  const totalMaterias = materias.length;
+
+  const materiasActivas = materias.filter(
+    (item) => datosMateria(item).estado === 'activa'
+  ).length;
+
   return (
     <ScrollView
       style={styles.screen}
       contentContainerStyle={styles.container}
       showsVerticalScrollIndicator={false}
     >
-      <TouchableOpacity
-        onPress={onBack}
-        style={styles.backButton}
-        accessibilityRole="button"
-      >
-        <Text style={styles.backText}>
-          ← Volver
+      {/* ENCABEZADO */}
+
+      <View style={styles.hero}>
+        <View style={styles.heroTop}>
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={onBack}
+            accessibilityRole="button"
+          >
+            <Ionicons
+              name="arrow-back"
+              size={20}
+              color="#FFFFFF"
+            />
+
+            <Text style={styles.backText}>
+              Volver
+            </Text>
+          </TouchableOpacity>
+
+          <View style={styles.heroBadge}>
+            <Ionicons
+              name="school-outline"
+              size={15}
+              color="#27C4E8"
+            />
+
+            <Text style={styles.heroBadgeText}>
+              AULA-AI
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.heroIcon}>
+          <Ionicons
+            name="library-outline"
+            size={30}
+            color="#FFFFFF"
+          />
+        </View>
+
+        <Text style={styles.title}>
+          {title || 'Mis materias'}
         </Text>
-      </TouchableOpacity>
 
-      <Text style={styles.title}>
-        {title}
-      </Text>
+        <Text style={styles.heroDescription}>
+          {esEstudiante
+            ? 'Consulta las materias correspondientes a tu grado, grupo y período académico.'
+            : 'Consulta tus materias asignadas y la información académica de los grupos.'}
+        </Text>
+      </View>
 
-      {esEstudiante && (
-        <View style={styles.periodSection}>
-          <Text style={styles.periodTitle}>
-            Periodo académico
+      {/* RESUMEN */}
+
+      <View style={styles.summaryRow}>
+        <View style={styles.summaryCard}>
+          <Ionicons
+            name="book-outline"
+            size={23}
+            color="#123B73"
+          />
+
+          <Text style={styles.summaryValue}>
+            {totalMaterias}
           </Text>
 
+          <Text style={styles.summaryLabel}>
+            Materias cargadas
+          </Text>
+        </View>
+
+        <View style={styles.summaryCard}>
+          <Ionicons
+            name="checkmark-circle-outline"
+            size={23}
+            color="#21845B"
+          />
+
+          <Text style={styles.summaryValue}>
+            {materiasActivas}
+          </Text>
+
+          <Text style={styles.summaryLabel}>
+            Asignaciones activas
+          </Text>
+        </View>
+      </View>
+
+      {/* PERÍODOS ACADÉMICOS: ESTUDIANTE */}
+      {esEstudiante && (
+        <View style={styles.periodSection}>
+          <View style={styles.sectionHeading}>
+            <Ionicons
+              name="calendar-outline"
+              size={21}
+              color="#123B73"
+            />
+
+            <Text style={styles.periodTitle}>
+              Período académico
+            </Text>
+          </View>
+
           <Text style={styles.periodDescription}>
-            Consulta las materias correspondientes
-            a tu grado, grupo y periodo académico.
+            Selecciona el período que deseas consultar.
           </Text>
 
           {cargandoPeriodos &&
@@ -613,11 +703,11 @@ export default function MySubjectsScreen({
               <View style={styles.periodLoading}>
                 <ActivityIndicator
                   size="small"
-                  color="#1F4E79"
+                  color="#123B73"
                 />
 
                 <Text style={styles.periodMessage}>
-                  Consultando periodos...
+                  Consultando períodos...
                 </Text>
               </View>
             )}
@@ -630,16 +720,29 @@ export default function MySubjectsScreen({
                   styles.periodOfflineBox,
               ]}
             >
+              <Ionicons
+                name="alert-circle-outline"
+                size={20}
+                color="#9B1C1C"
+              />
+
               <Text style={styles.periodErrorText}>
                 {errorPeriodos}
               </Text>
 
               <TouchableOpacity
+                style={styles.retryButton}
                 accessibilityRole="button"
                 onPress={
                   cargarPeriodosDisponibles
                 }
               >
+                <Ionicons
+                  name="refresh-outline"
+                  size={16}
+                  color="#123B73"
+                />
+
                 <Text style={styles.periodRetryText}>
                   Reintentar
                 </Text>
@@ -733,9 +836,8 @@ export default function MySubjectsScreen({
 
               {origenPeriodos === 'sqlite' && (
                 <Text style={styles.periodNotice}>
-                  Periodos recuperados desde SQLite.
-                  La información puede estar
-                  desactualizada.
+                  Períodos recuperados desde SQLite.
+                  La información puede estar desactualizada.
                 </Text>
               )}
 
@@ -744,9 +846,9 @@ export default function MySubjectsScreen({
                   (periodo) => periodo.esActual
                 ) && (
                   <Text style={styles.periodNotice}>
-                    No hay un periodo vigente según
-                    las fechas configuradas. Puedes
-                    consultar otro periodo.
+                    No hay un período vigente según las
+                    fechas configuradas. Puedes consultar
+                    otro período.
                   </Text>
                 )}
             </>
@@ -754,11 +856,23 @@ export default function MySubjectsScreen({
         </View>
       )}
 
+      {/* ESTADO DE CONEXIÓN */}
       {modoOffline && materias.length > 0 && (
         <View style={styles.offlineBanner}>
+          <Ionicons
+            name="cloud-offline-outline"
+            size={22}
+            color="#805A19"
+          />
+
+          <View style={styles.bannerContent}>
           <Text style={styles.offlineBannerText}>
-            Copia local de SQLite — puede estar
-            desactualizada.
+            Información disponible sin conexión
+          </Text>
+
+          <Text style={styles.bannerDescription}>
+            Estás consultando una copia local de SQLite.
+            Los datos pueden estar desactualizados.
           </Text>
 
           {ultimaActualizacion && (
@@ -769,6 +883,7 @@ export default function MySubjectsScreen({
               ).toLocaleString('es-CO')}
             </Text>
           )}
+          </View>
         </View>
       )}
 
@@ -776,23 +891,48 @@ export default function MySubjectsScreen({
         !cargando &&
         materias.length > 0 && (
           <View style={styles.onlineBanner}>
+            <Ionicons
+              name="cloud-done-outline"
+              size={21}
+              color="#21845B"
+            />
+
             <Text style={styles.onlineBannerText}>
-              Materias actualizadas desde el
-              servidor.
+              Materias actualizadas desde el servidor.
             </Text>
           </View>
         )}
 
+      {/* ERRORES */}
       {errorMaterias && (
         <View style={styles.errorBox}>
+          <View style={styles.errorHeading}>
+            <Ionicons
+              name="alert-circle-outline"
+              size={21}
+              color="#9B1C1C"
+            />
+
+            <Text style={styles.errorTitle}>
+              Aviso de consulta
+            </Text>
+          </View>
+
           <Text style={styles.errorText}>
             {errorMaterias}
           </Text>
 
           <TouchableOpacity
+            style={styles.retryButton}
             onPress={cargarMaterias}
             accessibilityRole="button"
           >
+            <Ionicons
+              name="refresh-outline"
+              size={17}
+              color="#123B73"
+            />
+
             <Text style={styles.periodRetryText}>
               Reintentar
             </Text>
@@ -800,11 +940,33 @@ export default function MySubjectsScreen({
         </View>
       )}
 
+      {/* ENCABEZADO DE LISTADO */}
+      <View style={styles.listHeading}>
+        <View>
+          <Text style={styles.listTitle}>
+            Listado de materias
+          </Text>
+
+          <Text style={styles.listSubtitle}>
+            Información de tus asignaciones académicas
+          </Text>
+        </View>
+
+        <View style={styles.listIcon}>
+          <Ionicons
+            name="albums-outline"
+            size={21}
+            color="#123B73"
+          />
+        </View>
+      </View>
+
+      {/* CARGA, VACÍO Y MATERIAS */}
       {cargando && materias.length === 0 ? (
         <View style={styles.loadingBox}>
           <ActivityIndicator
             size="large"
-            color="#1F4E79"
+            color="#123B73"
           />
 
           <Text style={styles.loadingText}>
@@ -813,6 +975,14 @@ export default function MySubjectsScreen({
         </View>
       ) : materias.length === 0 ? (
         <View style={styles.emptyBox}>
+          <View style={styles.emptyIcon}>
+            <Ionicons
+              name="library-outline"
+              size={34}
+              color="#123B73"
+            />
+          </View>
+
           <Text style={styles.emptyTitle}>
             No hay materias disponibles
           </Text>
@@ -820,7 +990,7 @@ export default function MySubjectsScreen({
           <Text style={styles.emptyText}>
             {esEstudiante &&
             periodoSeleccionado == null
-              ? 'Selecciona un periodo académico para consultar tus materias.'
+              ? 'Selecciona un período académico para consultar tus materias.'
               : 'Todavía no hay materias disponibles para la selección realizada.'}
           </Text>
         </View>
@@ -830,42 +1000,130 @@ export default function MySubjectsScreen({
 
           return (
             <View
-              key={String(
-                datos.id ?? indice
-              )}
+              key={String(datos.id ?? indice)}
               style={styles.card}
             >
-              <Text style={styles.subjectName}>
-                {datos.nombre}
-              </Text>
+              <View style={styles.cardHeader}>
+                <View style={styles.subjectIcon}>
+                  <Ionicons
+                    name="book-outline"
+                    size={23}
+                    color="#123B73"
+                  />
+                </View>
+
+                <View style={styles.cardTitleContainer}>
+                  <Text style={styles.subjectName}>
+                    {datos.nombre}
+                  </Text>
+
+                  {datos.estado ? (
+                    <View
+                      style={[
+                        styles.stateBadge,
+                        datos.estado === 'activa'
+                          ? styles.activeBadge
+                          : styles.inactiveBadge,
+                      ]}
+                    >
+                      <Text
+                        style={[
+                          styles.stateText,
+                          datos.estado === 'activa'
+                            ? styles.activeText
+                            : styles.inactiveText,
+                        ]}
+                      >
+                        {datos.estado}
+                      </Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
 
               {item.esOffline && (
-                <Text style={styles.offlineText}>
-                  Disponible sin conexión
-                </Text>
+                <View style={styles.offlineTag}>
+                  <Ionicons
+                    name="cloud-offline-outline"
+                    size={15}
+                    color="#805A19"
+                  />
+
+                  <Text style={styles.offlineText}>
+                    Disponible sin conexión
+                  </Text>
+                </View>
               )}
 
+              <View style={styles.cardDivider} />
+
               {datos.grado ? (
-                <Text style={styles.cardText}>
-                  Grado: {datos.grado}
-                </Text>
+                <View style={styles.infoRow}>
+                  <Ionicons
+                    name="school-outline"
+                    size={18}
+                    color="#718096"
+                  />
+
+                  <Text style={styles.cardText}>
+                    <Text style={styles.infoLabel}>
+                      Grado:{' '}
+                    </Text>
+                    {datos.grado}
+                  </Text>
+                </View>
               ) : null}
 
               {datos.grupo ? (
-                <Text style={styles.cardText}>
-                  Grupo: {datos.grupo}
-                </Text>
+                <View style={styles.infoRow}>
+                  <Ionicons
+                    name="people-outline"
+                    size={18}
+                    color="#718096"
+                  />
+
+                  <Text style={styles.cardText}>
+                    <Text style={styles.infoLabel}>
+                      Grupo:{' '}
+                    </Text>
+                    {datos.grupo}
+                  </Text>
+                </View>
               ) : null}
 
               {datos.periodo ? (
-                <Text style={styles.cardText}>
-                  Periodo: {datos.periodo}
-                </Text>
+                <View style={styles.infoRow}>
+                  <Ionicons
+                    name="calendar-outline"
+                    size={18}
+                    color="#718096"
+                  />
+
+                  <Text style={styles.cardText}>
+                    <Text style={styles.infoLabel}>
+                      Período:{' '}
+                    </Text>
+                    {datos.periodo}
+                  </Text>
+                </View>
               ) : null}
             </View>
           );
         })
       )}
+
+      {/* PIE DE PÁGINA */}
+      <View style={styles.footer}>
+        <Ionicons
+          name="shield-checkmark-outline"
+          size={16}
+          color="#718096"
+        />
+
+        <Text style={styles.footerText}>
+          AULA-AI · Gestión académica inteligente
+        </Text>
+      </View>
     </ScrollView>
   );
 }
@@ -873,212 +1131,529 @@ export default function MySubjectsScreen({
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: '#F4F7FB',
   },
+
   container: {
+    paddingHorizontal: 20,
+    paddingBottom: 55,
+  },
+
+  hero: {
+    backgroundColor: '#091D3A',
+    marginHorizontal: -20,
     paddingHorizontal: 24,
     paddingTop: 55,
-    paddingBottom: 50,
+    paddingBottom: 36,
+    marginBottom: 22,
   },
-  backButton: {
-    marginBottom: 20,
-  },
-  backText: {
-    color: '#1F4E79',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  title: {
-    fontSize: 30,
-    fontWeight: 'bold',
-    color: '#1F4E79',
+
+  heroTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     marginBottom: 25,
   },
+
+  backButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+  },
+
+  backText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+    marginLeft: 8,
+  },
+
+  heroBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(255,255,255,0.09)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+
+  heroBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 11,
+    fontWeight: '900',
+    marginLeft: 7,
+  },
+
+  heroIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    backgroundColor: '#123B73',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 18,
+  },
+
+  title: {
+    fontSize: 27,
+    fontWeight: '900',
+    color: '#FFFFFF',
+    marginBottom: 10,
+  },
+
+  heroDescription: {
+    color: '#D7E5F3',
+    fontSize: 13,
+    lineHeight: 21,
+  },
+
+  summaryRow: {
+    flexDirection: 'row',
+    marginBottom: 25,
+  },
+
+  summaryCard: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 17,
+    padding: 17,
+    borderWidth: 1,
+    borderColor: '#DFE7F0',
+    marginHorizontal: 5,
+  },
+
+  summaryValue: {
+    color: '#123B73',
+    fontSize: 28,
+    fontWeight: '900',
+    marginTop: 9,
+  },
+
+  summaryLabel: {
+    color: '#718096',
+    fontSize: 11,
+    fontWeight: '700',
+    marginTop: 5,
+  },
+
   periodSection: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: '#DFE7F0',
     marginBottom: 20,
   },
+
+  sectionHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+
   periodTitle: {
-    fontSize: 14,
-    fontWeight: '800',
-    color: '#455A64',
-    marginBottom: 4,
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#091D3A',
+    marginLeft: 9,
   },
+
   periodDescription: {
-    marginBottom: 12,
+    marginBottom: 15,
     fontSize: 12,
-    lineHeight: 18,
-    color: '#607D8B',
+    lineHeight: 19,
+    color: '#718096',
   },
+
   periodLoading: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
   },
+
   periodMessage: {
-    paddingVertical: 10,
-    fontSize: 13,
-    color: '#607D8B',
+    marginLeft: 10,
+    fontSize: 12,
+    color: '#718096',
   },
+
   periodErrorBox: {
-    padding: 12,
-    borderRadius: 10,
-    backgroundColor: '#FDECEC',
-    marginBottom: 12,
+    backgroundColor: '#FFF4F2',
+    padding: 14,
+    borderRadius: 12,
+    marginBottom: 14,
   },
+
   periodOfflineBox: {
     backgroundColor: '#FFF4CC',
   },
+
   periodErrorText: {
     color: '#9B1C1C',
-    fontSize: 13,
+    fontSize: 12,
     lineHeight: 19,
+    marginTop: 8,
   },
+
+  retryButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    marginTop: 12,
+    paddingVertical: 6,
+  },
+
   periodRetryText: {
-    marginTop: 9,
-    color: '#1F4E79',
-    fontSize: 13,
-    fontWeight: '800',
+    color: '#123B73',
+    fontSize: 12,
+    fontWeight: '900',
+    marginLeft: 7,
   },
+
   periodList: {
     paddingRight: 10,
-    paddingBottom: 4,
+    paddingBottom: 8,
   },
+
   periodButton: {
-    minWidth: 108,
-    maxWidth: 150,
+    minWidth: 110,
+    maxWidth: 160,
     paddingHorizontal: 14,
-    paddingVertical: 10,
+    paddingVertical: 12,
     marginRight: 10,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
+    borderRadius: 13,
+    backgroundColor: '#F4F7FB',
     borderWidth: 1,
-    borderColor: '#D8E0E8',
+    borderColor: '#DFE7F0',
     alignItems: 'center',
   },
+
   periodButtonActive: {
-    backgroundColor: '#1F4E79',
-    borderColor: '#1F4E79',
+    backgroundColor: '#123B73',
+    borderColor: '#123B73',
   },
+
   periodButtonText: {
-    fontSize: 13,
+    fontSize: 12,
     fontWeight: '800',
-    color: '#455A64',
+    color: '#263B53',
   },
+
   periodButtonTextActive: {
     color: '#FFFFFF',
   },
+
   periodStatus: {
-    marginTop: 3,
+    marginTop: 5,
     fontSize: 10,
     fontWeight: '700',
   },
+
   periodStatusCurrent: {
-    color: '#2E7D32',
+    color: '#21845B',
   },
+
   periodStatusOther: {
-    color: '#607D8B',
+    color: '#718096',
   },
+
   periodStatusActive: {
     color: '#FFFFFF',
   },
+
   selectedPeriodText: {
-    marginTop: 8,
+    marginTop: 9,
     fontSize: 12,
-    fontWeight: '700',
-    color: '#1F4E79',
+    fontWeight: '800',
+    color: '#123B73',
   },
+
   periodNotice: {
-    marginTop: 8,
+    marginTop: 10,
     fontSize: 12,
-    lineHeight: 18,
-    color: '#8A5A00',
+    lineHeight: 19,
+    color: '#805A19',
   },
+
   offlineBanner: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     backgroundColor: '#FFF3DC',
     borderColor: '#EDD6A5',
     borderWidth: 1,
-    padding: 13,
-    borderRadius: 10,
-    marginBottom: 14,
+    padding: 16,
+    borderRadius: 14,
+    marginBottom: 17,
   },
+
+  bannerContent: {
+    flex: 1,
+    marginLeft: 11,
+  },
+
   offlineBannerText: {
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '900',
     color: '#805A19',
   },
-  offlineDate: {
-    fontSize: 12,
+
+  bannerDescription: {
+    fontSize: 11,
     color: '#805A19',
+    lineHeight: 18,
     marginTop: 5,
   },
+
+  offlineDate: {
+    fontSize: 11,
+    color: '#805A19',
+    marginTop: 7,
+  },
+
   onlineBanner: {
-    backgroundColor: '#E8F2FA',
-    padding: 12,
-    borderRadius: 10,
-    marginBottom: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EAF7EF',
+    borderRadius: 13,
+    padding: 14,
+    marginBottom: 18,
   },
+
   onlineBannerText: {
-    color: '#1F4E79',
-    fontSize: 13,
-    fontWeight: '700',
+    flex: 1,
+    color: '#21845B',
+    fontSize: 12,
+    fontWeight: '800',
+    marginLeft: 10,
   },
+
   errorBox: {
-    backgroundColor: '#FFF2F0',
-    borderRadius: 10,
-    padding: 13,
-    marginBottom: 14,
+    backgroundColor: '#FFF4F2',
+    borderRadius: 14,
+    padding: 17,
+    marginBottom: 18,
+    borderWidth: 1,
+    borderColor: '#F0C6C0',
   },
-  errorText: {
+
+  errorHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 9,
+  },
+
+  errorTitle: {
     color: '#9B1C1C',
     fontSize: 13,
-    lineHeight: 19,
+    fontWeight: '900',
+    marginLeft: 8,
   },
-  loadingBox: {
-    alignItems: 'center',
-    paddingVertical: 50,
-  },
-  loadingText: {
-    marginTop: 12,
-    color: '#607D8B',
-  },
-  emptyBox: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
-  },
-  emptyTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#263238',
-    marginBottom: 6,
-  },
-  emptyText: {
-    color: '#607D8B',
+
+  errorText: {
+    color: '#9B1C1C',
+    fontSize: 12,
     lineHeight: 20,
   },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 18,
-    marginBottom: 15,
-    borderWidth: 1,
-    borderColor: '#E0E5EB',
+
+  listHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
   },
-  subjectName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#1F4E79',
-    marginBottom: 10,
-  },
-  cardText: {
-    color: '#455A64',
+
+  listTitle: {
+    color: '#091D3A',
+    fontSize: 18,
+    fontWeight: '900',
     marginBottom: 5,
   },
-  offlineText: {
-    marginTop: 8,
-    marginBottom: 8,
+
+  listSubtitle: {
+    color: '#718096',
+    fontSize: 11,
+  },
+
+  listIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    backgroundColor: '#EAF3FC',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  loadingBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 17,
+    padding: 35,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#DFE7F0',
+  },
+
+  loadingText: {
+    marginTop: 13,
+    color: '#718096',
+    fontSize: 13,
+  },
+
+  emptyBox: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 28,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#DFE7F0',
+  },
+
+  emptyIcon: {
+    width: 72,
+    height: 72,
+    borderRadius: 22,
+    backgroundColor: '#EAF3FC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 16,
+  },
+
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: '#091D3A',
+    marginBottom: 9,
+    textAlign: 'center',
+  },
+
+  emptyText: {
+    color: '#718096',
     fontSize: 12,
-    fontWeight: '600',
+    lineHeight: 20,
+    textAlign: 'center',
+  },
+
+  card: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 18,
+    padding: 19,
+    marginBottom: 15,
+    borderWidth: 1,
+    borderColor: '#DFE7F0',
+    shadowColor: '#091D3A',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+
+  cardHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+
+  subjectIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 14,
+    backgroundColor: '#EAF3FC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  cardTitleContainer: {
+    flex: 1,
+  },
+
+  subjectName: {
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#091D3A',
+    lineHeight: 24,
+    marginBottom: 8,
+  },
+
+  stateBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 20,
+  },
+
+  activeBadge: {
+    backgroundColor: '#EAF7EF',
+  },
+
+  inactiveBadge: {
+    backgroundColor: '#F0F3F7',
+  },
+
+  stateText: {
+    fontSize: 10,
+    fontWeight: '800',
+    textTransform: 'capitalize',
+  },
+
+  activeText: {
+    color: '#21845B',
+  },
+
+  inactiveText: {
+    color: '#718096',
+  },
+
+  offlineTag: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 13,
+  },
+
+  offlineText: {
+    fontSize: 11,
+    fontWeight: '800',
     color: '#805A19',
+    marginLeft: 7,
+  },
+
+  cardDivider: {
+    height: 1,
+    backgroundColor: '#E9EFF5',
+    marginVertical: 17,
+  },
+
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 11,
+  },
+
+  cardText: {
+    flex: 1,
+    color: '#263B53',
+    fontSize: 12,
+    lineHeight: 19,
+    marginLeft: 10,
+  },
+
+  infoLabel: {
+    color: '#718096',
+    fontWeight: '700',
+  },
+
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 25,
+  },
+
+  footerText: {
+    color: '#718096',
+    fontSize: 11,
+    fontWeight: '600',
+    marginLeft: 7,
   },
 });

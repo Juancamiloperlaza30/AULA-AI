@@ -35,17 +35,24 @@ import {
 } from '../database/attendanceOfflineDatabase';
 
 const COLORS = {
-  primary: '#1F4E79',
-  primaryLight: '#EAF2FA',
-  background: '#F5F7FA',
+  primary: '#091D3A',
+  primaryLight: '#E7F4FB',
+  background: '#F4F7FB',
   white: '#FFFFFF',
-  text: '#263238',
-  muted: '#607D8B',
-  border: '#DFE6ED',
+
+  blue: '#123B73',
+  cyan: '#27C4E8',
+
+  text: '#172B4D',
+  muted: '#65758B',
+  border: '#E2EAF2',
+
   green: '#198754',
   greenLight: '#E7F5EC',
+
   red: '#C0392B',
   redLight: '#FCECEB',
+
   orange: '#BB7200',
   orangeLight: '#FFF2D7',
 };
@@ -1654,7 +1661,7 @@ export default function AttendanceScreen({
         ]
           .filter(Boolean)
           .join(' · ')
-      : 'Seleccionar materia y grupo';
+      : 'Elige una materia y un grupo';
 
   const presentes =
     estudiantes.filter(
@@ -1693,7 +1700,7 @@ export default function AttendanceScreen({
         </Text>
 
         <Text style={styles.headerSubtitle}>
-          Registro y seguimiento académico
+          Control de asistencia · Gestión docente
         </Text>
       </View>
 
@@ -1882,7 +1889,7 @@ export default function AttendanceScreen({
                 <Text
                   style={styles.summaryTitle}
                 >
-                  Resumen de asistencia
+                  Resumen del grupo
                 </Text>
 
                 <View
@@ -2047,7 +2054,7 @@ export default function AttendanceScreen({
                 <Text
                   style={styles.emptyText}
                 >
-                  No se encontraron estudiantes activos en este grupo.
+                  No hay estudiantes activos para mostrar en este grupo.
                 </Text>
               )}
 
@@ -2262,378 +2269,478 @@ export default function AttendanceScreen({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor:
-      COLORS.background,
+    backgroundColor: COLORS.background,
   },
+
   header: {
-    backgroundColor:
-      COLORS.primary,
-    paddingHorizontal: 22,
+    backgroundColor: COLORS.primary,
     paddingTop: 18,
-    paddingBottom: 25,
+    paddingHorizontal: 22,
+    paddingBottom: 28,
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
   },
+
   backButton: {
-    marginBottom: 12,
     alignSelf: 'flex-start',
-  },
-  backText: {
-    color: COLORS.white,
-    fontSize: 15,
-    fontWeight: '600',
-  },
-  headerTitle: {
-    fontSize: 27,
-    fontWeight: '800',
-    color: COLORS.white,
-  },
-  headerSubtitle: {
-    marginTop: 5,
-    color: '#D7E6F3',
-    fontSize: 13,
-  },
-  content: {
-    padding: 20,
-    paddingBottom: 65,
-  },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: COLORS.primary,
-    marginTop: 18,
+    paddingVertical: 8,
+    paddingRight: 18,
     marginBottom: 12,
   },
-  selectCard: {
-    padding: 17,
-    backgroundColor:
-      COLORS.white,
-    borderWidth: 1,
-    borderColor:
-      COLORS.border,
-    borderRadius: 12,
-    flexDirection: 'row',
-    justifyContent:
-      'space-between',
-    alignItems: 'center',
+
+  backText: {
+    color: '#BCECF7',
+    fontSize: 14,
+    fontWeight: '700',
   },
+
+  headerTitle: {
+    color: COLORS.white,
+    fontSize: 29,
+    fontWeight: '900',
+    letterSpacing: -0.7,
+  },
+
+  headerSubtitle: {
+    color: '#C0D5E9',
+    fontSize: 13,
+    marginTop: 6,
+  },
+
+  content: {
+    paddingHorizontal: 18,
+    paddingTop: 22,
+    paddingBottom: 44,
+  },
+
+  sectionTitle: {
+    color: COLORS.primary,
+    fontSize: 16,
+    fontWeight: '800',
+    marginBottom: 11,
+    marginTop: 18,
+  },
+
+  selectCard: {
+    backgroundColor: COLORS.white,
+    borderRadius: 17,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    shadowColor: '#0B2447',
+    shadowOpacity: 0.05,
+    shadowRadius: 12,
+    elevation: 2,
+  },
+
   selectText: {
     flex: 1,
-    color: COLORS.text,
     fontSize: 14,
-    fontWeight: '600',
-  },
-  selectArrow: {
     color: COLORS.primary,
-    fontSize: 22,
-    marginLeft: 8,
+    fontWeight: '700',
+    paddingRight: 12,
   },
+
+  selectArrow: {
+    fontSize: 23,
+    color: COLORS.blue,
+  },
+
   optionsBox: {
-    backgroundColor:
-      COLORS.white,
-    borderRadius: 12,
-    marginTop: 6,
+    marginTop: 9,
+    borderRadius: 16,
+    backgroundColor: COLORS.white,
     borderWidth: 1,
-    borderColor:
-      COLORS.border,
+    borderColor: COLORS.border,
     overflow: 'hidden',
   },
+
   option: {
-    padding: 15,
+    padding: 16,
     borderBottomWidth: 1,
-    borderBottomColor:
-      COLORS.border,
+    borderBottomColor: '#EFF3F8',
   },
+
   optionTitle: {
-    fontWeight: '700',
+    fontSize: 14,
     color: COLORS.primary,
-    fontSize: 15,
+    fontWeight: '800',
   },
+
   optionSubtitle: {
     fontSize: 12,
     color: COLORS.muted,
-    marginTop: 3,
+    marginTop: 5,
   },
+
   dateRow: {
     flexDirection: 'row',
-    gap: 9,
+    alignItems: 'center',
+    gap: 10,
   },
+
   dateInput: {
     flex: 1,
-    backgroundColor:
-      COLORS.white,
+    backgroundColor: COLORS.white,
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    height: 52,
     borderWidth: 1,
-    borderColor:
-      COLORS.border,
-    borderRadius: 10,
-    paddingHorizontal: 13,
-    paddingVertical: 12,
-    fontSize: 15,
+    borderColor: COLORS.border,
     color: COLORS.text,
+    fontSize: 14,
   },
+
   dateButton: {
-    backgroundColor:
-      COLORS.primary,
-    borderRadius: 10,
-    paddingHorizontal: 15,
+    backgroundColor: COLORS.blue,
+    paddingHorizontal: 19,
+    height: 52,
+    borderRadius: 14,
     justifyContent: 'center',
+    alignItems: 'center',
   },
+
   dateButtonText: {
     color: COLORS.white,
-    fontWeight: '700',
+    fontWeight: '800',
     fontSize: 13,
   },
+
   loader: {
     marginVertical: 30,
   },
+
   summaryContainer: {
-    backgroundColor:
-      COLORS.white,
-    padding: 16,
-    borderRadius: 14,
+    backgroundColor: COLORS.white,
+    borderRadius: 20,
+    padding: 18,
+    marginTop: 22,
     borderWidth: 1,
-    borderColor:
-      COLORS.border,
-    marginTop: 20,
+    borderColor: COLORS.border,
+    shadowColor: '#0B2447',
+    shadowOpacity: 0.04,
+    shadowRadius: 10,
+    elevation: 2,
   },
+
   summaryTitle: {
-    fontSize: 15,
+    fontSize: 16,
     color: COLORS.primary,
-    fontWeight: '800',
-    marginBottom: 15,
+    fontWeight: '900',
+    marginBottom: 18,
   },
+
   summaryRow: {
     flexDirection: 'row',
-    justifyContent:
-      'space-between',
+    justifyContent: 'space-between',
+    gap: 5,
   },
+
   summaryItem: {
     flex: 1,
     alignItems: 'center',
-  },
-  summaryNumber: {
-    fontSize: 21,
-    fontWeight: '900',
-    color: COLORS.primary,
-  },
-  summaryLabel: {
-    marginTop: 4,
-    fontSize: 11,
-    color: COLORS.muted,
-  },
-  noticeBox: {
-    backgroundColor:
-      COLORS.primaryLight,
-    padding: 15,
+    backgroundColor: '#F7F9FC',
+    paddingVertical: 12,
     borderRadius: 12,
-    marginTop: 16,
-    borderWidth: 1,
-    borderColor: '#C9DDEC',
   },
-  offlineBanner: {
-    backgroundColor: COLORS.orangeLight,
-    borderColor: COLORS.orange,
-    borderWidth: 1,
-    borderRadius: 10,
-    padding: 13,
-    marginBottom: 12,
+
+  summaryNumber: {
+    color: COLORS.primary,
+    fontSize: 23,
+    fontWeight: '900',
   },
-  offlineBannerTitle: {
-    color: COLORS.orange,
+
+  summaryLabel: {
+    color: COLORS.muted,
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 5,
+  },
+
+  noticeBox: {
+    marginTop: 17,
+    backgroundColor: '#E9F4FF',
+    borderRadius: 16,
+    padding: 16,
+    borderLeftWidth: 4,
+    borderLeftColor: COLORS.blue,
+  },
+
+  noticeTitle: {
+    color: COLORS.blue,
     fontSize: 14,
-    fontWeight: '800',
+    fontWeight: '900',
   },
-  offlineBannerText: {
+
+  noticeText: {
     color: COLORS.text,
     fontSize: 12,
-    lineHeight: 18,
-    marginTop: 5,
-  },
-  noticeTitle: {
-    fontWeight: '800',
-    fontSize: 14,
-    color: COLORS.primary,
-  },
-  noticeText: {
-    marginTop: 5,
-    fontSize: 13,
     lineHeight: 19,
-    color: COLORS.text,
+    marginTop: 6,
   },
+
+  offlineBanner: {
+    backgroundColor: '#FFF5E8',
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#FFE0B5',
+    marginBottom: 14,
+  },
+
+  offlineBannerTitle: {
+    color: '#975800',
+    fontSize: 14,
+    fontWeight: '900',
+  },
+
+  offlineBannerText: {
+    color: '#755C40',
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: 6,
+  },
+
   studentCard: {
-    backgroundColor:
-      COLORS.white,
-    borderRadius: 14,
+    backgroundColor: COLORS.white,
+    borderRadius: 18,
     padding: 16,
     marginBottom: 12,
     borderWidth: 1,
-    borderColor:
-      COLORS.border,
+    borderColor: COLORS.border,
+    shadowColor: '#0B2447',
+    shadowOpacity: 0.035,
+    shadowRadius: 9,
+    elevation: 1,
   },
+
   studentHeader: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12,
+    marginBottom: 13,
   },
+
   avatar: {
-    width: 41,
-    height: 41,
-    borderRadius: 21,
-    backgroundColor:
-      COLORS.primaryLight,
+    width: 44,
+    height: 44,
+    borderRadius: 15,
+    backgroundColor: COLORS.primaryLight,
     justifyContent: 'center',
     alignItems: 'center',
-    marginRight: 11,
+    marginRight: 12,
   },
+
   avatarText: {
-    fontSize: 17,
-    fontWeight: '800',
-    color: COLORS.primary,
+    fontSize: 18,
+    fontWeight: '900',
+    color: COLORS.blue,
   },
+
   studentInfo: {
     flex: 1,
   },
+
   studentName: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.text,
+    color: COLORS.primary,
+    fontSize: 14,
+    fontWeight: '800',
   },
+
   studentSub: {
-    fontSize: 12,
     color: COLORS.muted,
-    marginTop: 3,
+    fontSize: 11,
+    marginTop: 5,
   },
+
   estadosRow: {
     flexDirection: 'row',
-    gap: 6,
+    gap: 8,
   },
+
   estadoButton: {
     flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 4,
+    borderRadius: 12,
     borderWidth: 1,
-    borderRadius: 9,
-    paddingVertical: 10,
-    paddingHorizontal: 3,
     alignItems: 'center',
     justifyContent: 'center',
   },
+
   estadoText: {
     fontSize: 12,
     fontWeight: '800',
   },
+
   disabledControl: {
     opacity: 0.55,
   },
+
   registeredRow: {
     flexDirection: 'row',
-    justifyContent:
-      'space-between',
     alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 10,
   },
+
   estadoBadge: {
-    paddingHorizontal: 13,
+    borderRadius: 10,
+    paddingHorizontal: 12,
     paddingVertical: 9,
-    borderRadius: 8,
   },
+
   estadoBadgeText: {
     fontSize: 12,
-    fontWeight: '800',
+    fontWeight: '900',
   },
+
   editButton: {
+    backgroundColor: COLORS.primaryLight,
+    borderRadius: 10,
+    paddingHorizontal: 12,
     paddingVertical: 10,
-    paddingHorizontal: 13,
-    borderRadius: 9,
-    backgroundColor:
-      COLORS.primaryLight,
   },
+
   editText: {
+    color: COLORS.blue,
     fontSize: 12,
     fontWeight: '800',
-    color: COLORS.primary,
   },
+
   saveButton: {
-    backgroundColor:
-      COLORS.primary,
-    minHeight: 52,
-    borderRadius: 12,
+    backgroundColor: COLORS.blue,
+    minHeight: 56,
+    borderRadius: 16,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 20,
-    paddingHorizontal: 16,
+    marginTop: 16,
+    marginBottom: 12,
+    shadowColor: COLORS.blue,
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 3,
   },
+
   saveText: {
     color: COLORS.white,
     fontSize: 15,
-    fontWeight: '800',
+    fontWeight: '900',
   },
+
   emptyText: {
     color: COLORS.muted,
-    fontSize: 14,
+    fontSize: 13,
     textAlign: 'center',
-    marginVertical: 20,
-    lineHeight: 21,
+    paddingVertical: 24,
+    lineHeight: 20,
   },
+
   modalOverlay: {
     flex: 1,
-    backgroundColor:
-      'rgba(0,0,0,0.50)',
-    justifyContent: 'flex-end',
+    backgroundColor: 'rgba(4,19,39,0.68)',
+    justifyContent: 'center',
+    padding: 18,
   },
+
   modalContent: {
-    backgroundColor:
-      COLORS.white,
-    borderTopLeftRadius: 22,
-    borderTopRightRadius: 22,
+    backgroundColor: COLORS.white,
+    borderRadius: 23,
     padding: 22,
-    paddingBottom: 35,
-    maxHeight: '90%',
+    maxHeight: '88%',
   },
+
   modalTitle: {
     color: COLORS.primary,
     fontSize: 22,
     fontWeight: '900',
   },
+
   modalSubtitle: {
     color: COLORS.text,
-    fontSize: 15,
-    marginTop: 7,
+    fontSize: 13,
+    marginTop: 6,
     marginBottom: 20,
   },
+
   formLabel: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginBottom: 9,
-    marginTop: 15,
-  },
-  formInput: {
-    minHeight: 60,
-    textAlignVertical: 'top',
-    padding: 13,
-    backgroundColor:
-      COLORS.background,
-    borderWidth: 1,
-    borderColor:
-      COLORS.border,
-    borderRadius: 10,
-    color: COLORS.text,
-    fontSize: 14,
-  },
-  reasonInput: {
-    minHeight: 90,
-  },
-  auditHint: {
-    marginTop: 15,
-    fontSize: 12,
-    color: COLORS.muted,
-    lineHeight: 18,
-  },
-  cancelButton: {
-    paddingVertical: 15,
-    alignItems: 'center',
-    marginTop: 12,
-  },
-  cancelText: {
-    color: COLORS.red,
+    color: COLORS.primary,
+    fontSize: 13,
     fontWeight: '800',
-    fontSize: 15,
+    marginBottom: 9,
+    marginTop: 13,
+  },
+
+  formInput: {
+    backgroundColor: '#F9FBFD',
+    borderRadius: 13,
+    padding: 13,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    color: COLORS.text,
+    fontSize: 13,
+  },
+
+  reasonInput: {
+    backgroundColor: '#F9FBFD',
+    borderRadius: 13,
+    padding: 13,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    color: COLORS.text,
+    fontSize: 13,
+    minHeight: 90,
+    textAlignVertical: 'top',
+  },
+
+  auditHint: {
+    color: COLORS.muted,
+    fontSize: 11,
+    lineHeight: 17,
+    marginTop: 13,
+  },
+
+  cancelButton: {
+    borderRadius: 14,
+    padding: 14,
+    alignItems: 'center',
+    backgroundColor: '#EDF2F8',
+    marginTop: 10,
+  },
+
+  cancelText: {
+    color: COLORS.blue,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+
+  listHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 6,
+  },
+
+  listCounter: {
+    fontSize: 11,
+    color: COLORS.muted,
+    fontWeight: '700',
+  },
+
+  progressTrack: {
+    height: 5,
+    borderRadius: 5,
+    backgroundColor: '#E3EBF4',
+    overflow: 'hidden',
+    marginBottom: 15,
+  },
+
+  progressFill: {
+    height: '100%',
+    backgroundColor: COLORS.cyan,
+    borderRadius: 5,
   },
 });

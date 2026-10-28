@@ -1141,6 +1141,7 @@ export default function App() {
     } else {
       return (
         <SubjectManagementScreen
+          rol={usuario.rol}
           accessToken={
             sesion?.accessToken
           }
@@ -1201,6 +1202,7 @@ export default function App() {
     } else {
       return (
         <RegisterUserScreen
+          rol={usuario.rol}
           accessToken={
             sesion?.accessToken
           }

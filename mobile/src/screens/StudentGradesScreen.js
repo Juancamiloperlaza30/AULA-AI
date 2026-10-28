@@ -19,6 +19,8 @@ import {
   ScrollView,
 } from 'react-native';
 
+import { Ionicons } from '@expo/vector-icons';
+
 import {
   guardarCalificacionesLocales,
   obtenerCalificacionesLocales,
@@ -975,12 +977,26 @@ export default function StudentGradesScreen({
           onPress={onBack}
           accessibilityRole="button"
         >
-          <Text style={styles.backText}>
-            ‹
-          </Text>
+          <Ionicons
+            name="arrow-back"
+            size={20}
+            color="#FFFFFF"
+          />
         </TouchableOpacity>
 
         <View style={{ flex: 1 }}>
+          <View style={styles.headerBadge}>
+            <Ionicons
+              name="school-outline"
+              size={13}
+              color="#27C4E8"
+            />
+
+            <Text style={styles.headerBadgeText}>
+              AULA-AI · RENDIMIENTO
+            </Text>
+          </View>
+
           <Text style={styles.headerTitle}>
             Mis calificaciones
           </Text>
@@ -1131,6 +1147,12 @@ export default function StudentGradesScreen({
 
           <View style={styles.summaryContainer}>
             <View style={styles.summaryCard}>
+              <Ionicons
+                name="stats-chart-outline"
+                size={22}
+                color="#27C4E8"
+              />
+
               <Text style={styles.summaryLabel}>
                 {periodoSeleccionado === 'Todos'
                   ? 'Promedio anual'
@@ -1158,6 +1180,12 @@ export default function StudentGradesScreen({
             </View>
 
             <View style={styles.summaryCard}>
+              <Ionicons
+                name="ribbon-outline"
+                size={22}
+                color="#27C4E8"
+              />
+
               <Text style={styles.summaryLabel}>
                 Calificaciones
               </Text>
@@ -1334,32 +1362,54 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 20,
-    paddingTop: 55,
-    paddingBottom: 20,
+    paddingTop: 48,
+    paddingBottom: 25,
+    backgroundColor: '#091D3A',
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
+
   backButton: {
     width: 44,
     height: 44,
     borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(255,255,255,0.10)',
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 12,
   },
+
   backText: {
     fontSize: 32,
     lineHeight: 34,
   },
-  headerTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: '#1F2D3D',
+
+  headerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 6,
   },
+
+  headerBadgeText: {
+    color: '#AFC4D8',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    marginLeft: 6,
+  },
+
+  headerTitle: {
+    fontSize: 23,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+
   headerSubtitle: {
     marginTop: 2,
-    fontSize: 13,
-    color: '#607D8B',
+    fontSize: 12,
+    color: '#C0D5E9',
   },
+
   offlineBanner: {
     marginHorizontal: 20,
     marginBottom: 14,
@@ -1437,27 +1487,42 @@ const styles = StyleSheet.create({
     marginHorizontal: 20,
     marginBottom: 22,
   },
+
   summaryCard: {
     flex: 1,
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
     padding: 18,
+    borderWidth: 1,
+    borderColor: '#DFE7F0',
+    shadowColor: '#091D3A',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
+
   summaryLabel: {
-    fontSize: 13,
-    color: '#607D8B',
-    fontWeight: '600',
+    fontSize: 11,
+    color: '#718096',
+    fontWeight: '700',
+    marginTop: 10,
   },
+
   summaryValue: {
     marginTop: 8,
     fontSize: 30,
-    fontWeight: '800',
-    color: '#1F2D3D',
+    fontWeight: '900',
+    color: '#123B73',
   },
+
   summarySmall: {
     marginTop: 2,
     fontSize: 11,
-    color: '#607D8B',
+    color: '#718096',
   },
   periodosWrapper: {
     marginTop: 10,
@@ -1525,10 +1590,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: 18,
     padding: 18,
+    borderWidth: 1,
+    borderColor: '#DFE7F0',
+    shadowColor: '#091D3A',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   performanceTitle: {
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '900',
+    color: '#091D3A',
     marginBottom: 16,
   },
   performanceRow: {
@@ -1586,6 +1662,16 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     padding: 16,
     marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#DFE7F0',
+    shadowColor: '#091D3A',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    elevation: 2,
   },
   cardTop: {
     flexDirection: 'row',
@@ -1611,13 +1697,14 @@ const styles = StyleSheet.create({
   materia: {
     fontSize: 12,
     fontWeight: '700',
-    color: '#607D8B',
+    color: '#718096',
     textTransform: 'uppercase',
   },
   titulo: {
     marginTop: 3,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '800',
+    color: '#091D3A',
     lineHeight: 21,
   },
   notaBox: {
@@ -1625,7 +1712,7 @@ const styles = StyleSheet.create({
     paddingVertical: 9,
     paddingHorizontal: 8,
     borderRadius: 15,
-    backgroundColor: '#F0F4F8',
+    backgroundColor: '#EAF3FC',
     alignItems: 'center',
   },
   nota: {
@@ -1700,6 +1787,8 @@ const styles = StyleSheet.create({
     padding: 28,
     borderRadius: 20,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: '#DFE7F0',
   },
   emptyTitle: {
     fontSize: 18,

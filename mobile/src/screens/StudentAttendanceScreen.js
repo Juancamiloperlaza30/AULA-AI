@@ -17,6 +17,8 @@ import {
   View,
 } from 'react-native';
 
+import { Ionicons } from '@expo/vector-icons';
+
 import {
   guardarHistorialEstudianteOffline,
   obtenerHistorialEstudianteOffline,
@@ -476,10 +478,28 @@ export default function StudentAttendanceScreen({
           style={styles.botonVolver}
           accessibilityRole="button"
         >
+          <Ionicons
+            name="arrow-back"
+            size={18}
+            color="#BCECF7"
+          />
+
           <Text style={styles.volverTexto}>
-            {'‹'} Volver
+            Volver
           </Text>
         </TouchableOpacity>
+
+        <View style={styles.headerBadge}>
+          <Ionicons
+            name="school-outline"
+            size={13}
+            color="#27C4E8"
+          />
+
+          <Text style={styles.headerBadgeText}>
+            AULA-AI · SEGUIMIENTO
+          </Text>
+        </View>
 
         <Text style={styles.titulo}>
           Mi asistencia
@@ -520,6 +540,14 @@ export default function StudentAttendanceScreen({
           <>
             {origen && (
               <View style={styles.resumen}>
+                <View style={styles.summaryIcon}>
+                  <Ionicons
+                    name="calendar-outline"
+                    size={22}
+                    color="#FFFFFF"
+                  />
+                </View>
+
                 <Text style={styles.total}>
                   {resumen.totalRegistros}
                 </Text>
@@ -530,6 +558,12 @@ export default function StudentAttendanceScreen({
 
                 <View style={styles.estadisticas}>
                   <View style={styles.estadistica}>
+                    <Ionicons
+                      name="checkmark-circle-outline"
+                      size={19}
+                      color="#198754"
+                    />
+
                     <Text style={styles.presentes}>
                       {resumen.presentes}
                     </Text>
@@ -539,6 +573,12 @@ export default function StudentAttendanceScreen({
                   </View>
 
                   <View style={styles.estadistica}>
+                    <Ionicons
+                      name="close-circle-outline"
+                      size={19}
+                      color="#C0392B"
+                    />
+
                     <Text style={styles.ausentes}>
                       {resumen.ausentes}
                     </Text>
@@ -548,6 +588,12 @@ export default function StudentAttendanceScreen({
                   </View>
 
                   <View style={styles.estadistica}>
+                    <Ionicons
+                      name="time-outline"
+                      size={19}
+                      color="#BB7200"
+                    />
+
                     <Text style={styles.tardes}>
                       {resumen.llegadasTarde}
                     </Text>
@@ -637,37 +683,60 @@ export default function StudentAttendanceScreen({
 const styles = StyleSheet.create({
   pantalla: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: '#F4F7FB',
   },
+
   encabezado: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#091D3A',
     paddingHorizontal: 20,
-    paddingTop: 55,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E0E6ED',
+    paddingTop: 48,
+    paddingBottom: 26,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
   },
+
   botonVolver: {
+    flexDirection: 'row',
+    alignItems: 'center',
     alignSelf: 'flex-start',
     paddingVertical: 8,
-    marginBottom: 10,
+    marginBottom: 18,
   },
+
   volverTexto: {
-    color: '#1F4E79',
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  titulo: {
-    fontSize: 27,
-    fontWeight: '800',
-    color: '#1F4E79',
-  },
-  subtitulo: {
-    color: '#607D8B',
+    color: '#FFFFFF',
     fontSize: 14,
-    marginTop: 7,
-    lineHeight: 21,
+    fontWeight: '700',
+    marginLeft: 8,
   },
+
+  headerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 9,
+  },
+
+  headerBadgeText: {
+    color: '#AFC4D8',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+    marginLeft: 6,
+  },
+
+  titulo: {
+    fontSize: 26,
+    fontWeight: '900',
+    color: '#FFFFFF',
+  },
+
+  subtitulo: {
+    color: '#C0D5E9',
+    fontSize: 12,
+    marginTop: 8,
+    lineHeight: 19,
+  },
+
   scroll: {
     flex: 1,
   },
@@ -677,50 +746,84 @@ const styles = StyleSheet.create({
   },
   resumen: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 16,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E0E6ED',
+    borderColor: '#DFE7F0',
     padding: 18,
     alignItems: 'center',
     marginBottom: 14,
+    shadowColor: '#091D3A',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
   },
+
+  summaryIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 14,
+    backgroundColor: '#123B73',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+
   total: {
-    fontSize: 38,
+    fontSize: 36,
     fontWeight: '900',
-    color: '#1F4E79',
+    color: '#123B73',
   },
+
   totalEtiqueta: {
-    fontSize: 13,
-    color: '#607D8B',
-    fontWeight: '600',
-    marginBottom: 20,
+    fontSize: 12,
+    color: '#718096',
+    fontWeight: '700',
+    marginBottom: 18,
   },
+
   estadisticas: {
     flexDirection: 'row',
     width: '100%',
+    gap: 8,
   },
+
   estadistica: {
     flex: 1,
     alignItems: 'center',
+    backgroundColor: '#F7F9FC',
+    borderRadius: 13,
+    paddingVertical: 12,
   },
+
   presentes: {
-    fontSize: 25,
-    fontWeight: '800',
-    color: '#166534',
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#198754',
+    marginTop: 5,
   },
+
   ausentes: {
-    fontSize: 25,
-    fontWeight: '800',
-    color: '#B42318',
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#C0392B',
+    marginTop: 5,
   },
+
   tardes: {
-    fontSize: 25,
-    fontWeight: '800',
-    color: '#9A6700',
+    fontSize: 22,
+    fontWeight: '900',
+    color: '#BB7200',
+    marginTop: 5,
   },
+
   estadisticaTexto: {
-    fontSize: 11,
-    color: '#607D8B',
+    fontSize: 10,
+    color: '#718096',
+    fontWeight: '700',
     textAlign: 'center',
     marginTop: 5,
   },
@@ -788,11 +891,19 @@ const styles = StyleSheet.create({
   },
   registro: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 13,
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E0E6ED',
-    padding: 16,
+    borderColor: '#DFE7F0',
+    padding: 17,
     marginBottom: 12,
+    shadowColor: '#091D3A',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.035,
+    shadowRadius: 7,
+    elevation: 1,
   },
   registroCabecera: {
     flexDirection: 'row',
@@ -803,9 +914,9 @@ const styles = StyleSheet.create({
   materia: {
     flex: 1,
     flexShrink: 1,
-    color: '#263238',
-    fontSize: 15,
-    fontWeight: '700',
+    color: '#091D3A',
+    fontSize: 14,
+    fontWeight: '800',
     marginRight: 8,
   },
   etiqueta: {
@@ -821,7 +932,7 @@ const styles = StyleSheet.create({
   },
   detalle: {
     fontSize: 13,
-    color: '#455A64',
+    color: '#52647A',
     marginTop: 4,
   },
   observacion: {

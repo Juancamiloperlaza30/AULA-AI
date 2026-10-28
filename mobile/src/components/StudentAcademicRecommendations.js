@@ -12,6 +12,8 @@ import {
   View,
 } from 'react-native';
 
+import { Ionicons } from '@expo/vector-icons';
+
 import {
   listarRecomendacionesEstudiante,
 } from '../services/academicRecommendationService';
@@ -150,9 +152,19 @@ function TarjetaPlan({ plan }) {
         }
       >
         <View style={styles.filaTitulo}>
-          <Text style={styles.planTitulo}>
-            Plan #{plan.id}
-          </Text>
+          <View style={styles.planHeading}>
+            <View style={styles.planIcon}>
+              <Ionicons
+                name="flag-outline"
+                size={18}
+                color="#123B73"
+              />
+            </View>
+
+            <Text style={styles.planTitulo}>
+              Plan de acompañamiento #{plan.id}
+            </Text>
+          </View>
 
           <View style={[
             styles.etiquetaEstado,
@@ -183,35 +195,63 @@ function TarjetaPlan({ plan }) {
           {fechaLegible(plan.fecha_seguimiento)}
         </Text>
 
-        <Text style={styles.enlace}>
-          {expandido
-            ? 'Ocultar detalles ▲'
-            : 'Consultar mi plan ▼'}
-        </Text>
+        <View style={styles.enlace}>
+          <Text style={styles.enlaceTexto}>
+            {expandido
+              ? 'Ocultar detalles'
+              : 'Consultar mi plan'}
+          </Text>
+          <Ionicons
+            name={expandido ? 'chevron-up' : 'chevron-down'}
+            size={15}
+            color="#27C4E8"
+          />
+        </View>
       </TouchableOpacity>
 
       {expandido && (
         <View style={styles.detalles}>
-          <Text style={styles.seccion}>
-            Mis acciones de refuerzo
-          </Text>
+          <View style={styles.seccionHeading}>
+            <Ionicons
+              name="checkmark-done-outline"
+              size={16}
+              color="#123B73"
+            />
+            <Text style={styles.seccion}>
+              Mis acciones de refuerzo
+            </Text>
+          </View>
 
           <ListaAcademica
             elementos={plan.acciones}
           />
 
-          <Text style={styles.seccion}>
-            Indicadores de progreso
-          </Text>
+          <View style={styles.seccionHeading}>
+            <Ionicons
+              name="analytics-outline"
+              size={16}
+              color="#123B73"
+            />
+            <Text style={styles.seccion}>
+              Indicadores de progreso
+            </Text>
+          </View>
 
           <ListaAcademica
             elementos={plan.indicadores_progreso}
             indicadores
           />
 
-          <Text style={styles.seccion}>
-            Observaciones de acompañamiento
-          </Text>
+          <View style={styles.seccionHeading}>
+            <Ionicons
+              name="chatbox-ellipses-outline"
+              size={16}
+              color="#123B73"
+            />
+            <Text style={styles.seccion}>
+              Observaciones de acompañamiento
+            </Text>
+          </View>
 
           <Text style={styles.texto}>
             {plan.observaciones_orientador ||
@@ -242,9 +282,19 @@ function TarjetaRecomendacion({ recomendacion }) {
         }
       >
         <View style={styles.filaTitulo}>
-          <Text style={styles.planTitulo}>
-            Recomendación #{recomendacion.id}
-          </Text>
+          <View style={styles.planHeading}>
+            <View style={[styles.planIcon, styles.recommendationIcon]}>
+              <Ionicons
+                name="sparkles-outline"
+                size={18}
+                color="#7353B6"
+              />
+            </View>
+
+            <Text style={styles.planTitulo}>
+              Recomendación académica #{recomendacion.id}
+            </Text>
+          </View>
         </View>
 
         <Text style={styles.detalle}>
@@ -257,11 +307,18 @@ function TarjetaRecomendacion({ recomendacion }) {
           {fechaLegible(recomendacion.created_at)}
         </Text>
 
-        <Text style={styles.enlace}>
-          {expandido
-            ? 'Ocultar recomendación ▲'
-            : 'Ver recomendaciones ▼'}
-        </Text>
+        <View style={styles.enlace}>
+          <Text style={styles.enlaceTexto}>
+            {expandido
+              ? 'Ocultar recomendación'
+              : 'Ver recomendación'}
+          </Text>
+          <Ionicons
+            name={expandido ? 'chevron-up' : 'chevron-down'}
+            size={15}
+            color="#27C4E8"
+          />
+        </View>
       </TouchableOpacity>
 
       {expandido && (
@@ -423,9 +480,25 @@ export default function StudentAcademicRecommendations({
 
   return (
     <View style={styles.contenedor}>
-      <Text style={styles.titulo}>
-        Mis recomendaciones y planes
-      </Text>
+      <View style={styles.tituloPrincipal}>
+        <View style={styles.tituloIcono}>
+          <Ionicons
+            name="sparkles-outline"
+            size={22}
+            color="#27C4E8"
+          />
+        </View>
+
+        <View style={styles.tituloContenido}>
+          <Text style={styles.titulo}>
+            Recomendaciones y planes
+          </Text>
+
+          <Text style={styles.kicker}>
+            ACOMPAÑAMIENTO ACADÉMICO
+          </Text>
+        </View>
+      </View>
 
       <Text style={styles.descripcion}>
         Consulta las recomendaciones académicas
@@ -439,6 +512,12 @@ export default function StudentAcademicRecommendations({
         onPress={alternar}
         accessibilityRole="button"
       >
+        <Ionicons
+          name={visible ? 'chevron-up' : 'arrow-forward'}
+          size={18}
+          color="#FFFFFF"
+        />
+
         <Text style={styles.botonTexto}>
           {visible
             ? 'Ocultar recomendaciones y planes'
@@ -454,6 +533,12 @@ export default function StudentAcademicRecommendations({
             disabled={cargando}
             accessibilityRole="button"
           >
+            <Ionicons
+              name="refresh-outline"
+              size={17}
+              color="#123B73"
+            />
+
             <Text style={styles.botonSecundarioTexto}>
               Actualizar información
             </Text>
@@ -461,16 +546,23 @@ export default function StudentAcademicRecommendations({
 
           {cargando ? (
             <View style={styles.carga}>
-              <ActivityIndicator color="#2563EB" />
+              <ActivityIndicator color="#123B73" />
               <Text style={styles.secundario}>
                 Consultando tu información académica...
               </Text>
             </View>
           ) : (
             <>
-              <Text style={styles.subtitulo}>
-                Mis recomendaciones
-              </Text>
+              <View style={styles.subtitulo}>
+                <Ionicons
+                  name="bulb-outline"
+                  size={17}
+                  color="#7353B6"
+                />
+                <Text style={styles.subtituloTexto}>
+                  Mis recomendaciones
+                </Text>
+              </View>
 
               {errorRecomendaciones ? (
                 <Text style={styles.error}>
@@ -490,9 +582,16 @@ export default function StudentAcademicRecommendations({
                 ))
               )}
 
-              <Text style={styles.subtitulo}>
-                Mis planes de refuerzo
-              </Text>
+              <View style={styles.subtitulo}>
+                <Ionicons
+                  name="flag-outline"
+                  size={17}
+                  color="#123B73"
+                />
+                <Text style={styles.subtituloTexto}>
+                  Mis planes de refuerzo
+                </Text>
+              </View>
 
               {errorPlanes ? (
                 <Text style={styles.error}>
@@ -529,66 +628,130 @@ export default function StudentAcademicRecommendations({
 const styles = StyleSheet.create({
   contenedor: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 20,
     borderWidth: 1,
-    borderColor: '#E0E6ED',
-    padding: 18,
-    marginBottom: 16,
+    borderColor: '#DFE7F0',
+    padding: 19,
+    marginBottom: 18,
+    shadowColor: '#091D3A',
+    shadowOffset: {
+      width: 0,
+      height: 3,
+    },
+    shadowOpacity: 0.045,
+    shadowRadius: 9,
+    elevation: 2,
   },
+
+  tituloPrincipal: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 13,
+  },
+
+  tituloIcono: {
+    width: 47,
+    height: 47,
+    borderRadius: 15,
+    backgroundColor: '#EAF3FC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  tituloContenido: {
+    flex: 1,
+  },
+
   titulo: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginBottom: 9,
+    fontSize: 17,
+    fontWeight: '900',
+    color: '#091D3A',
+    marginBottom: 4,
   },
+
+  kicker: {
+    color: '#718096',
+    fontSize: 9,
+    fontWeight: '800',
+    letterSpacing: 0.8,
+  },
+
   descripcion: {
     fontSize: 13,
     lineHeight: 20,
-    color: '#64748B',
-    marginBottom: 15,
+    color: '#52647A',
+    marginBottom: 17,
   },
+
   boton: {
-    backgroundColor: '#2563EB',
-    borderRadius: 10,
-    padding: 14,
+    minHeight: 52,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 9,
+    backgroundColor: '#123B73',
+    borderRadius: 14,
+    paddingHorizontal: 15,
+    paddingVertical: 13,
     alignItems: 'center',
+    borderBottomWidth: 3,
+    borderBottomColor: '#27C4E8',
   },
+
   botonTexto: {
     color: '#FFFFFF',
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
     textAlign: 'center',
   },
+
   botonSecundario: {
-    backgroundColor: '#EFF6FF',
-    borderRadius: 9,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 8,
+    backgroundColor: '#EAF3FC',
+    borderRadius: 12,
     padding: 12,
     alignItems: 'center',
     marginBottom: 12,
   },
+
   botonSecundarioTexto: {
-    color: '#1D4ED8',
+    color: '#123B73',
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: '800',
   },
+
   contenido: {
     marginTop: 15,
   },
+
   subtitulo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginTop: 17,
+    marginBottom: 12,
+    paddingBottom: 9,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E9EFF5',
+  },
+
+  subtituloTexto: {
     fontSize: 16,
-    fontWeight: '700',
-    color: '#1E293B',
-    marginTop: 16,
-    marginBottom: 12,
+    fontWeight: '900',
+    color: '#091D3A',
   },
+
   plan: {
-    backgroundColor: '#F8FAFC',
-    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#E2E8F0',
-    padding: 14,
-    marginBottom: 12,
+    borderColor: '#DFE7F0',
+    padding: 15,
+    marginBottom: 13,
   },
+
   filaTitulo: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -596,66 +759,112 @@ const styles = StyleSheet.create({
     gap: 8,
     marginBottom: 10,
   },
+
+  planHeading: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 0,
+  },
+
+  planIcon: {
+    width: 36,
+    height: 36,
+    borderRadius: 11,
+    backgroundColor: '#EAF3FC',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 9,
+  },
+
+  recommendationIcon: {
+    backgroundColor: '#F1EBFA',
+  },
+
   planTitulo: {
-    fontSize: 14,
-    fontWeight: '700',
-    color: '#1E293B',
+    fontSize: 13,
+    fontWeight: '900',
+    color: '#091D3A',
     flexShrink: 1,
   },
+
   objetivo: {
     fontSize: 13,
-    fontWeight: '600',
+    fontWeight: '700',
     lineHeight: 21,
     color: '#334155',
     marginBottom: 10,
   },
+
   etiquetaEstado: {
-    backgroundColor: '#DBEAFE',
-    padding: 7,
-    borderRadius: 8,
+    backgroundColor: '#EAF3FC',
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+    borderRadius: 20,
   },
+
   estadoCompletado: {
-    backgroundColor: '#DCFCE7',
+    backgroundColor: '#EAF7EF',
   },
+
   estadoTexto: {
-    color: '#1D4ED8',
-    fontSize: 11,
-    fontWeight: '700',
+    color: '#123B73',
+    fontSize: 10,
+    fontWeight: '800',
   },
+
   detalle: {
     fontSize: 12,
     lineHeight: 19,
     color: '#64748B',
     marginTop: 5,
   },
+
   enlace: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#2563EB',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
     marginTop: 12,
   },
+
+  enlaceTexto: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: '#123B73',
+  },
+
   detalles: {
     borderTopWidth: 1,
-    borderTopColor: '#E2E8F0',
+    borderTopColor: '#E9EFF5',
     marginTop: 14,
-    paddingTop: 10,
+    paddingTop: 13,
   },
+
+  seccionHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    marginTop: 10,
+    marginBottom: 8,
+  },
+
   seccion: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#334155',
-    marginTop: 10,
-    marginBottom: 10,
+    fontWeight: '800',
+    color: '#123B73',
   },
+
   elemento: {
     flexDirection: 'row',
     gap: 8,
     marginBottom: 10,
   },
+
   punto: {
-    color: '#2563EB',
+    color: '#123B73',
     fontSize: 17,
   },
+
   elementoContenido: {
     flex: 1,
   },
@@ -664,6 +873,7 @@ const styles = StyleSheet.create({
     color: '#334155',
     lineHeight: 20,
   },
+
   texto: {
     fontSize: 13,
     lineHeight: 20,
@@ -675,20 +885,30 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   carga: {
-    padding: 20,
+    backgroundColor: '#F4F7FB',
+    borderRadius: 14,
+    padding: 22,
     alignItems: 'center',
     gap: 10,
   },
+
   error: {
+    backgroundColor: '#FFF4F2',
+    borderRadius: 12,
+    padding: 13,
     color: '#B91C1C',
     fontSize: 13,
     lineHeight: 20,
     marginBottom: 12,
   },
+
   aviso: {
+    backgroundColor: '#F4F7FB',
+    borderRadius: 12,
+    padding: 12,
     fontSize: 12,
     lineHeight: 19,
     color: '#64748B',
-    marginTop: 18,
+    marginTop: 16,
   },
 });

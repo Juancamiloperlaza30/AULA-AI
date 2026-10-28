@@ -14,6 +14,8 @@ import {
   View,
 } from 'react-native';
 
+import { Ionicons } from '@expo/vector-icons';
+
 import ProfileDashboardHeader
   from '../components/ProfileDashboardHeader';
 
@@ -569,6 +571,7 @@ export default function EstudianteDashboard({
       <ProfileDashboardHeader
         apiUrl={apiUrl}
         accessToken={accessToken}
+        studentPremium
       >
         <View style={styles.academicSummary}>
           <View style={styles.summaryItem}>
@@ -684,14 +687,25 @@ export default function EstudianteDashboard({
 
       {/* INFORMACIÓN ACADÉMICA */}
 
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>
-          Mi información académica
-        </Text>
+      <View style={styles.introCard}>
+        <View style={styles.introIcon}>
+          <Ionicons
+            name="school-outline"
+            size={25}
+            color="#27C4E8"
+          />
+        </View>
 
-        <Text style={styles.cardText}>
-          Consulta de materias, actividades y rendimiento.
-        </Text>
+        <View style={styles.introContent}>
+          <Text style={styles.introTitle}>
+            Mi espacio académico
+          </Text>
+
+          <Text style={styles.introText}>
+            Consulta tus materias, actividades y rendimiento
+            académico desde un solo lugar.
+          </Text>
+        </View>
       </View>
 
       {/* RECORDATORIOS HU-07 */}
@@ -705,85 +719,183 @@ export default function EstudianteDashboard({
 
       {/* ACCESOS EXISTENTES */}
 
-      <TouchableOpacity
-        style={styles.card}
-        onPress={onMySubjects}
-        accessibilityRole="button"
-      >
-        <Text style={styles.cardTitle}>
-          Mis materias
-        </Text>
+      <View style={styles.sectionHeader}>
+        <View style={styles.sectionIcon}>
+          <Ionicons
+            name="grid-outline"
+            size={19}
+            color="#123B73"
+          />
+        </View>
 
-        <Text style={styles.cardText}>
-          Consulta las materias correspondientes a tu grado y grupo.
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.card}
-        onPress={onMyActivities}
-        accessibilityRole="button"
-      >
-        <Text style={styles.cardTitle}>
-          Mis actividades
-        </Text>
-
-        <Text style={styles.cardText}>
-          Consulta tus tareas, actividades y exámenes.
-        </Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={styles.card}
-        onPress={onMyGrades}
-        accessibilityRole="button"
-      >
-        <Text style={styles.cardTitle}>
-          Mis calificaciones
-        </Text>
-
-        <Text style={styles.cardText}>
-          Consulta tus notas y la retroalimentación de tus actividades.
-        </Text>
-      </TouchableOpacity>
-
-      {typeof onMyAttendance === 'function' && (
-        <TouchableOpacity
-          style={styles.card}
-          onPress={onMyAttendance}
-          accessibilityRole="button"
-          accessibilityLabel="Consultar mi asistencia"
-        >
-          <Text style={styles.cardTitle}>
-            Mi asistencia
+        <View>
+          <Text style={styles.sectionTitle}>
+            Mis herramientas
           </Text>
 
-          <Text style={styles.cardText}>
-            Consulta tus asistencias, inasistencias
-            y llegadas tarde, organizadas por
-            fecha y materia.
+          <Text style={styles.sectionSubtitle}>
+            Accede a tu información académica
           </Text>
-        </TouchableOpacity>
-      )}
+        </View>
+      </View>
 
-      {typeof onMyCommunications === 'function' && (
+      <View style={styles.menuGrid}>
         <TouchableOpacity
-          style={styles.card}
-          onPress={onMyCommunications}
+          style={styles.menuCard}
+          onPress={onMySubjects}
           activeOpacity={0.85}
           accessibilityRole="button"
-          accessibilityLabel="Consultar mis comunicados institucionales"
         >
-          <Text style={styles.cardTitle}>
-            📢 Mis comunicados
+          <View style={[styles.menuIcon, styles.iconBlue]}>
+            <Ionicons
+              name="book-outline"
+              size={25}
+              color="#123B73"
+            />
+          </View>
+
+          <Text style={styles.menuTitle}>
+            Mis materias
           </Text>
 
-          <Text style={styles.cardText}>
-            Consulta los avisos, novedades y comunicados
-            publicados por tu institución educativa.
+          <Text style={styles.menuDescription}>
+            Consulta tus asignaturas
           </Text>
+
+          <Ionicons
+            name="arrow-forward-circle-outline"
+            size={21}
+            color="#27C4E8"
+            style={styles.menuArrow}
+          />
         </TouchableOpacity>
-      )}
+
+        <TouchableOpacity
+          style={styles.menuCard}
+          onPress={onMyActivities}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+        >
+          <View style={[styles.menuIcon, styles.iconCyan]}>
+            <Ionicons
+              name="clipboard-outline"
+              size={25}
+              color="#0891B2"
+            />
+          </View>
+
+          <Text style={styles.menuTitle}>
+            Mis actividades
+          </Text>
+
+          <Text style={styles.menuDescription}>
+            Tareas y evaluaciones
+          </Text>
+
+          <Ionicons
+            name="arrow-forward-circle-outline"
+            size={21}
+            color="#27C4E8"
+            style={styles.menuArrow}
+          />
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.menuCard}
+          onPress={onMyGrades}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+        >
+          <View style={[styles.menuIcon, styles.iconPurple]}>
+            <Ionicons
+              name="ribbon-outline"
+              size={25}
+              color="#7353B6"
+            />
+          </View>
+
+          <Text style={styles.menuTitle}>
+            Mis calificaciones
+          </Text>
+
+          <Text style={styles.menuDescription}>
+            Notas y rendimiento
+          </Text>
+
+          <Ionicons
+            name="arrow-forward-circle-outline"
+            size={21}
+            color="#27C4E8"
+            style={styles.menuArrow}
+          />
+        </TouchableOpacity>
+
+        {typeof onMyAttendance === 'function' && (
+          <TouchableOpacity
+            style={styles.menuCard}
+            onPress={onMyAttendance}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Consultar mi asistencia"
+          >
+            <View style={[styles.menuIcon, styles.iconGreen]}>
+              <Ionicons
+                name="calendar-outline"
+                size={25}
+                color="#16845B"
+              />
+            </View>
+
+            <Text style={styles.menuTitle}>
+              Mi asistencia
+            </Text>
+
+            <Text style={styles.menuDescription}>
+              Asistencias y llegadas tarde
+            </Text>
+
+            <Ionicons
+              name="arrow-forward-circle-outline"
+              size={21}
+              color="#27C4E8"
+              style={styles.menuArrow}
+            />
+          </TouchableOpacity>
+        )}
+
+        {typeof onMyCommunications === 'function' && (
+          <TouchableOpacity
+            style={styles.menuCard}
+            onPress={onMyCommunications}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Consultar mis comunicados institucionales"
+          >
+            <View style={[styles.menuIcon, styles.iconOrange]}>
+              <Ionicons
+                name="megaphone-outline"
+                size={25}
+                color="#C47A20"
+              />
+            </View>
+
+            <Text style={styles.menuTitle}>
+              Mis comunicados
+            </Text>
+
+            <Text style={styles.menuDescription}>
+              Avisos de tu institución
+            </Text>
+
+            <Ionicons
+              name="arrow-forward-circle-outline"
+              size={21}
+              color="#27C4E8"
+              style={styles.menuArrow}
+            />
+          </TouchableOpacity>
+        )}
+      </View>
 
       <StudentAcademicRecommendations
         estudianteId={usuario?.id}
@@ -807,96 +919,247 @@ export default function EstudianteDashboard({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F5F7FA',
+    backgroundColor: '#F4F7FB',
   },
+
   contentContainer: {
-    padding: 24,
-    paddingTop: 70,
+    paddingHorizontal: 18,
+    paddingTop: 28,
     paddingBottom: 50,
   },
-  card: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 18,
-    marginBottom: 16,
-    borderWidth: 1,
-    borderColor: '#E0E6ED',
-  },
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: 'bold',
-    color: '#1F4E79',
-    marginBottom: 6,
-  },
-  cardText: {
-    fontSize: 14,
-    color: '#455A64',
-    lineHeight: 21,
-  },
-  logoutButton: {
-    marginTop: 30,
-    backgroundColor: '#B3261E',
-    paddingVertical: 14,
-    borderRadius: 10,
-    alignItems: 'center',
-  },
-  logoutText: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
+
   academicSummary: {
     flexDirection: 'row',
     flexWrap: 'wrap',
+    marginTop: 12,
   },
+
   summaryItem: {
     width: '33.33%',
     alignItems: 'center',
-    marginBottom: 12,
+    justifyContent: 'center',
+    paddingVertical: 13,
+    paddingHorizontal: 4,
   },
+
   summaryValue: {
-    fontSize: 20,
+    fontSize: 21,
     fontWeight: '900',
-    color: '#1F4E79',
+    color: '#123B73',
   },
+
   summaryLabel: {
-    marginTop: 4,
+    marginTop: 5,
     fontSize: 11,
     fontWeight: '600',
-    color: '#607D8B',
+    color: '#64748B',
     textAlign: 'center',
   },
+
   estimado: {
-    marginTop: 3,
-    fontSize: 9,
-    color: '#9A6A18',
+    marginTop: 4,
+    fontSize: 10,
+    color: '#B7791F',
     fontWeight: '700',
   },
+
   estadoResumen: {
     flexDirection: 'row',
     alignItems: 'center',
     backgroundColor: '#FFFFFF',
-    borderRadius: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 15,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    marginTop: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: '#E7EDF5',
     gap: 9,
   },
+
   estadoPunto: {
-    height: 8,
-    width: 8,
-    borderRadius: 4,
+    height: 9,
+    width: 9,
+    borderRadius: 5,
   },
+
   estadoTexto: {
     flex: 1,
-    color: '#607D8B',
+    color: '#64748B',
     fontSize: 11,
     fontWeight: '600',
+    lineHeight: 16,
   },
+
   aviso: {
+    backgroundColor: '#FFF7E8',
+    borderRadius: 12,
+    padding: 12,
     color: '#91651D',
     fontSize: 12,
     marginBottom: 15,
     lineHeight: 18,
+  },
+
+  introCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#091D3A',
+    borderRadius: 20,
+    padding: 20,
+    marginBottom: 22,
+    elevation: 3,
+    shadowColor: '#091D3A',
+    shadowOpacity: 0.12,
+    shadowRadius: 8,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+  },
+
+  introIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 16,
+    backgroundColor: '#17375B',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 14,
+  },
+
+  introContent: {
+    flex: 1,
+  },
+
+  introTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#FFFFFF',
+    marginBottom: 6,
+  },
+
+  introText: {
+    fontSize: 12,
+    color: '#D6E5F5',
+    lineHeight: 19,
+  },
+
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    marginBottom: 16,
+  },
+
+  sectionIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 13,
+    backgroundColor: '#E7F1FA',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  sectionTitle: {
+    fontSize: 19,
+    fontWeight: '800',
+    color: '#091D3A',
+  },
+
+  sectionSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 3,
+  },
+
+  menuGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    marginBottom: 18,
+  },
+
+  menuCard: {
+    width: '48%',
+    minHeight: 184,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 19,
+    padding: 16,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: '#E6ECF4',
+    elevation: 2,
+    shadowColor: '#091D3A',
+    shadowOpacity: 0.05,
+    shadowRadius: 5,
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+  },
+
+  menuIcon: {
+    width: 49,
+    height: 49,
+    borderRadius: 15,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 15,
+  },
+
+  iconBlue: {
+    backgroundColor: '#E8F1FC',
+  },
+
+  iconCyan: {
+    backgroundColor: '#E2F8FC',
+  },
+
+  iconPurple: {
+    backgroundColor: '#F1EBFA',
+  },
+
+  iconGreen: {
+    backgroundColor: '#E5F7EE',
+  },
+
+  iconOrange: {
+    backgroundColor: '#FFF1DD',
+  },
+
+  menuTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: '#091D3A',
+    marginBottom: 5,
+  },
+
+  menuDescription: {
+    fontSize: 11,
+    color: '#64748B',
+    lineHeight: 16,
+  },
+
+  menuArrow: {
+    marginTop: 12,
+    alignSelf: 'flex-end',
+  },
+
+  logoutButton: {
+    marginTop: 22,
+    backgroundColor: '#FFF1F0',
+    borderWidth: 1,
+    borderColor: '#F5D1CF',
+    paddingVertical: 15,
+    borderRadius: 15,
+    alignItems: 'center',
+  },
+
+  logoutText: {
+    color: '#B3261E',
+    fontWeight: '800',
+    fontSize: 15,
   },
 });

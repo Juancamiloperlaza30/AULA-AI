@@ -1,4 +1,3 @@
-
 import { useEffect, useState } from 'react';
 
 import * as Crypto from 'expo-crypto';
@@ -21,6 +20,8 @@ import {
   View,
 } from 'react-native';
 
+import { Ionicons } from '@expo/vector-icons';
+
 import DateTimePicker, {
   DateTimePickerAndroid,
 } from '@react-native-community/datetimepicker';
@@ -28,29 +29,55 @@ import DateTimePicker, {
 // =====================================================
 // AULA-AI | HU-04 / HU-08
 // REGISTRO DE ACTIVIDADES ACADÉMICAS
+// REDISEÑO PREMIUM
 //
-// Corrección:
-// Android utiliza selectores nativos separados
-// para fecha y hora.
-//
-// Se mantienen:
-// - Asignaciones del docente.
+// Se conservan:
+// - Consulta de asignaciones del docente.
 // - Tipos de actividad.
-// - Registro con reintentos.
-// - Adjuntos y enlaces.
-// - Validaciones.
+// - Validaciones del formulario.
 // - Fechas ISO para el backend.
+// - Selectores nativos Android e iOS.
+// - Registro con reintentos.
+// - Archivos adjuntos y enlaces.
+// - Navegación y callbacks originales.
 // =====================================================
 
 const COLORES = {
-  primario: '#2D405D',
-  fondo: '#F5F7FB',
+  navy: '#091D3A',
+  primario: '#123B73',
+  cyan: '#27C4E8',
+  fondo: '#F4F7FB',
   blanco: '#FFFFFF',
-  texto: '#17243A',
-  secundario: '#65738A',
-  borde: '#D5DCE5',
-  error: '#B00020',
+  texto: '#334155',
+  secundario: '#718096',
+  borde: '#DFE7F0',
+  pale: '#EAF3FC',
+  error: '#B91C1C',
+  errorFondo: '#FEF2F2',
+  verde: '#15803D',
+  verdeFondo: '#ECFDF3',
 };
+
+const TIPOS_ACTIVIDAD = [
+  {
+    id: 'tarea',
+    titulo: 'Tarea',
+    icono: 'clipboard-outline',
+    descripcion: 'Trabajo asignado',
+  },
+  {
+    id: 'actividad',
+    titulo: 'Actividad',
+    icono: 'book-outline',
+    descripcion: 'Trabajo académico',
+  },
+  {
+    id: 'examen',
+    titulo: 'Examen',
+    icono: 'document-text-outline',
+    descripcion: 'Evaluación',
+  },
+];
 
 const fechaInicialEntrega = () =>
   new Date(Date.now() + 24 * 60 * 60 * 1000);
@@ -81,7 +108,9 @@ const combinarFecha = (actual, seleccionada, modo) => {
 };
 
 const formatearFecha = (fecha) => {
-  if (!fechaValida(fecha)) return 'Sin fecha';
+  if (!fechaValida(fecha)) {
+    return 'Sin fecha';
+  }
 
   return fecha.toLocaleDateString('es-CO', {
     day: '2-digit',
@@ -91,13 +120,79 @@ const formatearFecha = (fecha) => {
 };
 
 const formatearHora = (fecha) => {
-  if (!fechaValida(fecha)) return 'Sin hora';
+  if (!fechaValida(fecha)) {
+    return 'Sin hora';
+  }
 
   return fecha.toLocaleTimeString('es-CO', {
     hour: '2-digit',
     minute: '2-digit',
   });
 };
+
+// =====================================================
+// COMPONENTES VISUALES
+// =====================================================
+
+const EncabezadoSeccion = ({
+  icono,
+  titulo,
+  descripcion,
+  numero,
+}) => (
+  <View style={styles.sectionHeader}>
+    <View style={styles.sectionIcon}>
+      <Ionicons
+        name={icono}
+        size={21}
+        color={COLORES.primario}
+      />
+    </View>
+
+    <View style={styles.sectionHeaderText}>
+      <View style={styles.sectionTitleRow}>
+        <Text style={styles.sectionTitle}>
+          {titulo}
+        </Text>
+
+        {numero ? (
+          <View style={styles.sectionNumber}>
+            <Text style={styles.sectionNumberText}>
+              {numero}
+            </Text>
+          </View>
+        ) : null}
+      </View>
+
+      {descripcion ? (
+        <Text style={styles.sectionDescription}>
+          {descripcion}
+        </Text>
+      ) : null}
+    </View>
+  </View>
+);
+
+const EtiquetaCampo = ({
+  texto,
+  obligatorio = false,
+}) => (
+  <View style={styles.labelRow}>
+    <Text style={styles.label}>
+      {texto}
+    </Text>
+
+    {obligatorio && (
+      <Text style={styles.requiredMark}>
+        *
+      </Text>
+    )}
+  </View>
+);
+
+// =====================================================
+// PANTALLA PRINCIPAL
+// =====================================================
 
 const RegisterActivityScreen = ({
   apiUrl,
@@ -106,7 +201,7 @@ const RegisterActivityScreen = ({
   onRegistered,
 }) => {
   // ===================================================
-  // ESTADOS DEL FORMULARIO
+  // ESTADOS ORIGINALES
   // ===================================================
 
   const [tipo, setTipo] = useState('tarea');
@@ -143,7 +238,7 @@ const RegisterActivityScreen = ({
   const [guardando, setGuardando] = useState(false);
 
   // ===================================================
-  // CARGAR ASIGNACIONES DEL DOCENTE
+  // CONSULTAR ASIGNACIONES
   // ===================================================
 
   useEffect(() => {
@@ -172,6 +267,7 @@ const RegisterActivityScreen = ({
                 'No fue posible cargar las materias asignadas.'
             );
           }
+
           return;
         }
 
@@ -206,7 +302,7 @@ const RegisterActivityScreen = ({
   }, [apiUrl, accessToken]);
 
   // ===================================================
-  // SELECTOR DE FECHA Y HORA
+  // SELECTORES DE FECHA Y HORA
   // ===================================================
 
   const actualizarFecha = (campo, modo, valor) => {
@@ -268,7 +364,6 @@ const RegisterActivityScreen = ({
       return;
     }
 
-    // iOS conserva el selector visual integrado.
     setSelectorIOS({ campo, modo });
   };
 
@@ -293,7 +388,7 @@ const RegisterActivityScreen = ({
   };
 
   // ===================================================
-  // SELECCIONAR ARCHIVO ADJUNTO
+  // SELECCIÓN DE ARCHIVO
   // ===================================================
 
   const seleccionarArchivo = async () => {
@@ -334,6 +429,7 @@ const RegisterActivityScreen = ({
 
   // ===================================================
   // REGISTRAR ACTIVIDAD
+  // LÓGICA ORIGINAL CONSERVADA
   // ===================================================
 
   const registrarActividad = async () => {
@@ -352,6 +448,7 @@ const RegisterActivityScreen = ({
           'Campos incompletos',
           'Complete todos los campos obligatorios.'
         );
+
         return;
       }
 
@@ -363,6 +460,7 @@ const RegisterActivityScreen = ({
           'Fechas inválidas',
           'Seleccione fechas válidas para la actividad.'
         );
+
         return;
       }
 
@@ -371,6 +469,7 @@ const RegisterActivityScreen = ({
           'Fecha no válida',
           'La fecha de entrega debe ser posterior a la fecha de publicación.'
         );
+
         return;
       }
 
@@ -444,6 +543,7 @@ const RegisterActivityScreen = ({
           data.message ||
             'No fue posible registrar la actividad.'
         );
+
         return;
       }
 
@@ -511,6 +611,7 @@ const RegisterActivityScreen = ({
             'Actividad registrada',
             'La actividad se creó correctamente, pero no fue posible subir el archivo adjunto.'
           );
+
           return;
         }
       }
@@ -546,6 +647,7 @@ const RegisterActivityScreen = ({
             dataLink.message ||
               'La actividad se creó, pero no fue posible guardar el enlace.'
           );
+
           return;
         }
       }
@@ -577,14 +679,19 @@ const RegisterActivityScreen = ({
   };
 
   // ===================================================
-  // COMPONENTE PARA FECHA Y HORA
+  // COMPONENTE DE FECHA Y HORA
   // ===================================================
 
-  const renderCampoFecha = (campo, tituloCampo, valor) => (
-    <View>
-      <Text style={styles.label}>
-        {tituloCampo} *
-      </Text>
+  const renderCampoFecha = (
+    campo,
+    tituloCampo,
+    valor
+  ) => (
+    <View style={styles.dateSection}>
+      <EtiquetaCampo
+        texto={tituloCampo}
+        obligatorio
+      />
 
       <View style={styles.filaFechas}>
         <TouchableOpacity
@@ -593,9 +700,18 @@ const RegisterActivityScreen = ({
             abrirSelector(campo, 'date')
           }
           disabled={guardando}
+          activeOpacity={0.8}
         >
+          <View style={styles.dateIcon}>
+            <Ionicons
+              name="calendar-outline"
+              size={21}
+              color={COLORES.primario}
+            />
+          </View>
+
           <Text style={styles.dateCaption}>
-            Fecha
+            FECHA
           </Text>
 
           <Text style={styles.dateValue}>
@@ -609,9 +725,18 @@ const RegisterActivityScreen = ({
             abrirSelector(campo, 'time')
           }
           disabled={guardando}
+          activeOpacity={0.8}
         >
+          <View style={styles.dateIcon}>
+            <Ionicons
+              name="time-outline"
+              size={21}
+              color={COLORES.primario}
+            />
+          </View>
+
           <Text style={styles.dateCaption}>
-            Hora
+            HORA
           </Text>
 
           <Text style={styles.dateValue}>
@@ -629,13 +754,26 @@ const RegisterActivityScreen = ({
   if (cargando) {
     return (
       <View style={styles.center}>
+        <View style={styles.loadingIcon}>
+          <Ionicons
+            name="school-outline"
+            size={35}
+            color={COLORES.primario}
+          />
+        </View>
+
         <ActivityIndicator
           size="large"
           color={COLORES.primario}
         />
 
+        <Text style={styles.loadingTitle}>
+          Preparando registro
+        </Text>
+
         <Text style={styles.loadingText}>
-          Cargando materias asignadas...
+          Cargando las materias y grupos
+          asignados al docente...
         </Text>
       </View>
     );
@@ -651,261 +789,662 @@ const RegisterActivityScreen = ({
       contentContainerStyle={styles.container}
       keyboardShouldPersistTaps="handled"
     >
-      <Text style={styles.title}>
-        Registrar actividad
-      </Text>
+      {/* ============================================ */}
+      {/* ENCABEZADO PREMIUM */}
+      {/* ============================================ */}
 
-      <Text style={styles.subtitle}>
-        Complete los datos académicos de la actividad.
-      </Text>
-
-      <Text style={styles.label}>
-        Tipo de actividad *
-      </Text>
-
-      <View style={styles.options}>
-        {[
-          'tarea',
-          'actividad',
-          'examen',
-        ].map((item) => (
+      <View style={styles.header}>
+        <View style={styles.headerTop}>
           <TouchableOpacity
-            key={item}
-            style={[
-              styles.option,
-              tipo === item &&
-                styles.optionSelected,
-            ]}
-            onPress={() => setTipo(item)}
+            style={styles.headerBackButton}
+            onPress={onBack}
             disabled={guardando}
+            activeOpacity={0.8}
           >
-            <Text
-              style={[
-                styles.optionText,
-                tipo === item &&
-                  styles.optionTextSelected,
-              ]}
-            >
-              {item.toUpperCase()}
+            <Ionicons
+              name="arrow-back"
+              size={20}
+              color={COLORES.blanco}
+            />
+
+            <Text style={styles.headerBackText}>
+              Volver
             </Text>
           </TouchableOpacity>
-        ))}
+
+          <View style={styles.headerBadge}>
+            <Ionicons
+              name="school-outline"
+              size={14}
+              color={COLORES.cyan}
+            />
+
+            <Text style={styles.headerBadgeText}>
+              DOCENTE
+            </Text>
+          </View>
+        </View>
+
+        <View style={styles.headerIcon}>
+          <Ionicons
+            name="create-outline"
+            size={29}
+            color={COLORES.blanco}
+          />
+        </View>
+
+        <Text style={styles.headerTitle}>
+          Registrar actividad
+        </Text>
+
+        <Text style={styles.headerSubtitle}>
+          Organiza las actividades académicas,
+          asigna fechas y comparte recursos
+          con tus estudiantes.
+        </Text>
       </View>
 
-      <Text style={styles.label}>
-        Materia y grupo *
-      </Text>
+      {/* ============================================ */}
+      {/* MENSAJE INFORMATIVO */}
+      {/* ============================================ */}
 
-      <View style={styles.options}>
-        {asignaciones.length === 0 && (
-          <Text style={styles.emptyText}>
-            No se encontraron asignaciones
-            académicas para este docente.
-          </Text>
+      <View style={styles.introCard}>
+        <Ionicons
+          name="information-circle-outline"
+          size={22}
+          color={COLORES.primario}
+        />
+
+        <Text style={styles.introText}>
+          Completa los datos del formulario.
+          Los campos marcados con * son
+          obligatorios.
+        </Text>
+      </View>
+
+      {/* ============================================ */}
+      {/* SECCIÓN 1: TIPO DE ACTIVIDAD */}
+      {/* ============================================ */}
+
+      <View style={styles.sectionCard}>
+        <EncabezadoSeccion
+          icono="apps-outline"
+          titulo="Tipo de actividad"
+          descripcion="Selecciona la categoría académica."
+          numero="01"
+        />
+
+        <EtiquetaCampo
+          texto="Categoría"
+          obligatorio
+        />
+
+        <View style={styles.typesContainer}>
+          {TIPOS_ACTIVIDAD.map((item) => {
+            const seleccionado =
+              tipo === item.id;
+
+            return (
+              <TouchableOpacity
+                key={item.id}
+                style={[
+                  styles.typeCard,
+                  seleccionado &&
+                    styles.typeCardSelected,
+                ]}
+                onPress={() =>
+                  setTipo(item.id)
+                }
+                disabled={guardando}
+                activeOpacity={0.8}
+              >
+                <View
+                  style={[
+                    styles.typeIcon,
+                    seleccionado &&
+                      styles.typeIconSelected,
+                  ]}
+                >
+                  <Ionicons
+                    name={item.icono}
+                    size={22}
+                    color={
+                      seleccionado
+                        ? COLORES.blanco
+                        : COLORES.primario
+                    }
+                  />
+                </View>
+
+                <Text
+                  style={[
+                    styles.typeTitle,
+                    seleccionado &&
+                      styles.typeTitleSelected,
+                  ]}
+                >
+                  {item.titulo}
+                </Text>
+
+                <Text style={styles.typeDescription}>
+                  {item.descripcion}
+                </Text>
+
+                <Ionicons
+                  name={
+                    seleccionado
+                      ? 'checkmark-circle'
+                      : 'ellipse-outline'
+                  }
+                  size={19}
+                  color={
+                    seleccionado
+                      ? COLORES.primario
+                      : COLORES.borde
+                  }
+                  style={styles.typeCheck}
+                />
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </View>
+
+      {/* ============================================ */}
+      {/* SECCIÓN 2: ASIGNACIÓN ACADÉMICA */}
+      {/* ============================================ */}
+
+      <View style={styles.sectionCard}>
+        <EncabezadoSeccion
+          icono="school-outline"
+          titulo="Asignación académica"
+          descripcion="Elige la materia y el grupo."
+          numero="02"
+        />
+
+        <EtiquetaCampo
+          texto="Materia y grupo"
+          obligatorio
+        />
+
+        {asignaciones.length === 0 ? (
+          <View style={styles.emptyAssignments}>
+            <Ionicons
+              name="folder-open-outline"
+              size={34}
+              color={COLORES.primario}
+            />
+
+            <Text style={styles.emptyTitle}>
+              Sin asignaciones disponibles
+            </Text>
+
+            <Text style={styles.emptyText}>
+              No se encontraron asignaciones
+              académicas para este docente.
+            </Text>
+          </View>
+        ) : (
+          <View style={styles.assignmentsContainer}>
+            {asignaciones.map((asignacion) => {
+              const seleccionado =
+                asignacionSeleccionada?.id ===
+                asignacion.id;
+
+              return (
+                <TouchableOpacity
+                  key={String(asignacion.id)}
+                  style={[
+                    styles.assignmentCard,
+                    seleccionado &&
+                      styles.assignmentSelected,
+                  ]}
+                  onPress={() =>
+                    setAsignacionSeleccionada(
+                      asignacion
+                    )
+                  }
+                  disabled={guardando}
+                  activeOpacity={0.8}
+                >
+                  <View style={styles.assignmentTop}>
+                    <View style={styles.assignmentIcon}>
+                      <Ionicons
+                        name="book-outline"
+                        size={20}
+                        color={COLORES.primario}
+                      />
+                    </View>
+
+                    <View style={styles.assignmentTitleBox}>
+                      <Text style={styles.assignmentTitle}>
+                        {asignacion.materia?.nombre ||
+                          'Materia sin nombre'}
+                      </Text>
+
+                      <Text style={styles.assignmentSubtitle}>
+                        Asignación académica
+                      </Text>
+                    </View>
+
+                    <Ionicons
+                      name={
+                        seleccionado
+                          ? 'checkmark-circle'
+                          : 'ellipse-outline'
+                      }
+                      size={23}
+                      color={
+                        seleccionado
+                          ? COLORES.primario
+                          : COLORES.borde
+                      }
+                    />
+                  </View>
+
+                  <View style={styles.assignmentDetails}>
+                    <View style={styles.assignmentDetail}>
+                      <Ionicons
+                        name="school-outline"
+                        size={15}
+                        color={COLORES.secundario}
+                      />
+
+                      <Text style={styles.assignmentDetailText}>
+                        Grado:{' '}
+                        {asignacion.grado?.nombre ||
+                          '-'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.assignmentDetail}>
+                      <Ionicons
+                        name="people-outline"
+                        size={15}
+                        color={COLORES.secundario}
+                      />
+
+                      <Text style={styles.assignmentDetailText}>
+                        Grupo:{' '}
+                        {asignacion.grupo?.nombre ||
+                          '-'}
+                      </Text>
+                    </View>
+
+                    <View style={styles.assignmentDetail}>
+                      <Ionicons
+                        name="calendar-outline"
+                        size={15}
+                        color={COLORES.secundario}
+                      />
+
+                      <Text style={styles.assignmentDetailText}>
+                        Período:{' '}
+                        {asignacion.periodo?.nombre ||
+                          '-'}
+                      </Text>
+                    </View>
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         )}
+      </View>
 
-        {asignaciones.map((asignacion) => {
-          const seleccionado =
-            asignacionSeleccionada?.id ===
-            asignacion.id;
+      {/* ============================================ */}
+      {/* SECCIÓN 3: INFORMACIÓN DE LA ACTIVIDAD */}
+      {/* ============================================ */}
 
-          return (
+      <View style={styles.sectionCard}>
+        <EncabezadoSeccion
+          icono="document-text-outline"
+          titulo="Información de la actividad"
+          descripcion="Describe el trabajo que realizarán los estudiantes."
+          numero="03"
+        />
+
+        <EtiquetaCampo
+          texto="Título de la actividad"
+          obligatorio
+        />
+
+        <View style={styles.inputContainer}>
+          <Ionicons
+            name="text-outline"
+            size={20}
+            color={COLORES.secundario}
+          />
+
+          <TextInput
+            style={styles.inputWithIcon}
+            value={titulo}
+            onChangeText={setTitulo}
+            placeholder="Ej. Taller de matemáticas"
+            placeholderTextColor={COLORES.secundario}
+            maxLength={200}
+            editable={!guardando}
+          />
+        </View>
+
+        <Text style={styles.characterCounter}>
+          {titulo.length}/200 caracteres
+        </Text>
+
+        <EtiquetaCampo
+          texto="Descripción"
+          obligatorio
+        />
+
+        <TextInput
+          style={styles.textArea}
+          value={descripcion}
+          onChangeText={setDescripcion}
+          placeholder="Describe las instrucciones, objetivos y actividades que deben desarrollar los estudiantes..."
+          placeholderTextColor={COLORES.secundario}
+          multiline
+          textAlignVertical="top"
+          editable={!guardando}
+        />
+      </View>
+
+      {/* ============================================ */}
+      {/* SECCIÓN 4: RECURSOS ADICIONALES */}
+      {/* ============================================ */}
+
+      <View style={styles.sectionCard}>
+        <EncabezadoSeccion
+          icono="attach-outline"
+          titulo="Recursos de apoyo"
+          descripcion="Adjunta materiales complementarios."
+          numero="04"
+        />
+
+        <View style={styles.optionalBadge}>
+          <Ionicons
+            name="information-circle-outline"
+            size={15}
+            color={COLORES.primario}
+          />
+
+          <Text style={styles.optionalText}>
+            Esta sección es opcional
+          </Text>
+        </View>
+
+        <EtiquetaCampo texto="Archivo adjunto" />
+
+        <TouchableOpacity
+          style={styles.fileButton}
+          onPress={seleccionarArchivo}
+          disabled={guardando}
+          activeOpacity={0.8}
+        >
+          <View style={styles.fileButtonIcon}>
+            <Ionicons
+              name="cloud-upload-outline"
+              size={25}
+              color={COLORES.primario}
+            />
+          </View>
+
+          <Text style={styles.fileButtonTitle}>
+            Seleccionar archivo
+          </Text>
+
+          <Text style={styles.fileButtonSubtitle}>
+            Pulsa aquí para buscar un documento
+          </Text>
+        </TouchableOpacity>
+
+        {archivoSeleccionado && (
+          <View style={styles.fileCard}>
+            <View style={styles.selectedFileIcon}>
+              <Ionicons
+                name="document-attach-outline"
+                size={23}
+                color={COLORES.primario}
+              />
+            </View>
+
+            <View style={styles.selectedFileInfo}>
+              <Text
+                style={styles.fileName}
+                numberOfLines={2}
+              >
+                {archivoSeleccionado.name}
+              </Text>
+
+              <Text style={styles.fileSelectedLabel}>
+                Archivo seleccionado
+              </Text>
+            </View>
+
             <TouchableOpacity
-              key={asignacion.id}
-              style={[
-                styles.option,
-                seleccionado &&
-                  styles.optionSelected,
-              ]}
+              style={styles.removeFileButton}
               onPress={() =>
-                setAsignacionSeleccionada(
-                  asignacion
-                )
+                setArchivoSeleccionado(null)
               }
               disabled={guardando}
             >
-              <Text style={styles.optionTitle}>
-                {asignacion.materia?.nombre}
-              </Text>
-
-              <Text style={styles.optionDetail}>
-                Grado:{' '}
-                {asignacion.grado?.nombre}
-              </Text>
-
-              <Text style={styles.optionDetail}>
-                Grupo:{' '}
-                {asignacion.grupo?.nombre}
-              </Text>
-
-              <Text style={styles.optionDetail}>
-                Período:{' '}
-                {asignacion.periodo?.nombre}
-              </Text>
-            </TouchableOpacity>
-          );
-        })}
-      </View>
-
-      <Text style={styles.label}>
-        Título *
-      </Text>
-
-      <TextInput
-        style={styles.input}
-        value={titulo}
-        onChangeText={setTitulo}
-        placeholder="Título de la actividad"
-        maxLength={200}
-        editable={!guardando}
-      />
-
-      <Text style={styles.label}>
-        Descripción *
-      </Text>
-
-      <TextInput
-        style={[
-          styles.input,
-          styles.textArea,
-        ]}
-        value={descripcion}
-        onChangeText={setDescripcion}
-        placeholder="Descripción de la actividad"
-        multiline
-        textAlignVertical="top"
-        editable={!guardando}
-      />
-
-      <Text style={styles.label}>
-        Material adicional
-      </Text>
-
-      <TouchableOpacity
-        style={styles.fileButton}
-        onPress={seleccionarArchivo}
-        disabled={guardando}
-      >
-        <Text style={styles.fileButtonText}>
-          + Seleccionar archivo
-        </Text>
-      </TouchableOpacity>
-
-      {archivoSeleccionado && (
-        <View style={styles.fileCard}>
-          <Text style={styles.fileName}>
-            {archivoSeleccionado.name}
-          </Text>
-
-          <TouchableOpacity
-            onPress={() =>
-              setArchivoSeleccionado(null)
-            }
-            disabled={guardando}
-          >
-            <Text style={styles.removeFile}>
-              Quitar archivo
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <Text style={styles.label}>
-        Link externo
-      </Text>
-
-      <TextInput
-        style={styles.input}
-        value={linkExterno}
-        onChangeText={setLinkExterno}
-        placeholder="https://..."
-        autoCapitalize="none"
-        keyboardType="url"
-        editable={!guardando}
-      />
-
-      {renderCampoFecha(
-        'publicacion',
-        'Fecha de publicación',
-        fechaPublicacion
-      )}
-
-      {renderCampoFecha(
-        'entrega',
-        'Fecha de entrega',
-        fechaEntrega
-      )}
-
-      {Platform.OS === 'ios' &&
-        selectorIOS && (
-          <View style={styles.iosPickerCard}>
-            <Text style={styles.iosPickerTitle}>
-              Seleccionar{' '}
-              {selectorIOS.modo === 'date'
-                ? 'fecha'
-                : 'hora'}
-            </Text>
-
-            <DateTimePicker
-              value={
-                selectorIOS.campo ===
-                'publicacion'
-                  ? fechaPublicacion
-                  : fechaEntrega
-              }
-              mode={selectorIOS.modo}
-              display="spinner"
-              onChange={cambiarSelectorIOS}
-              is24Hour
-            />
-
-            <TouchableOpacity
-              style={styles.iosConfirmButton}
-              onPress={cerrarSelectorIOS}
-            >
-              <Text
-                style={styles.iosConfirmText}
-              >
-                Listo
-              </Text>
+              <Ionicons
+                name="close-circle-outline"
+                size={24}
+                color={COLORES.error}
+              />
             </TouchableOpacity>
           </View>
         )}
 
-      <TouchableOpacity
-        style={[
-          styles.saveButton,
-          guardando && styles.disabledButton,
-        ]}
-        onPress={registrarActividad}
-        disabled={guardando}
-      >
-        {guardando ? (
-          <ActivityIndicator
-            color={COLORES.blanco}
-          />
-        ) : (
-          <Text style={styles.saveButtonText}>
-            Registrar actividad
-          </Text>
-        )}
-      </TouchableOpacity>
+        <View style={styles.fieldSeparator} />
 
-      <TouchableOpacity
-        style={styles.backButton}
-        onPress={onBack}
-        disabled={guardando}
-      >
-        <Text style={styles.backButtonText}>
-          Volver
+        <EtiquetaCampo texto="Enlace externo" />
+
+        <View style={styles.inputContainer}>
+          <Ionicons
+            name="link-outline"
+            size={20}
+            color={COLORES.secundario}
+          />
+
+          <TextInput
+            style={styles.inputWithIcon}
+            value={linkExterno}
+            onChangeText={setLinkExterno}
+            placeholder="https://..."
+            placeholderTextColor={COLORES.secundario}
+            autoCapitalize="none"
+            keyboardType="url"
+            editable={!guardando}
+          />
+        </View>
+
+        <Text style={styles.helperText}>
+          Puedes agregar un enlace a material
+          educativo o recursos complementarios.
         </Text>
-      </TouchableOpacity>
+      </View>
+
+      {/* ============================================ */}
+      {/* SECCIÓN 5: FECHAS */}
+      {/* ============================================ */}
+
+      <View style={styles.sectionCard}>
+        <EncabezadoSeccion
+          icono="calendar-outline"
+          titulo="Programación"
+          descripcion="Define cuándo se publica y cuándo vence la actividad."
+          numero="05"
+        />
+
+        {renderCampoFecha(
+          'publicacion',
+          'Fecha de publicación',
+          fechaPublicacion
+        )}
+
+        <View style={styles.dateDivider}>
+          <Ionicons
+            name="arrow-down-outline"
+            size={18}
+            color={COLORES.secundario}
+          />
+        </View>
+
+        {renderCampoFecha(
+          'entrega',
+          'Fecha de entrega',
+          fechaEntrega
+        )}
+
+        <View style={styles.dateInfo}>
+          <Ionicons
+            name="alert-circle-outline"
+            size={19}
+            color={COLORES.primario}
+          />
+
+          <Text style={styles.dateInfoText}>
+            La fecha de entrega debe ser posterior
+            a la fecha de publicación.
+          </Text>
+        </View>
+
+        {/* SELECTOR NATIVO IOS */}
+
+        {Platform.OS === 'ios' &&
+          selectorIOS && (
+            <View style={styles.iosPickerCard}>
+              <Text style={styles.iosPickerTitle}>
+                Seleccionar{' '}
+                {selectorIOS.modo === 'date'
+                  ? 'fecha'
+                  : 'hora'}
+              </Text>
+
+              <DateTimePicker
+                value={
+                  selectorIOS.campo ===
+                  'publicacion'
+                    ? fechaPublicacion
+                    : fechaEntrega
+                }
+                mode={selectorIOS.modo}
+                display="spinner"
+                onChange={cambiarSelectorIOS}
+                is24Hour
+              />
+
+              <TouchableOpacity
+                style={styles.iosConfirmButton}
+                onPress={cerrarSelectorIOS}
+              >
+                <Text style={styles.iosConfirmText}>
+                  Listo
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+      </View>
+
+      {/* ============================================ */}
+      {/* ACCIONES FINALES */}
+      {/* ============================================ */}
+
+      <View style={styles.actionsCard}>
+        <View style={styles.actionsInfo}>
+          <Ionicons
+            name="shield-checkmark-outline"
+            size={21}
+            color={COLORES.verde}
+          />
+
+          <Text style={styles.actionsInfoText}>
+            Verifica los datos antes de registrar
+            la actividad académica.
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={[
+            styles.saveButton,
+            guardando && styles.disabledButton,
+          ]}
+          onPress={registrarActividad}
+          disabled={guardando}
+          activeOpacity={0.85}
+        >
+          {guardando ? (
+            <>
+              <ActivityIndicator
+                color={COLORES.blanco}
+                size="small"
+              />
+
+              <Text style={styles.saveButtonText}>
+                Registrando actividad...
+              </Text>
+            </>
+          ) : (
+            <>
+              <Ionicons
+                name="checkmark-circle-outline"
+                size={22}
+                color={COLORES.blanco}
+              />
+
+              <Text style={styles.saveButtonText}>
+                Registrar actividad
+              </Text>
+
+              <Ionicons
+                name="arrow-forward"
+                size={19}
+                color={COLORES.blanco}
+              />
+            </>
+          )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={onBack}
+          disabled={guardando}
+          activeOpacity={0.8}
+        >
+          <Ionicons
+            name="arrow-back-outline"
+            size={19}
+            color={COLORES.primario}
+          />
+
+          <Text style={styles.backButtonText}>
+            Volver sin registrar
+          </Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* ============================================ */}
+      {/* PIE DE PÁGINA */}
+      {/* ============================================ */}
+
+      <View style={styles.footer}>
+        <Ionicons
+          name="shield-checkmark-outline"
+          size={15}
+          color={COLORES.secundario}
+        />
+
+        <Text style={styles.footerText}>
+          Gestión académica · AULA-AI
+        </Text>
+      </View>
     </ScrollView>
   );
 };
 
 // =====================================================
-// ESTILOS
+// ESTILOS PREMIUM
 // =====================================================
 
 const styles = StyleSheet.create({
@@ -915,130 +1454,520 @@ const styles = StyleSheet.create({
   },
 
   container: {
-    padding: 20,
-    paddingBottom: 40,
+    paddingHorizontal: 20,
+    paddingBottom: 50,
   },
 
-  center: {
-    flex: 1,
-    justifyContent: 'center',
+  // ===================================================
+  // ENCABEZADO
+  // ===================================================
+
+  header: {
+    backgroundColor: COLORES.navy,
+    marginHorizontal: -20,
+    paddingHorizontal: 24,
+    paddingTop: 48,
+    paddingBottom: 35,
+    marginBottom: 20,
+    borderBottomLeftRadius: 24,
+    borderBottomRightRadius: 24,
+  },
+
+  headerTop: {
+    flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    padding: 20,
+    justifyContent: 'space-between',
+    marginBottom: 25,
   },
 
-  loadingText: {
-    color: COLORES.secundario,
-    textAlign: 'center',
+  headerBackButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 8,
   },
 
-  title: {
-    fontSize: 25,
-    fontWeight: 'bold',
-    color: COLORES.texto,
-    marginBottom: 6,
-  },
-
-  subtitle: {
+  headerBackText: {
     fontSize: 14,
-    color: COLORES.secundario,
+    fontWeight: '700',
+    color: COLORES.blanco,
+  },
+
+  headerBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 7,
+    backgroundColor: 'rgba(255,255,255,0.09)',
+    paddingHorizontal: 13,
+    paddingVertical: 8,
+    borderRadius: 20,
+  },
+
+  headerBadgeText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: COLORES.blanco,
+  },
+
+  headerIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 18,
+    backgroundColor: COLORES.primario,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.12)',
+  },
+
+  headerTitle: {
+    fontSize: 27,
+    fontWeight: '900',
+    color: COLORES.blanco,
+    marginBottom: 10,
+  },
+
+  headerSubtitle: {
+    fontSize: 13,
+    lineHeight: 21,
+    color: '#D6E4F2',
+  },
+
+  // ===================================================
+  // INFORMACIÓN
+  // ===================================================
+
+  introCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    backgroundColor: COLORES.pale,
+    borderRadius: 15,
+    padding: 16,
+    gap: 11,
+    marginBottom: 20,
+  },
+
+  introText: {
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 20,
+    color: COLORES.texto,
+  },
+
+  // ===================================================
+  // SECCIONES
+  // ===================================================
+
+  sectionCard: {
+    backgroundColor: COLORES.blanco,
+    borderRadius: 21,
+    padding: 19,
     marginBottom: 18,
+    borderWidth: 1,
+    borderColor: COLORES.borde,
+    shadowColor: COLORES.navy,
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 22,
+  },
+
+  sectionIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: 13,
+    backgroundColor: COLORES.pale,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+
+  sectionHeaderText: {
+    flex: 1,
+  },
+
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  sectionTitle: {
+    flexShrink: 1,
+    fontSize: 16,
+    fontWeight: '900',
+    color: COLORES.navy,
+  },
+
+  sectionDescription: {
+    fontSize: 11,
+    lineHeight: 17,
+    color: COLORES.secundario,
+    marginTop: 5,
+  },
+
+  sectionNumber: {
+    backgroundColor: COLORES.pale,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+
+  sectionNumberText: {
+    fontSize: 10,
+    fontWeight: '900',
+    color: COLORES.primario,
+  },
+
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 10,
+    marginBottom: 10,
   },
 
   label: {
-    fontWeight: '600',
-    color: COLORES.texto,
-    marginTop: 14,
-    marginBottom: 8,
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORES.navy,
   },
 
-  input: {
+  requiredMark: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: COLORES.error,
+  },
+
+  // ===================================================
+  // TIPOS DE ACTIVIDAD
+  // ===================================================
+
+  typesContainer: {
+    flexDirection: 'row',
+    gap: 8,
+  },
+
+  typeCard: {
+    flex: 1,
+    minWidth: 0,
+    alignItems: 'center',
+    backgroundColor: '#F8FAFD',
     borderWidth: 1,
     borderColor: COLORES.borde,
-    borderRadius: 10,
-    padding: 12,
+    borderRadius: 15,
+    paddingHorizontal: 5,
+    paddingVertical: 15,
+  },
+
+  typeCardSelected: {
+    backgroundColor: COLORES.pale,
+    borderColor: COLORES.primario,
+    borderWidth: 2,
+  },
+
+  typeIcon: {
+    width: 43,
+    height: 43,
+    borderRadius: 13,
+    backgroundColor: COLORES.pale,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 10,
+  },
+
+  typeIconSelected: {
+    backgroundColor: COLORES.primario,
+  },
+
+  typeTitle: {
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORES.navy,
+    textAlign: 'center',
+  },
+
+  typeTitleSelected: {
+    color: COLORES.primario,
+  },
+
+  typeDescription: {
+    fontSize: 9,
+    lineHeight: 14,
+    color: COLORES.secundario,
+    textAlign: 'center',
+    marginTop: 5,
+    minHeight: 28,
+  },
+
+  typeCheck: {
+    marginTop: 7,
+  },
+
+  // ===================================================
+  // ASIGNACIONES
+  // ===================================================
+
+  assignmentsContainer: {
+    gap: 11,
+  },
+
+  assignmentCard: {
+    backgroundColor: '#F8FAFD',
+    borderWidth: 1,
+    borderColor: COLORES.borde,
+    borderRadius: 15,
+    padding: 15,
+  },
+
+  assignmentSelected: {
+    backgroundColor: COLORES.pale,
+    borderWidth: 2,
+    borderColor: COLORES.primario,
+  },
+
+  assignmentTop: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  assignmentIcon: {
+    width: 41,
+    height: 41,
+    borderRadius: 12,
     backgroundColor: COLORES.blanco,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 11,
+  },
+
+  assignmentTitleBox: {
+    flex: 1,
+  },
+
+  assignmentTitle: {
+    fontSize: 14,
+    fontWeight: '900',
+    color: COLORES.navy,
+    marginBottom: 4,
+  },
+
+  assignmentSubtitle: {
+    fontSize: 11,
+    color: COLORES.secundario,
+  },
+
+  assignmentDetails: {
+    marginTop: 13,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: COLORES.borde,
+    gap: 9,
+  },
+
+  assignmentDetail: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+
+  assignmentDetailText: {
+    flex: 1,
+    fontSize: 12,
     color: COLORES.texto,
+    fontWeight: '600',
+  },
+
+  emptyAssignments: {
+    backgroundColor: '#F8FAFD',
+    borderRadius: 15,
+    padding: 24,
+    alignItems: 'center',
+  },
+
+  emptyTitle: {
+    fontSize: 14,
+    fontWeight: '800',
+    color: COLORES.navy,
+    marginTop: 12,
+    textAlign: 'center',
+  },
+
+  emptyText: {
+    fontSize: 12,
+    lineHeight: 19,
+    color: COLORES.secundario,
+    marginTop: 8,
+    textAlign: 'center',
+  },
+
+  // ===================================================
+  // CAMPOS DEL FORMULARIO
+  // ===================================================
+
+  inputContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F8FAFD',
+    borderWidth: 1,
+    borderColor: COLORES.borde,
+    borderRadius: 13,
+    paddingHorizontal: 13,
+    minHeight: 53,
+    gap: 10,
+  },
+
+  inputWithIcon: {
+    flex: 1,
+    minWidth: 0,
+    fontSize: 13,
+    color: COLORES.navy,
+    paddingVertical: 12,
   },
 
   textArea: {
-    minHeight: 120,
+    backgroundColor: '#F8FAFD',
+    borderWidth: 1,
+    borderColor: COLORES.borde,
+    borderRadius: 13,
+    padding: 14,
+    minHeight: 135,
+    fontSize: 13,
+    lineHeight: 21,
+    color: COLORES.navy,
+  },
+
+  characterCounter: {
+    fontSize: 10,
+    color: COLORES.secundario,
+    textAlign: 'right',
+    marginTop: 6,
+  },
+
+  helperText: {
+    fontSize: 11,
+    lineHeight: 18,
+    color: COLORES.secundario,
+    marginTop: 9,
+  },
+
+  fieldSeparator: {
+    height: 1,
+    backgroundColor: COLORES.borde,
+    marginVertical: 19,
+  },
+
+  // ===================================================
+  // ARCHIVOS
+  // ===================================================
+
+  optionalBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 7,
+    backgroundColor: COLORES.pale,
+    paddingHorizontal: 11,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginBottom: 13,
+  },
+
+  optionalText: {
+    fontSize: 11,
+    fontWeight: '700',
+    color: COLORES.primario,
   },
 
   fileButton: {
     borderWidth: 1,
+    borderStyle: 'dashed',
     borderColor: COLORES.primario,
-    borderRadius: 10,
-    padding: 14,
+    backgroundColor: '#F8FAFD',
+    borderRadius: 15,
+    paddingVertical: 22,
+    paddingHorizontal: 15,
     alignItems: 'center',
-    backgroundColor: COLORES.blanco,
   },
 
-  fileButtonText: {
+  fileButtonIcon: {
+    width: 52,
+    height: 52,
+    borderRadius: 15,
+    backgroundColor: COLORES.pale,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+  },
+
+  fileButtonTitle: {
+    fontSize: 13,
+    fontWeight: '900',
     color: COLORES.primario,
-    fontWeight: 'bold',
+    marginBottom: 5,
+  },
+
+  fileButtonSubtitle: {
+    fontSize: 11,
+    color: COLORES.secundario,
+    textAlign: 'center',
   },
 
   fileCard: {
-    marginTop: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORES.verdeFondo,
+    borderRadius: 13,
     padding: 12,
-    borderRadius: 10,
-    backgroundColor: '#EAF0F6',
+    marginTop: 12,
+    gap: 10,
+  },
+
+  selectedFileIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 11,
+    backgroundColor: COLORES.blanco,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  selectedFileInfo: {
+    flex: 1,
   },
 
   fileName: {
-    fontWeight: '600',
-    color: COLORES.texto,
+    fontSize: 12,
+    fontWeight: '800',
+    color: COLORES.navy,
+  },
+
+  fileSelectedLabel: {
+    fontSize: 10,
+    color: COLORES.verde,
+    marginTop: 4,
+  },
+
+  removeFileButton: {
+    padding: 5,
+  },
+
+  // ===================================================
+  // FECHAS
+  // ===================================================
+
+  dateSection: {
     marginBottom: 6,
-  },
-
-  removeFile: {
-    color: COLORES.error,
-    fontWeight: '600',
-  },
-
-  options: {
-    gap: 8,
-  },
-
-  option: {
-    borderWidth: 1,
-    borderColor: COLORES.borde,
-    borderRadius: 10,
-    padding: 12,
-    backgroundColor: COLORES.blanco,
-  },
-
-  optionSelected: {
-    borderWidth: 2,
-    borderColor: COLORES.primario,
-    backgroundColor: '#EAF0F6',
-  },
-
-  optionText: {
-    color: COLORES.texto,
-    fontWeight: '500',
-  },
-
-  optionTextSelected: {
-    color: COLORES.primario,
-    fontWeight: 'bold',
-  },
-
-  optionTitle: {
-    fontWeight: 'bold',
-    color: COLORES.texto,
-    marginBottom: 4,
-  },
-
-  optionDetail: {
-    color: COLORES.secundario,
-    marginTop: 2,
-  },
-
-  emptyText: {
-    color: COLORES.secundario,
-    paddingVertical: 12,
   },
 
   filaFechas: {
@@ -1048,60 +1977,127 @@ const styles = StyleSheet.create({
 
   dateButton: {
     flex: 1,
+    minWidth: 0,
+    backgroundColor: '#F8FAFD',
     borderWidth: 1,
     borderColor: COLORES.borde,
-    borderRadius: 10,
+    borderRadius: 14,
     padding: 13,
-    backgroundColor: COLORES.blanco,
+  },
+
+  dateIcon: {
+    width: 37,
+    height: 37,
+    borderRadius: 11,
+    backgroundColor: COLORES.pale,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 11,
   },
 
   dateCaption: {
-    fontSize: 12,
+    fontSize: 10,
+    fontWeight: '900',
     color: COLORES.secundario,
-    marginBottom: 5,
+    marginBottom: 6,
   },
 
   dateValue: {
-    fontWeight: '600',
+    fontSize: 13,
+    fontWeight: '900',
+    color: COLORES.navy,
+  },
+
+  dateDivider: {
+    alignItems: 'center',
+    paddingVertical: 13,
+  },
+
+  dateInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: COLORES.pale,
+    borderRadius: 13,
+    padding: 13,
+    marginTop: 18,
+  },
+
+  dateInfoText: {
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 18,
     color: COLORES.texto,
-    fontSize: 14,
   },
 
   iosPickerCard: {
-    marginTop: 12,
+    marginTop: 14,
     backgroundColor: COLORES.blanco,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
     borderColor: COLORES.borde,
-    padding: 10,
+    padding: 12,
   },
 
   iosPickerTitle: {
-    fontWeight: 'bold',
+    fontSize: 14,
+    fontWeight: '800',
     textAlign: 'center',
-    color: COLORES.texto,
+    color: COLORES.navy,
   },
 
   iosConfirmButton: {
     backgroundColor: COLORES.primario,
-    padding: 12,
-    borderRadius: 8,
+    padding: 13,
+    borderRadius: 11,
     alignItems: 'center',
   },
 
   iosConfirmText: {
     color: COLORES.blanco,
-    fontWeight: 'bold',
+    fontWeight: '800',
+  },
+
+  // ===================================================
+  // ACCIONES
+  // ===================================================
+
+  actionsCard: {
+    backgroundColor: COLORES.blanco,
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: COLORES.borde,
+  },
+
+  actionsInfo: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 10,
+    backgroundColor: COLORES.verdeFondo,
+    padding: 13,
+    borderRadius: 13,
+    marginBottom: 17,
+  },
+
+  actionsInfoText: {
+    flex: 1,
+    fontSize: 11,
+    lineHeight: 18,
+    color: COLORES.texto,
   },
 
   saveButton: {
-    marginTop: 24,
-    padding: 15,
-    minHeight: 52,
-    borderRadius: 10,
+    minHeight: 58,
     backgroundColor: COLORES.primario,
+    borderRadius: 15,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 10,
+    paddingHorizontal: 14,
+    borderBottomWidth: 3,
+    borderBottomColor: COLORES.cyan,
   },
 
   disabledButton: {
@@ -1109,19 +2105,82 @@ const styles = StyleSheet.create({
   },
 
   saveButtonText: {
+    fontSize: 13,
+    fontWeight: '900',
     color: COLORES.blanco,
-    fontWeight: 'bold',
   },
 
   backButton: {
+    minHeight: 52,
+    borderWidth: 1,
+    borderColor: COLORES.borde,
+    borderRadius: 13,
     marginTop: 12,
-    padding: 14,
+    flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    gap: 9,
   },
 
   backButtonText: {
+    fontSize: 13,
+    fontWeight: '800',
+    color: COLORES.primario,
+  },
+
+  // ===================================================
+  // CARGA
+  // ===================================================
+
+  center: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: COLORES.fondo,
+    paddingHorizontal: 25,
+  },
+
+  loadingIcon: {
+    width: 76,
+    height: 76,
+    borderRadius: 23,
+    backgroundColor: COLORES.pale,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 23,
+  },
+
+  loadingTitle: {
+    fontSize: 16,
+    fontWeight: '900',
+    color: COLORES.navy,
+    marginTop: 18,
+  },
+
+  loadingText: {
+    fontSize: 12,
+    lineHeight: 20,
     color: COLORES.secundario,
+    textAlign: 'center',
+    marginTop: 9,
+  },
+
+  // ===================================================
+  // PIE DE PÁGINA
+  // ===================================================
+
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    marginTop: 24,
+  },
+
+  footerText: {
+    fontSize: 11,
     fontWeight: '600',
+    color: COLORES.secundario,
   },
 });
 

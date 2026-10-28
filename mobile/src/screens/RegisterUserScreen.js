@@ -32,6 +32,7 @@ const mostrarAlerta = (titulo, mensaje) => {
 };
 
 export default function RegisterUserScreen({
+  rol: rolAutenticado,
   accessToken,
   apiUrl,
   onBack,
@@ -608,7 +609,11 @@ export default function RegisterUserScreen({
             style={styles.backButton}
             activeOpacity={0.8}
             accessibilityRole="button"
-            accessibilityLabel="Volver al panel de administración"
+            accessibilityLabel={
+              rolAutenticado === 'coordinador'
+                ? 'Volver al panel del coordinador'
+                : 'Volver al panel de administración'
+            }
           >
             <Ionicons
               name="arrow-back"
@@ -629,7 +634,9 @@ export default function RegisterUserScreen({
             />
 
             <Text style={styles.headerBadgeText}>
-              ADMIN
+              {rolAutenticado === 'coordinador'
+                ? 'COORDINADOR'
+                : 'ADMIN'}
             </Text>
           </View>
         </View>
