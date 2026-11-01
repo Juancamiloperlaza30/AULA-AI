@@ -1,5 +1,6 @@
 import * as Linking from 'expo-linking';
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
@@ -21,6 +22,14 @@ import {
 
 import LoginScreen from './src/components/LoginScreen';
 import AdminDashboard from './src/screens/AdminDashboard';
+import RolesPermissionsScreen
+  from './src/screens/RolesPermissionsScreen';
+import RoleUsersScreen
+  from './src/screens/RoleUsersScreen';
+import SystemMonitoringScreen
+  from './src/screens/SystemMonitoringScreen';
+// HU-13: ubicación del dispositivo
+import LocationScreen from './src/screens/LocationScreen';
 import AcademicPeriodsScreen
   from './src/screens/AcademicPeriodsScreen';
 import AcademicActivitiesScreen
@@ -112,6 +121,11 @@ export default function App() {
   ] = useState(null);
 
   const [
+    rolUsuariosSeleccionado,
+    setRolUsuariosSeleccionado,
+  ] = useState(null);
+
+  const [
     actividadSeleccionada,
     setActividadSeleccionada,
   ] = useState(null);
@@ -196,7 +210,7 @@ export default function App() {
     usuario,
   ]);
 
-  const fetchConTimeout = async (
+  const fetchConTimeout = useCallback(async (
     url,
     options
   ) => {
@@ -214,14 +228,6 @@ export default function App() {
     } finally {
       clearTimeout(timeoutId);
     }
-  };
-
-  /**
-   * Al abrir la aplicación verificamos
-   * si existe una sesión guardada.
-   */
-  useEffect(() => {
-    cargarSesionGuardada();
   }, []);
 
   const procesarDeepLink = async (url) => {
@@ -463,7 +469,7 @@ export default function App() {
     };
   }, []);
 
-  const cargarSesionGuardada = async () => {
+  const cargarSesionGuardada = useCallback(async () => {
     try {
       const datosGuardados =
         await obtenerSesion();
@@ -581,7 +587,17 @@ export default function App() {
     } finally {
       setCargandoSesion(false);
     }
-  };
+  }, [fetchConTimeout]);
+
+  /**
+   * Al abrir la aplicación verificamos
+   * si existe una sesión guardada.
+   */
+  useEffect(() => {
+     Promise.resolve().then(
+       cargarSesionGuardada
+     );
+   }, [cargarSesionGuardada]);
 
   /**
    * Inicio de sesión contra el backend.
@@ -1168,6 +1184,78 @@ export default function App() {
     }
   }
 
+  // ====================================================
+  // HU-13 | UBICACIÓN DEL DISPOSITIVO
+  // ====================================================
+
+  if (
+    usuario &&
+    pantallaActual === 'ubicacionDispositivo'
+  ) {
+    return (
+      <LocationScreen
+        onBack={() => {
+          setPantallaActual('dashboard');
+        }}
+      />
+    );
+  }
+
+  // ====================================================
+  // ADMINISTRADOR | ROLES Y PERMISOS
+  // ====================================================
+
+  if (
+    usuario?.rol === 'administrador' &&
+    pantallaActual === 'monitoreoSistema'
+  ) {
+    return (
+      <SystemMonitoringScreen
+        apiUrl={API_URL}
+        accessToken={sesion?.accessToken}
+        onBack={() => {
+          setPantallaActual('dashboard');
+        }}
+      />
+    );
+  }
+
+  if (
+    usuario?.rol === 'administrador' &&
+    pantallaActual === 'rolesPermisos'
+  ) {
+    return (
+      <RolesPermissionsScreen
+        apiUrl={API_URL}
+        accessToken={sesion?.accessToken}
+        onBack={() => {
+          setPantallaActual('dashboard');
+        }}
+        onManageUsers={(rol) => {
+          setRolUsuariosSeleccionado(rol);
+          setPantallaActual('usuariosPorRol');
+        }}
+      />
+    );
+  }
+
+  if (
+    usuario?.rol === 'administrador' &&
+    pantallaActual === 'usuariosPorRol' &&
+    rolUsuariosSeleccionado
+  ) {
+    return (
+      <RoleUsersScreen
+        rol={rolUsuariosSeleccionado}
+        apiUrl={API_URL}
+        accessToken={sesion?.accessToken}
+        onBack={() => {
+          setPantallaActual('rolesPermisos');
+        }}
+      />
+    );
+  }
+
   if (
     usuario &&
     pantallaActual === 'periodosAcademicos'
@@ -1613,6 +1701,15 @@ export default function App() {
             onPublishCommunication={() =>
               setPantallaActual('publicarComunicado')
             }
+            onManageRoles={() =>
+              setPantallaActual('rolesPermisos')
+            }
+            onSystemMonitoring={() =>
+              setPantallaActual('monitoreoSistema')
+            }
+            onLocation={() => {
+              setPantallaActual('ubicacionDispositivo');
+            }}
           />
         );
 
@@ -1637,6 +1734,9 @@ export default function App() {
               setPantallaActual(
                 'periodosAcademicos'
               )
+            }
+            onReviewExcuses={() =>
+              setPantallaActual('revisionExcusas')
             }
             onMyCommunications={() =>
               setPantallaActual(

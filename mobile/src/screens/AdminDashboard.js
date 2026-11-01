@@ -140,6 +140,9 @@ export default function AdminDashboard({
   onManagePeriods,
   onMyCommunications,
   onPublishCommunication,
+  onManageRoles,
+  onSystemMonitoring,
+  onLocation,
 }) {
   return (
     <ScrollView
@@ -232,7 +235,7 @@ export default function AdminDashboard({
         <DashboardCard
           icon="people-outline"
           title="Gestión de usuarios"
-          description="Crear, editar, activar y desactivar usuarios."
+          description="Registra usuarios y asigna sus roles y vinculaciones académicas."
           onPress={onRegisterUser}
           accentColor={COLORS.primary}
         />
@@ -290,15 +293,26 @@ export default function AdminDashboard({
         <DashboardCard
           icon="key-outline"
           title="Roles y permisos"
-          description="Administración de accesos y permisos del sistema."
-          disabled
+          description="Consulta y administra los accesos y permisos del sistema."
+          onPress={onManageRoles}
+          accentColor="#7C3AED"
         />
 
         <DashboardCard
           icon="analytics-outline"
           title="Monitoreo del sistema"
-          description="Consulta de actividad y eventos administrativos."
-          disabled
+          description="Consulta la actividad y los eventos administrativos."
+          onPress={onSystemMonitoring}
+          accentColor="#0891B2"
+        />
+
+        {/* HU-13: ACCESO A LA UBICACIÓN */}
+        <DashboardCard
+          icon="location-outline"
+          title="Ubicación del dispositivo"
+          description="Verifica el acceso a la ubicación del dispositivo mediante una solicitud autorizada."
+          onPress={onLocation}
+          accentColor="#0D9488"
         />
 
         {/* CERRAR SESIÓN */}

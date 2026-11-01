@@ -30,7 +30,15 @@
       "expo-notifications",
       "expo-sharing",
       "expo-font",
-      "expo-asset"
+      "expo-asset",
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "AULA-AI necesita acceder a tu ubicación únicamente cuando utilices una función que requiera información de localización. No realizamos seguimiento permanente.",
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": false
+        }
+      ]
     ],
     "extra": {
       "eas": {
