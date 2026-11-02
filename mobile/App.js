@@ -1063,12 +1063,19 @@ export default function App() {
       }
 
       try {
-        await eliminarSesion();
+        const sesionEliminada = await eliminarSesion();
+
+        if (!sesionEliminada) {
+          throw new Error(
+            'No fue posible eliminar la sesión del almacenamiento seguro.'
+          );
+        }
       } catch (error) {
         console.warn(
-          'HU-07: no fue posible eliminar la sesión local:',
-          error.message
+          'HU-14: no fue posible eliminar la sesión local:',
+          error?.message || 'Error desconocido'
         );
+
         Alert.alert(
           'No se pudo completar el cierre de sesión',
           'Ocurrió un problema al eliminar la sesión guardada. Inténtalo nuevamente.'
