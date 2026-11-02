@@ -1,4 +1,5 @@
 import * as Linking from 'expo-linking';
+import * as Location from 'expo-location';
 import {
   useCallback,
   useEffect,
@@ -12,6 +13,7 @@ import {
 } from './supabaseClient';
 
 import {
+  AppState,
   ActivityIndicator,
   Alert,
   StyleSheet,
@@ -44,6 +46,8 @@ import EditSubjectScreen
   from './src/screens/EditSubjectScreen';
 import MySubjectsScreen
   from './src/screens/MySubjectsScreen';
+import MyStudentsScreen
+  from './src/screens/MyStudentsScreen';
 import StudentActivitiesScreen
   from './src/screens/StudentActivitiesScreen';
 import StudentGradesScreen
@@ -168,6 +172,8 @@ export default function App() {
   const procesandoEnlaceRecuperacion =
     useRef(false);
 
+  const renovacionSesionEnCurso = useRef(null);
+
   const [
     modoActivacion,
     setModoActivacion,
@@ -180,6 +186,67 @@ export default function App() {
 
   const accessToken =
     sesion?.accessToken;
+  const usuarioAutenticado =
+    Boolean(usuario?.id);
+  const debeCambiarPassword =
+    usuario?.debeCambiarPassword;
+
+  // ======================================================
+  // HU-13 | PERMISO AUTOMÁTICO DE UBICACIÓN
+  // ======================================================
+
+  useEffect(() => {
+    let activo = true;
+
+    const solicitarPermisoGPS = async () => {
+      if (
+        cargandoSesion ||
+        !usuarioAutenticado ||
+        !accessToken ||
+        debeCambiarPassword === true ||
+        recuperandoPassword ||
+        modoActivacion
+      ) {
+        return;
+      }
+
+      try {
+        const permisoActual =
+          await Location.getForegroundPermissionsAsync();
+
+        if (!activo) {
+          return;
+        }
+
+        if (
+          permisoActual.granted ||
+          !permisoActual.canAskAgain
+        ) {
+          return;
+        }
+
+        await Location.requestForegroundPermissionsAsync();
+      } catch (error) {
+        console.warn(
+          '[HU-13] No fue posible solicitar el permiso GPS:',
+          error?.message || error
+        );
+      }
+    };
+
+    void solicitarPermisoGPS();
+
+    return () => {
+      activo = false;
+    };
+  }, [
+    cargandoSesion,
+    usuarioAutenticado,
+    debeCambiarPassword,
+    accessToken,
+    recuperandoPassword,
+    modoActivacion,
+  ]);
 
   useEffect(() => {
     const registrarPush = async () => {
@@ -229,6 +296,154 @@ export default function App() {
       clearTimeout(timeoutId);
     }
   }, []);
+
+  const renovarSesionAutenticada = useCallback(async () => {
+    const refreshToken = sesion?.refreshToken;
+
+    if (!refreshToken) {
+      throw new Error(
+        'La sesión ya no se puede renovar. Inicia sesión nuevamente.'
+      );
+    }
+
+    if (renovacionSesionEnCurso.current) {
+      return renovacionSesionEnCurso.current;
+    }
+
+    const renovacion = (async () => {
+      const response = await fetchConTimeout(
+        `${API_URL}/api/auth/refresh`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ refreshToken }),
+        }
+      );
+
+      let resultado;
+
+      try {
+        resultado = await response.json();
+      } catch {
+        throw new Error(
+          'El servidor devolvió una respuesta inválida al renovar la sesión.'
+        );
+      }
+
+      if (
+        !response.ok ||
+        resultado?.success !== true ||
+        !resultado?.session?.accessToken ||
+        !resultado?.session?.refreshToken
+      ) {
+        throw new Error(
+          resultado?.message ||
+            'La sesión no pudo renovarse. Inicia sesión nuevamente.'
+        );
+      }
+
+      const sesionRenovada = {
+        usuario: resultado.usuario,
+        session: resultado.session,
+      };
+
+      const guardado = await guardarSesion(sesionRenovada);
+
+      if (!guardado) {
+        throw new Error(
+          'La sesión se renovó, pero no pudo guardarse de forma segura.'
+        );
+      }
+
+      setUsuario(resultado.usuario);
+      setSesion(resultado.session);
+
+      return resultado.session;
+    })();
+
+    renovacionSesionEnCurso.current = renovacion;
+
+    try {
+      return await renovacion;
+    } finally {
+      if (renovacionSesionEnCurso.current === renovacion) {
+        renovacionSesionEnCurso.current = null;
+      }
+    }
+  }, [fetchConTimeout, sesion?.refreshToken]);
+
+  useEffect(() => {
+    const expiresAt = Number(sesion?.expiresAt);
+
+    if (
+      !usuario?.id ||
+      !sesion?.refreshToken ||
+      !Number.isFinite(expiresAt) ||
+      expiresAt <= 0
+    ) {
+      return undefined;
+    }
+
+    const expiresAtMs = expiresAt * 1000;
+    const margenRenovacionMs = 2 * 60 * 1000;
+    let temporizador;
+
+    const renovarSiNecesario = async () => {
+      if (
+        Date.now() <
+        expiresAtMs - margenRenovacionMs
+      ) {
+        programarRenovacion();
+        return;
+      }
+
+      try {
+        await renovarSesionAutenticada();
+      } catch (error) {
+        console.warn(
+          'No se pudo renovar la sesión activa:',
+          error.message
+        );
+      }
+    };
+
+    const programarRenovacion = () => {
+      clearTimeout(temporizador);
+
+      const tiempoRestante =
+        expiresAtMs -
+        Date.now() -
+        margenRenovacionMs;
+
+      temporizador = setTimeout(
+        renovarSiNecesario,
+        Math.max(0, tiempoRestante)
+      );
+    };
+
+    const suscripcion = AppState.addEventListener(
+      'change',
+      (estado) => {
+        if (estado === 'active') {
+          void renovarSiNecesario();
+        }
+      }
+    );
+
+    programarRenovacion();
+
+    return () => {
+      clearTimeout(temporizador);
+      suscripcion.remove();
+    };
+  }, [
+    renovarSesionAutenticada,
+    sesion?.expiresAt,
+    sesion?.refreshToken,
+    usuario?.id,
+  ]);
 
   const procesarDeepLink = async (url) => {
     if (!url) {
@@ -1325,6 +1540,25 @@ export default function App() {
 
   if (
     usuario &&
+    pantallaActual === 'misEstudiantesDocente'
+  ) {
+    if (usuario.rol !== 'docente') {
+      setPantallaActual('dashboard');
+    } else {
+      return (
+        <MyStudentsScreen
+          apiUrl={API_URL}
+          accessToken={sesion?.accessToken}
+          onBack={() =>
+            setPantallaActual('dashboard')
+          }
+        />
+      );
+    }
+  }
+
+  if (
+    usuario &&
     pantallaActual === 'misMateriasDocente'
   ) {
     return (
@@ -1746,6 +1980,9 @@ export default function App() {
             onPublishCommunication={() =>
               setPantallaActual('publicarComunicado')
             }
+            onLocation={() =>
+              setPantallaActual('ubicacionDispositivo')
+            }
           />
         );
 
@@ -1761,6 +1998,9 @@ export default function App() {
                 'misComunicadosEstudiante'
               )
             }
+            onLocation={() =>
+              setPantallaActual('ubicacionDispositivo')
+            }
           />
         );
 
@@ -1774,6 +2014,11 @@ export default function App() {
             onMySubjects={() =>
               setPantallaActual(
                 'misMateriasDocente'
+              )
+            }
+            onMyStudents={() =>
+              setPantallaActual(
+                'misEstudiantesDocente'
               )
             }
             onAcademicActivities={() =>
@@ -1799,6 +2044,9 @@ export default function App() {
                 'misComunicadosEstudiante'
               )
             }
+            onLocation={() =>
+              setPantallaActual('ubicacionDispositivo')
+            }
           />
         );
 
@@ -1808,11 +2056,15 @@ export default function App() {
             usuario={usuario}
             apiUrl={API_URL}
             accessToken={sesion?.accessToken}
+            onRefreshSession={renovarSesionAutenticada}
             onLogout={handleLogout}
             onMyCommunications={() =>
               setPantallaActual(
                 'misComunicadosEstudiante'
               )
+            }
+            onLocation={() =>
+              setPantallaActual('ubicacionDispositivo')
             }
           />
         );
@@ -1844,6 +2096,12 @@ export default function App() {
               setPantallaActual(
                 'misComunicadosEstudiante'
               )
+            }
+            onLocation={() =>
+              setPantallaActual('ubicacionDispositivo')
+            }
+            onRefreshSession={
+              renovarSesionAutenticada
             }
           />
         );
