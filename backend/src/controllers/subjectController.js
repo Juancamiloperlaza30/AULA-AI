@@ -6,6 +6,50 @@ const {
   registrarAuditoria,
 } = require('../services/auditService');
 
+const verificarAmbitoCoordinador = async ({
+  usuario,
+  gradoId,
+  gruposIds,
+}) => {
+  if (usuario?.rol !== 'coordinador') {
+    return {
+      autorizado: true,
+      error: null,
+    };
+  }
+
+  const gruposUnicos = [...new Set(gruposIds)];
+
+  const {
+    data: ambitos,
+    error,
+  } = await supabaseAdmin
+    .from('coordinador_ambito')
+    .select('grupo_id')
+    .eq('coordinador_id', usuario.id)
+    .eq('grado_id', gradoId)
+    .eq('activo', true)
+    .in('grupo_id', gruposUnicos);
+
+  if (error) {
+    return {
+      autorizado: false,
+      error,
+    };
+  }
+
+  const gruposAutorizados = new Set(
+    (ambitos || []).map((ambito) => ambito.grupo_id)
+  );
+
+  return {
+    autorizado: gruposUnicos.every((grupoId) =>
+      gruposAutorizados.has(grupoId)
+    ),
+    error: null,
+  };
+};
+
 const registrarMateria = async (req, res) => {
   try {
     const {
@@ -104,6 +148,33 @@ const registrarMateria = async (req, res) => {
         success: false,
         message:
           'Uno o más grupos no corresponden al grado seleccionado.',
+      });
+    }
+
+    const permisoAmbito = await verificarAmbitoCoordinador({
+      usuario: req.usuario,
+      gradoId,
+      gruposIds,
+    });
+
+    if (permisoAmbito.error) {
+      console.error(
+        'Error verificando el ámbito del coordinador para materias:',
+        permisoAmbito.error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          'No fue posible verificar los grupos asignables.',
+      });
+    }
+
+    if (!permisoAmbito.autorizado) {
+      return res.status(403).json({
+        success: false,
+        message:
+          'No tiene autorización para asignar materias a uno o más grupos seleccionados.',
       });
     }
 
@@ -243,10 +314,7 @@ const registrarMateria = async (req, res) => {
 
 const listarMaterias = async (req, res) => {
   try {
-    const {
-      data,
-      error,
-    } = await supabaseAdmin
+    let consulta = supabaseAdmin
       .from('materia_grupo_periodo')
       .select(`
         id,
@@ -275,10 +343,55 @@ const listarMaterias = async (req, res) => {
             correo
           )
         )
-      `)
-      .order('created_at', {
-        ascending: false,
-      });
+      `);
+
+    if (req.usuario?.rol === 'coordinador') {
+      const {
+        data: ambitos,
+        error: ambitosError,
+      } = await supabaseAdmin
+        .from('coordinador_ambito')
+        .select('grupo_id')
+        .eq('coordinador_id', req.usuario.id)
+        .eq('activo', true);
+
+      if (ambitosError) {
+        console.error(
+          'Error consultando los grupos del ámbito del coordinador:',
+          ambitosError.message
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            'No fue posible consultar las materias de su ámbito.',
+        });
+      }
+
+      const gruposIds = [
+        ...new Set(
+          (ambitos || []).map(
+            ({ grupo_id }) => grupo_id
+          )
+        ),
+      ];
+
+      if (gruposIds.length === 0) {
+        return res.status(200).json({
+          success: true,
+          materias: [],
+        });
+      }
+
+      consulta = consulta.in('grupo_id', gruposIds);
+    }
+
+    const {
+      data,
+      error,
+    } = await consulta.order('created_at', {
+      ascending: false,
+    });
 
     if (error) {
       console.error(
@@ -356,6 +469,93 @@ const actualizarMateria = async (req, res) => {
         success: false,
         message:
           'El estado seleccionado no es válido.',
+      });
+    }
+
+    if (req.usuario?.rol === 'coordinador') {
+      const {
+        data: asignacionActual,
+        error: asignacionActualError,
+      } = await supabaseAdmin
+        .from('materia_grupo_periodo')
+        .select('grado_id, grupo_id')
+        .eq('id', asignacionId)
+        .maybeSingle();
+
+      if (asignacionActualError) {
+        console.error(
+          'Error consultando la asignación actual de la materia:',
+          asignacionActualError.message
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            'No fue posible verificar la materia que desea actualizar.',
+        });
+      }
+
+      if (!asignacionActual) {
+        return res.status(404).json({
+          success: false,
+          message:
+            'No se encontró la materia que desea actualizar.',
+        });
+      }
+
+      const permisoAsignacionActual =
+        await verificarAmbitoCoordinador({
+          usuario: req.usuario,
+          gradoId: asignacionActual.grado_id,
+          gruposIds: [asignacionActual.grupo_id],
+        });
+
+      if (permisoAsignacionActual.error) {
+        console.error(
+          'Error verificando el ámbito de la materia actual:',
+          permisoAsignacionActual.error
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            'No fue posible verificar el ámbito de la materia actual.',
+        });
+      }
+
+      if (!permisoAsignacionActual.autorizado) {
+        return res.status(403).json({
+          success: false,
+          message:
+            'No tiene autorización para actualizar una materia fuera de su ámbito.',
+        });
+      }
+    }
+
+    const permisoAmbito = await verificarAmbitoCoordinador({
+      usuario: req.usuario,
+      gradoId,
+      gruposIds: [grupoId],
+    });
+
+    if (permisoAmbito.error) {
+      console.error(
+        'Error verificando el ámbito del coordinador para actualizar materias:',
+        permisoAmbito.error
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          'No fue posible verificar el grupo asignable.',
+      });
+    }
+
+    if (!permisoAmbito.autorizado) {
+      return res.status(403).json({
+        success: false,
+        message:
+          'No tiene autorización para asignar materias a este grupo.',
       });
     }
 

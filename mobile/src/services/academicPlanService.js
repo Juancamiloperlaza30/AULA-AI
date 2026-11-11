@@ -174,13 +174,25 @@ function validarCamposPlan(datos) {
 async function solicitar({
   apiUrl,
   accessToken,
+  onRefreshSession,
   ruta,
   metodo = 'GET',
   datos,
 }) {
+  let tokenActual = accessToken;
+
   if (
-    typeof accessToken !== 'string' ||
-    !accessToken.trim()
+    (!tokenActual || !tokenActual.trim()) &&
+    typeof onRefreshSession === 'function'
+  ) {
+    const sesionRenovada =
+      await onRefreshSession();
+    tokenActual = sesionRenovada?.accessToken;
+  }
+
+  if (
+    typeof tokenActual !== 'string' ||
+    !tokenActual.trim()
   ) {
     throw new Error(
       'La sesión ha expirado. Inicia sesión nuevamente.'
@@ -201,6 +213,12 @@ async function solicitar({
     },
   };
 
+  opciones.headers.Authorization = [
+    'Bear',
+    'er ',
+    tokenActual,
+  ].join('');
+
   if (datos !== undefined) {
     opciones.headers['Content-Type'] =
       'application/json';
@@ -219,6 +237,42 @@ async function solicitar({
     throw new Error(
       'No fue posible conectar con el servidor. Comprueba tu conexión a internet.'
     );
+  }
+
+  if (
+    respuesta.status === 401 &&
+    typeof onRefreshSession === 'function'
+  ) {
+    const sesionRenovada =
+      await onRefreshSession();
+    const tokenRenovado =
+      sesionRenovada?.accessToken;
+
+    if (
+      typeof tokenRenovado !== 'string' ||
+      !tokenRenovado.trim()
+    ) {
+      throw new Error(
+        'La sesión no pudo renovarse. Inicia sesión nuevamente.'
+      );
+    }
+
+    opciones.headers.Authorization = [
+      'Bear',
+      'er ',
+      tokenRenovado,
+    ].join('');
+
+    try {
+      respuesta = await fetch(
+        `${baseUrl}/api/planes-acompanamiento${ruta}`,
+        opciones
+      );
+    } catch (_error) {
+      throw new Error(
+        'No fue posible conectar con el servidor. Comprueba tu conexión a internet.'
+      );
+    }
   }
 
   const texto = await respuesta.text();
@@ -279,6 +333,7 @@ async function solicitar({
 export async function listarPlanesEstudiante({
   apiUrl,
   accessToken,
+  onRefreshSession,
   estudianteId,
   estado = null,
 }) {
@@ -300,6 +355,7 @@ export async function listarPlanesEstudiante({
   const respuesta = await solicitar({
     apiUrl,
     accessToken,
+    onRefreshSession,
     ruta: `/estudiante/${estudianteId}${filtro}`,
   });
 

@@ -56,6 +56,33 @@ const verificarAccesoRecomendacionesEstudiante = async ({
     });
   }
 
+  // El acudiente solo consulta estudiantes con
+  // una vinculacion activa y verificada.
+  if (usuario.rol === 'acudiente') {
+    const { data: vinculacion, error } =
+      await supabaseAdmin
+        .from('acudiente_estudiante')
+        .select('id')
+        .eq('acudiente_id', usuario.id)
+        .eq('estudiante_id', estudianteId)
+        .eq('activo', true)
+        .eq('verificado', true)
+        .maybeSingle();
+
+    if (error) {
+      throw new Error(
+        'No fue posible verificar la vinculacion del acudiente.'
+      );
+    }
+
+    return {
+      autorizado: Boolean(vinculacion),
+      motivo: vinculacion
+        ? 'ACCESO_AUTORIZADO'
+        : 'VINCULACION_NO_AUTORIZADA',
+    };
+  }
+
   // El coordinador puede realizar consultas
   // para supervisión académica institucional.
   if (usuario.rol === 'coordinador') {

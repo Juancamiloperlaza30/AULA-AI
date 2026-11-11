@@ -11,6 +11,7 @@ import React, {
 } from 'react';
 
 import {
+  Alert,
   ActivityIndicator,
   ScrollView,
   StyleSheet,
@@ -133,11 +134,13 @@ export default function DocenteDashboard({
   accessToken,
   onLogout,
   onMySubjects,
+  onMyStudents,
   onAcademicActivities,
   onGrades,
   onAttendance,
   onReviewExcuses,
   onMyCommunications,
+  onLocation,
 }) {
   // ====================================================
   // ESTADOS
@@ -178,8 +181,11 @@ export default function DocenteDashboard({
 
         const data = await response.json();
 
-        if (!response.ok) {
-          return;
+        if (!response.ok || data?.success === false) {
+          throw new Error(
+            data?.message ||
+              'No fue posible consultar el resumen de materias.'
+          );
         }
 
         const asignaciones = (
@@ -214,10 +220,13 @@ export default function DocenteDashboard({
           });
         }
       } catch (error) {
-        console.log(
-          'Error cargando resumen del docente:',
-          error
-        );
+        if (activo) {
+          Alert.alert(
+            'No fue posible cargar el resumen',
+            error.message ||
+              'Intenta actualizar el panel cuando tengas conexión.'
+          );
+        }
       } finally {
         if (activo) {
           setCargandoResumen(false);
@@ -297,6 +306,7 @@ export default function DocenteDashboard({
           key={usuario?.id}
           apiUrl={apiUrl}
           accessToken={accessToken}
+          onLocation={onLocation}
         >
           <View style={styles.teacherSummary}>
             <View style={styles.summaryItem}>
@@ -448,15 +458,13 @@ export default function DocenteDashboard({
 
       {/* ================================================
           MIS ESTUDIANTES
-          SIN NAVEGACIÓN EN EL CÓDIGO ORIGINAL
       ================================================ */}
 
       <ModuleCard
         title="Mis estudiantes"
-        description="Gestión académica de los estudiantes asignados."
+        description="Consulta los estudiantes de tus grupos asignados."
         icon="people-outline"
-        badge="Informativo"
-        disabled
+        onPress={onMyStudents}
       />
 
       {/* ================================================

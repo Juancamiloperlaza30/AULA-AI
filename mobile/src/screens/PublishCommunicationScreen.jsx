@@ -339,13 +339,83 @@ export default function PublishCommunicationScreen({
       ruta: '/api/academic/grados',
       signal: controller.signal,
     })
-      .then((resultado) => {
+      .then(async (resultado) => {
+        let gradosDisponibles = Array.isArray(
+          resultado.grados
+        )
+          ? resultado.grados
+          : [];
+
+        if (esCoordinador) {
+          const gradosConAlcance =
+            await Promise.all(
+              gradosDisponibles.map(
+                async (grado) => {
+                  const rutaGrupos =
+                    `/api/academic/grados/${grado.id}/grupos`;
+                  const rutaAsignables =
+                    `/api/academic/grados/${grado.id}/` +
+                    'grupos-asignables-coordinador';
+
+                  const gruposAsignados =
+                    await consultarEstructuraAcademica({
+                      apiUrl,
+                      accessToken,
+                      ruta: rutaAsignables,
+                      signal: controller.signal,
+                    });
+
+                  const grupos = Array.isArray(
+                    gruposAsignados.grupos
+                  )
+                    ? gruposAsignados.grupos
+                    : [];
+
+                  if (alcanceTipo === 'grupo') {
+                    return grupos.length > 0
+                      ? grado
+                      : null;
+                  }
+
+                  const todosLosGrupos =
+                    await consultarEstructuraAcademica({
+                      apiUrl,
+                      accessToken,
+                      ruta: rutaGrupos,
+                      signal: controller.signal,
+                    });
+
+                  const gruposActivos = Array.isArray(
+                    todosLosGrupos.grupos
+                  )
+                    ? todosLosGrupos.grupos
+                    : [];
+                  const gruposAutorizados = new Set(
+                    grupos.map((grupo) =>
+                      String(grupo.id)
+                    )
+                  );
+
+                  return (
+                    gruposActivos.length > 0 &&
+                    gruposActivos.every((grupo) =>
+                      gruposAutorizados.has(
+                        String(grupo.id)
+                      )
+                    )
+                  )
+                    ? grado
+                    : null;
+                }
+              )
+            );
+
+          gradosDisponibles =
+            gradosConAlcance.filter(Boolean);
+        }
+
         if (activa) {
-          setGrados(
-            Array.isArray(resultado.grados)
-              ? resultado.grados
-              : []
-          );
+          setGrados(gradosDisponibles);
         }
       })
       .catch((error) => {
@@ -369,7 +439,12 @@ export default function PublishCommunicationScreen({
       activa = false;
       controller.abort();
     };
-  }, [alcanceTipo, apiUrl, accessToken]);
+  }, [
+    alcanceTipo,
+    apiUrl,
+    accessToken,
+    esCoordinador,
+  ]);
 
   // ====================================================
   // CONSULTAR GRUPOS
@@ -391,7 +466,9 @@ export default function PublishCommunicationScreen({
     consultarEstructuraAcademica({
       apiUrl,
       accessToken,
-      ruta: `/api/academic/grados/${gradoId}/grupos`,
+      ruta: esCoordinador
+        ? `/api/academic/grados/${gradoId}/grupos-asignables-coordinador`
+        : `/api/academic/grados/${gradoId}/grupos`,
       signal: controller.signal,
     })
       .then((resultado) => {
@@ -429,6 +506,7 @@ export default function PublishCommunicationScreen({
     apiUrl,
     accessToken,
     gradoId,
+    esCoordinador,
   ]);
 
   // ====================================================

@@ -68,3 +68,13 @@ dist-hu11-test/
 # Copias de seguridad
 *.backup
 *.bak
+
+# ======================================================
+# AULA-AI | ARCHIVOS TEMPORALES HU-14
+# ======================================================
+
+# Exportacion temporal de verificacion Android
+.expo-hu14-check/
+
+# Exportaciones temporales futuras de HU-14
+.expo-hu14-*/

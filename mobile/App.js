@@ -1,5 +1,6 @@
 import * as Linking from 'expo-linking';
 import * as Location from 'expo-location';
+import * as Network from 'expo-network';
 import {
   useCallback,
   useEffect,
@@ -92,6 +93,11 @@ import {
   obtenerSesion,
 } from './src/services/sessionService';
 import {
+  guardarAutorizacionOffline,
+  verificarAutorizacionOffline,
+  eliminarAutorizacionOffline,
+} from './src/services/offlineAuthorizationService';
+import {
   registrarDispositivoEnBackend,
 } from './src/services/notificationService';
 import { API_URL } from './src/config/apiConfig';
@@ -101,6 +107,7 @@ import {
 import {
   eliminarCacheAcademicaLocal,
 } from './database/localDatabase';
+import AcademicOfflineScreen from './src/screens/AcademicOfflineScreen';
 
 export default function App() {
   const [correo, setCorreo] = useState('');
@@ -118,6 +125,29 @@ export default function App() {
   const [usuario, setUsuario] = useState(null);
 
   const [sesion, setSesion] = useState(null);
+
+  // =====================================================
+  // HU-14 | ESTADO DE ACCESO OFFLINE
+  // =====================================================
+
+  // Indica si la aplicación está utilizando una
+  // autorización local limitada.
+  //
+  // Por defecto permanece desactivado.
+  // No debe activarse sin validar previamente
+  // las condiciones de acceso offline.
+  const [modoOffline, setModoOffline] = useState(false);
+
+  // HU-14: usuario autorizado exclusivamente
+  // para consultar información académica local.
+  const [usuarioOffline, setUsuarioOffline] = useState(null);
+  const usuarioOfflineId = usuarioOffline?.id;
+
+  // Permite identificar si el usuario tiene una
+  // sesión online validada por el servidor.
+  const sesionOnlineValidada =
+    Boolean(usuario?.id && sesion?.accessToken) &&
+    !modoOffline;
 
   const [
     materiaSeleccionada,
@@ -201,6 +231,7 @@ export default function App() {
     const solicitarPermisoGPS = async () => {
       if (
         cargandoSesion ||
+        modoOffline ||
         !usuarioAutenticado ||
         !accessToken ||
         debeCambiarPassword === true ||
@@ -241,6 +272,7 @@ export default function App() {
     };
   }, [
     cargandoSesion,
+    modoOffline,
     usuarioAutenticado,
     debeCambiarPassword,
     accessToken,
@@ -251,6 +283,7 @@ export default function App() {
   useEffect(() => {
     const registrarPush = async () => {
       if (
+        modoOffline ||
         !accessToken ||
         !usuario
       ) {
@@ -273,6 +306,7 @@ export default function App() {
 
     registrarPush();
   }, [
+    modoOffline,
     accessToken,
     usuario,
   ]);
@@ -378,6 +412,7 @@ export default function App() {
     const expiresAt = Number(sesion?.expiresAt);
 
     if (
+      modoOffline ||
       !usuario?.id ||
       !sesion?.refreshToken ||
       !Number.isFinite(expiresAt) ||
@@ -439,6 +474,7 @@ export default function App() {
       suscripcion.remove();
     };
   }, [
+    modoOffline,
     renovarSesionAutenticada,
     sesion?.expiresAt,
     sesion?.refreshToken,
@@ -684,15 +720,125 @@ export default function App() {
     };
   }, []);
 
-  const cargarSesionGuardada = useCallback(async () => {
+  // =====================================================
+  // HU-14 | VERIFICACION DE CONECTIVIDAD
+  // =====================================================
+
+  const dispositivoSinConexion = useCallback(async () => {
     try {
-      const datosGuardados =
-        await obtenerSesion();
+      const estadoRed = await Network.getNetworkStateAsync();
+
+      const sinConexion =
+        estadoRed.isConnected === false ||
+        estadoRed.isInternetReachable === false;
+
+      if (sinConexion) {
+        console.log(
+          '[HU-14] Dispositivo sin conexion a Internet.'
+        );
+      }
+
+      return sinConexion;
+    } catch (error) {
+      console.warn(
+        '[HU-14] No fue posible verificar la conectividad:',
+        error?.message || error
+      );
+
+      // Si no podemos comprobar la conectividad,
+      // no autorizamos automaticamente el modo offline.
+      return false;
+    }
+  }, []);
+
+  // =====================================================
+  // HU-14 | RECUPERACION DE ACCESO OFFLINE
+  // =====================================================
+
+  const intentarAccesoOffline = useCallback(
+    async (datosGuardados) => {
+      const usuarioGuardado = datosGuardados?.usuario;
+
+      // Solo habilitamos inicialmente la consulta
+      // academica offline para estudiantes.
+      if (
+        !usuarioGuardado?.id ||
+        usuarioGuardado.rol !== 'estudiante' ||
+        usuarioGuardado.debeCambiarPassword === true
+      ) {
+        return false;
+      }
+
+      // La autorizacion debe haberse generado
+      // previamente durante una sesion online valida.
+      const autorizado =
+        await verificarAutorizacionOffline(
+          usuarioGuardado
+        );
+
+      if (!autorizado) {
+        console.log(
+          '[HU-14] No existe autorizacion offline vigente.'
+        );
+        return false;
+      }
+
+      // No activamos la sesion online ni exponemos
+      // tokens a los dashboards.
+      setUsuario(null);
+      setSesion(null);
+
+      setUsuarioOffline(usuarioGuardado);
+      setModoOffline(true);
+
+      console.log(
+        '[HU-14] Acceso local de solo lectura autorizado.'
+      );
+
+      return true;
+    },
+    []
+  );
+
+  const cargarSesionGuardada = useCallback(async () => {
+    let datosGuardados = null;
+
+    try {
+      datosGuardados = await obtenerSesion();
 
       if (
         !datosGuardados?.session?.accessToken ||
         !datosGuardados?.session?.refreshToken
       ) {
+        return;
+      }
+
+      // =====================================================
+      // HU-14 | ACCESO SIN CONEXION AL INICIAR
+      // =====================================================
+
+      const sinInternetAlIniciar =
+        await dispositivoSinConexion();
+
+      if (sinInternetAlIniciar) {
+        console.log(
+          '[HU-14] Inicio sin Internet. Verificando acceso local.'
+        );
+
+        const accesoOffline =
+          await intentarAccesoOffline(datosGuardados);
+
+        if (accesoOffline) {
+          return;
+        }
+
+        // Sin autorizacion vigente, no se permite
+        // acceder a informacion academica local.
+        setUsuarioOffline(null);
+        setModoOffline(false);
+        setUsuario(null);
+        setSesion(null);
+
         return;
       }
 
@@ -723,12 +869,73 @@ export default function App() {
           session: datosGuardados.session,
         };
 
+        setModoOffline(false);
+
         setUsuario(data.usuario);
         setSesion(datosGuardados.session);
 
         await guardarSesion(
           sesionActualizada
         );
+
+        // HU-14: registrar autorización offline únicamente
+        // después de validar la sesión con el servidor.
+        if (data.usuario?.debeCambiarPassword !== true) {
+          await guardarAutorizacionOffline(data.usuario);
+        }
+
+        return;
+      }
+
+      // =====================================================
+      // HU-14 | CONTROL DE ERRORES HTTP
+      // =====================================================
+
+      // Si el servidor responde con un error temporal,
+      // conservamos la sesion guardada y evitamos
+      // renovar tokens innecesariamente.
+      if (response.status >= 500) {
+        console.warn(
+          '[HU-14] Error temporal del servidor:',
+          response.status
+        );
+
+        // Si ya existe acceso offline autorizado,
+        // conservamos la consulta académica local.
+        if (modoOffline && usuarioOfflineId) {
+          return;
+        }
+
+        setUsuarioOffline(null);
+        setModoOffline(false);
+        setUsuario(null);
+        setSesion(null);
+
+        return;
+      }
+
+      // Solo renovamos credenciales cuando el servidor
+      // informa que la autenticacion no es valida.
+      if (
+        response.status !== 401 &&
+        response.status !== 403
+      ) {
+        console.warn(
+          '[HU-14] Respuesta inesperada al validar sesion:',
+          response.status
+        );
+
+        // No cerrar la consulta offline por una
+        // respuesta HTTP distinta a un rechazo
+        // explícito de autenticación.
+        if (modoOffline && usuarioOfflineId) {
+          return;
+        }
+
+        setUsuarioOffline(null);
+        setModoOffline(false);
+        setUsuario(null);
+        setSesion(null);
 
         return;
       }
@@ -760,8 +967,51 @@ export default function App() {
        * eliminamos la sesión local.
        */
       if (!refreshResponse.ok) {
-        await eliminarSesion();
+        // HU-14: una respuesta de autenticacion
+        // rechazada invalida el acceso offline.
+        //
+        // Los errores temporales del servidor no
+        // deben tratarse como credenciales revocadas.
+        if (
+          refreshResponse.status === 400 ||
+          refreshResponse.status === 401 ||
+          refreshResponse.status === 403
+        ) {
+          const autorizacionEliminada =
+            await eliminarAutorizacionOffline();
 
+          if (!autorizacionEliminada) {
+            console.warn(
+              '[HU-14] No se pudo revocar la autorizacion offline.'
+            );
+          }
+
+          const sesionEliminada = await eliminarSesion();
+
+          if (!sesionEliminada) {
+            console.warn(
+              '[HU-14] No se pudo eliminar la sesion rechazada.'
+            );
+          }
+        }
+
+        // HU-14 | Conservar consulta offline ante
+        // errores temporales de renovación.
+        if (
+          ![400, 401, 403].includes(refreshResponse.status) &&
+          modoOffline &&
+          usuarioOfflineId
+        ) {
+          console.warn(
+            '[HU-14] Renovacion temporalmente no disponible. ' +
+            'Se conserva el acceso offline autorizado.'
+          );
+
+          return;
+        }
+
+        setUsuarioOffline(null);
+        setModoOffline(false);
         setUsuario(null);
         setSesion(null);
 
@@ -782,6 +1032,12 @@ export default function App() {
 
       await guardarSesion(nuevaSesion);
 
+      if (refreshData.usuario?.debeCambiarPassword !== true) {
+        await guardarAutorizacionOffline(refreshData.usuario);
+      }
+
+      setModoOffline(false);
+
       setUsuario(refreshData.usuario);
       setSesion(refreshData.session);
     } catch (error) {
@@ -790,29 +1046,185 @@ export default function App() {
         error
       );
 
-      /**
-       * No eliminamos automáticamente los datos
-       * solamente por un problema de red.
-       *
-       * HU-14 definirá posteriormente
-       * el funcionamiento offline.
-       */
+      // HU-14: no conceder acceso offline ante
+      // cualquier error de forma indiscriminada.
+      //
+      // Solo se intenta cuando la solicitud no
+      // obtuvo respuesta HTTP del servidor.
+      const posibleFalloConexion =
+        error?.name === 'AbortError' ||
+        error instanceof TypeError;
+
+      if (
+        posibleFalloConexion &&
+        datosGuardados &&
+        (await dispositivoSinConexion())
+      ) {
+        try {
+          const accesoAutorizado =
+            await intentarAccesoOffline(
+              datosGuardados
+            );
+
+          if (accesoAutorizado) {
+            return;
+          }
+        } catch (errorOffline) {
+          console.warn(
+            '[HU-14] Error verificando acceso offline:',
+            errorOffline?.message || errorOffline
+          );
+        }
+      }
+
+      // HU-14 | Si la consulta offline ya estaba
+      // autorizada, un fallo temporal de red no
+      // debe eliminar ese acceso local.
+      if (modoOffline && usuarioOfflineId) {
+        console.warn(
+          '[HU-14] Fallo durante la reconexion. ' +
+          'Se mantiene la consulta academica offline.'
+        );
+
+        return;
+      }
+
+      setUsuarioOffline(null);
+      setModoOffline(false);
       setUsuario(null);
       setSesion(null);
     } finally {
       setCargandoSesion(false);
     }
-  }, [fetchConTimeout]);
+  }, [
+    fetchConTimeout,
+    intentarAccesoOffline,
+    dispositivoSinConexion,
+    modoOffline,
+    usuarioOfflineId,
+  ]);
 
-  /**
-   * Al abrir la aplicación verificamos
-   * si existe una sesión guardada.
-   */
+  // =====================================================
+  // HU-14 | RECUPERACION INICIAL DE SESION
+  // =====================================================
+
+  // Conserva la version mas reciente de la funcion
+  // sin provocar nuevas recuperaciones al cambiar
+  // el estado online/offline.
+  const cargarSesionGuardadaRef = useRef(
+    cargarSesionGuardada
+  );
+
   useEffect(() => {
-     Promise.resolve().then(
-       cargarSesionGuardada
-     );
-   }, [cargarSesionGuardada]);
+    cargarSesionGuardadaRef.current =
+      cargarSesionGuardada;
+  }, [cargarSesionGuardada]);
+
+  // La recuperacion inicial debe ejecutarse
+  // una sola vez al montar la aplicacion.
+  useEffect(() => {
+    void Promise.resolve().then(() => {
+      return cargarSesionGuardadaRef.current();
+    });
+  }, []);
+
+  // =====================================================
+  // HU-14 | RECONEXION AUTOMATICA DESDE MODO OFFLINE
+  // =====================================================
+
+  const reconexionEnProceso = useRef(false);
+
+  // HU-14 | Identifica una salida voluntaria del modo offline.
+  const salidaOfflineSolicitada = useRef(false);
+
+  useEffect(() => {
+    if (!modoOffline || !usuarioOffline?.id) {
+      return;
+    }
+
+    let activo = true;
+
+    const intentarReconexion = async () => {
+      if (!activo || reconexionEnProceso.current) {
+        return;
+      }
+
+      reconexionEnProceso.current = true;
+
+      try {
+        const estadoRed = await Network.getNetworkStateAsync();
+
+        const hayConexion =
+          estadoRed.isConnected === true &&
+          estadoRed.isInternetReachable !== false;
+
+        if (!hayConexion || !activo) {
+          return;
+        }
+
+        console.log(
+          '[HU-14] Conexion recuperada. Validando sesion.'
+        );
+
+        await cargarSesionGuardada();
+      } catch (error) {
+        console.warn(
+          '[HU-14] No fue posible recuperar la sesion:',
+          error?.message || error
+        );
+      } finally {
+        reconexionEnProceso.current = false;
+      }
+    };
+
+    const suscripcion = Network.addNetworkStateListener(
+      (estadoRed) => {
+        const hayConexion =
+          estadoRed.isConnected === true &&
+          estadoRed.isInternetReachable !== false;
+
+        if (hayConexion) {
+          void intentarReconexion();
+        }
+      }
+    );
+
+    // Verificacion inicial al activar el modo offline.
+    void intentarReconexion();
+
+    // Reintento moderado mientras permanezca offline.
+    // La funcion verifica primero la conectividad,
+    // evitando solicitudes al backend sin Internet.
+    const intervaloReconexion = setInterval(() => {
+      if (AppState.currentState === 'active') {
+        void intentarReconexion();
+      }
+    }, 30000);
+
+    // Al regresar a la aplicacion, comprobar si
+    // la conexion fue recuperada en segundo plano.
+    const suscripcionAppState = AppState.addEventListener(
+      'change',
+      (estado) => {
+        if (estado === 'active') {
+          void intentarReconexion();
+        }
+      }
+    );
+
+    return () => {
+      activo = false;
+
+      clearInterval(intervaloReconexion);
+
+      suscripcion.remove();
+      suscripcionAppState.remove();
+    };
+  }, [
+    modoOffline,
+    usuarioOffline?.id,
+    cargarSesionGuardada,
+  ]);
 
   /**
    * Inicio de sesión contra el backend.
@@ -884,6 +1296,26 @@ export default function App() {
           'La sesión inició, pero no pudo guardarse de forma segura.'
         );
       }
+
+      // HU-14: una autenticacion online correcta puede
+      // habilitar posteriormente la consulta offline.
+      // Si no fue posible guardar la sesion, no
+      // registramos una autorizacion offline.
+      if (
+        guardado &&
+        data.usuario?.debeCambiarPassword !== true
+      ) {
+        const autorizacionGuardada =
+          await guardarAutorizacionOffline(data.usuario);
+
+        if (!autorizacionGuardada) {
+          console.warn(
+            '[HU-14] No se pudo registrar la autorizacion offline.'
+          );
+        }
+      }
+
+      setModoOffline(false);
 
       setUsuario(data.usuario);
       setSesion(data.session);
@@ -1063,6 +1495,17 @@ export default function App() {
       }
 
       try {
+        // HU-14: revocar primero la autorizacion
+        // offline antes de eliminar la sesion.
+        const autorizacionEliminada =
+          await eliminarAutorizacionOffline();
+
+        if (!autorizacionEliminada) {
+          throw new Error(
+            'No fue posible eliminar la autorizacion offline.'
+          );
+        }
+
         const sesionEliminada = await eliminarSesion();
 
         if (!sesionEliminada) {
@@ -1086,6 +1529,7 @@ export default function App() {
 
       setUsuario(null);
       setSesion(null);
+      setModoOffline(false);
 
       setMateriaSeleccionada(null);
       setActividadSeleccionada(null);
@@ -1259,6 +1703,28 @@ export default function App() {
           Cargando AULA-AI...
         </Text>
       </View>
+    );
+  }
+
+  // =====================================================
+  // HU-14 | PANTALLA ACADEMICA OFFLINE
+  // =====================================================
+
+  if (modoOffline && usuarioOffline?.id) {
+    return (
+      <AcademicOfflineScreen
+        usuario={usuarioOffline}
+        onBack={() => {
+          // Impide que una reconexion pendiente
+          // restaure la sesion despues de salir.
+          salidaOfflineSolicitada.current = true;
+
+          setUsuarioOffline(null);
+          setModoOffline(false);
+          setUsuario(null);
+          setSesion(null);
+        }}
+      />
     );
   }
 

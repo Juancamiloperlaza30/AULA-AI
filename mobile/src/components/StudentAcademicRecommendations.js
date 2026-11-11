@@ -1,6 +1,7 @@
 import React, {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 
@@ -338,6 +339,7 @@ export default function StudentAcademicRecommendations({
   estudianteId,
   apiUrl,
   accessToken,
+  onRefreshSession,
 }) {
   const [recomendaciones, setRecomendaciones] =
     useState([]);
@@ -346,7 +348,7 @@ export default function StudentAcademicRecommendations({
     useState([]);
 
   const [cargando, setCargando] =
-    useState(false);
+    useState(true);
 
   const [errorRecomendaciones, setErrorRecomendaciones] =
     useState('');
@@ -355,16 +357,23 @@ export default function StudentAcademicRecommendations({
     useState('');
 
   const [visible, setVisible] =
-    useState(false);
+    useState(true);
+  const solicitudRef = useRef(0);
 
   const cargarInformacion = useCallback(async () => {
-    if (!estudianteId || !accessToken) {
+    const solicitudId = ++solicitudRef.current;
+
+    if (
+      !estudianteId ||
+      (!accessToken && !onRefreshSession)
+    ) {
       setErrorRecomendaciones(
         'No se encontró una sesión válida.'
       );
       setErrorPlanes(
         'No se encontró una sesión válida.'
       );
+      setCargando(false);
       return;
     }
 
@@ -372,50 +381,24 @@ export default function StudentAcademicRecommendations({
     setErrorRecomendaciones('');
     setErrorPlanes('');
 
-    console.log(
-      '[HU-11] ID utilizado por Estudiante:',
-      estudianteId
-    );
-
     const resultados = await Promise.allSettled([
       listarRecomendacionesEstudiante({
         apiUrl,
         accessToken,
+        onRefreshSession,
         estudianteId,
       }),
       listarPlanesEstudiante({
         apiUrl,
         accessToken,
+        onRefreshSession,
         estudianteId,
       }),
     ]);
 
-    console.log('[HU-11] Diagnóstico de consultas:', {
-      recomendaciones:
-        resultados[0].status === 'fulfilled'
-          ? {
-              estado: 'OK',
-              cantidad:
-                resultados[0].value?.recomendaciones?.length,
-            }
-          : {
-              estado: 'ERROR',
-              mensaje: resultados[0].reason?.message,
-            },
-
-      planes:
-        resultados[1].status === 'fulfilled'
-          ? {
-              estado: 'OK',
-              cantidad: Array.isArray(resultados[1].value)
-                ? resultados[1].value.length
-                : 'FORMATO_INESPERADO',
-            }
-          : {
-              estado: 'ERROR',
-              mensaje: resultados[1].reason?.message,
-            },
-    });
+    if (solicitudId !== solicitudRef.current) {
+      return;
+    }
 
     if (resultados[0].status === 'fulfilled') {
       const datos = resultados[0].value;
@@ -448,34 +431,36 @@ export default function StudentAcademicRecommendations({
     }
 
     setCargando(false);
-  }, [apiUrl, accessToken, estudianteId]);
+  }, [
+    apiUrl,
+    accessToken,
+    estudianteId,
+    onRefreshSession,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      solicitudRef.current += 1;
+    };
+  }, [estudianteId]);
 
   useEffect(() => {
     let activo = true;
 
     Promise.resolve().then(() => {
-      if (activo) {
-        setVisible(false);
-        setRecomendaciones([]);
-        setPlanes([]);
-        setErrorRecomendaciones('');
-        setErrorPlanes('');
+      if (activo && visible) {
+        void cargarInformacion();
       }
     });
 
     return () => {
       activo = false;
+      solicitudRef.current += 1;
     };
-  }, [estudianteId, accessToken]);
+  }, [visible, cargarInformacion]);
 
   const alternar = () => {
-    if (visible) {
-      setVisible(false);
-      return;
-    }
-
-    setVisible(true);
-    cargarInformacion();
+    setVisible((actual) => !actual);
   };
 
   return (
@@ -570,8 +555,10 @@ export default function StudentAcademicRecommendations({
                 </Text>
               ) : recomendaciones.length === 0 ? (
                 <Text style={styles.secundario}>
-                  Todavía no tienes recomendaciones
-                  académicas registradas.
+                  El servidor no encontró recomendaciones
+                  asociadas a esta cuenta. Solicita al
+                  Orientador verificar que se hayan
+                  registrado para tu usuario.
                 </Text>
               ) : (
                 recomendaciones.map((item) => (
@@ -599,8 +586,10 @@ export default function StudentAcademicRecommendations({
                 </Text>
               ) : planes.length === 0 ? (
                 <Text style={styles.secundario}>
-                  Todavía no tienes planes de
-                  acompañamiento registrados.
+                  El servidor no encontró planes de
+                  acompañamiento asociados a esta cuenta.
+                  Solicita al Orientador verificar el
+                  estudiante seleccionado.
                 </Text>
               ) : (
                 planes.map((plan) => (

@@ -167,7 +167,7 @@ const EditSubjectScreen = ({
         setGrupos([]);
 
         const response = await fetch(
-          `${apiUrl}/api/academic/grados/${idGrado}/grupos`,
+          `${apiUrl}/api/academic/grados/${idGrado}/grupos-asignables-coordinador`,
           {
             headers: {
               Authorization: `Bearer ${accessToken}`,

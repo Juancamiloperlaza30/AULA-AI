@@ -33,6 +33,7 @@ router.use(verificarToken);
 router.use(
   permitirRoles(
     'estudiante',
+    'acudiente',
     'orientador',
     'coordinador'
   )

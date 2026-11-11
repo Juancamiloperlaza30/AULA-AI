@@ -131,6 +131,113 @@ const listarGruposPorGrado = async (
   }
 };
 
+const listarGruposAsignablesCoordinador = async (
+  req,
+  res
+) => {
+  try {
+    const gradoId = Number(
+      req.params.gradoId
+    );
+
+    if (
+      !Number.isSafeInteger(gradoId) ||
+      gradoId <= 0
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'El grado seleccionado no es válido.',
+      });
+    }
+
+    const {
+      data: grupos,
+      error: gruposError,
+    } = await supabaseAdmin
+      .from('grupos')
+      .select('id, nombre, grado_id')
+      .eq('grado_id', gradoId)
+      .eq('activo', true)
+      .order('nombre', {
+        ascending: true,
+      });
+
+    if (gruposError) {
+      console.error(
+        'Error consultando grupos asignables:',
+        gruposError.message
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          'No fue posible consultar los grupos asignables.',
+      });
+    }
+
+    if (req.usuario.rol === 'administrador') {
+      return res.status(200).json({
+        success: true,
+        grupos: grupos || [],
+      });
+    }
+
+    const {
+      data: ambitos,
+      error: ambitosError,
+    } = await supabaseAdmin
+      .from('coordinador_ambito')
+      .select('grupo_id')
+      .eq(
+        'coordinador_id',
+        req.usuario.id
+      )
+      .eq('grado_id', gradoId)
+      .eq('activo', true);
+
+    if (ambitosError) {
+      console.error(
+        'Error consultando el ámbito del coordinador:',
+        ambitosError.message
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          'No fue posible validar los grupos autorizados para el coordinador.',
+      });
+    }
+
+    const gruposAutorizados = new Set(
+      (ambitos || []).map(
+        (ambito) => String(ambito.grupo_id)
+      )
+    );
+
+    return res.status(200).json({
+      success: true,
+      grupos: (grupos || []).filter(
+        (grupo) =>
+          gruposAutorizados.has(
+            String(grupo.id)
+          )
+      ),
+    });
+  } catch (error) {
+    console.error(
+      'Error inesperado consultando grupos asignables:',
+      error
+    );
+
+    return res.status(500).json({
+      success: false,
+      message:
+        'Ocurrió un error al consultar los grupos asignables.',
+    });
+  }
+};
+
 const listarPeriodos = async (req, res) => {
   try {
     const {
@@ -380,6 +487,24 @@ const listarPeriodosDisponibles = async (req, res) => {
   }
 };
 
+const esFechaAcademicaValida = (valor) => {
+  if (
+    typeof valor !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(valor)
+  ) {
+    return false;
+  }
+
+  const fecha = new Date(
+    `${valor}T00:00:00.000Z`
+  );
+
+  return (
+    Number.isFinite(fecha.getTime()) &&
+    fecha.toISOString().slice(0, 10) === valor
+  );
+};
+
 const actualizarPeriodoAcademico = async (req, res) => {
   try {
     const periodoId = Number(
@@ -389,24 +514,22 @@ const actualizarPeriodoAcademico = async (req, res) => {
     const {
       fechaInicio,
       fechaFin,
-    } = req.body;
+    } = req.body || {};
 
     if (
-      !periodoId ||
-      !fechaInicio ||
-      !fechaFin
+      !Number.isSafeInteger(periodoId) ||
+      periodoId <= 0 ||
+      !esFechaAcademicaValida(fechaInicio) ||
+      !esFechaAcademicaValida(fechaFin)
     ) {
       return res.status(400).json({
         success: false,
         message:
-          'Debe indicar el periodo, la fecha de inicio y la fecha de finalización.',
+          'Debe indicar un periodo válido y fechas válidas en formato AAAA-MM-DD.',
       });
     }
 
-    if (
-      new Date(fechaInicio) >
-      new Date(fechaFin)
-    ) {
+    if (fechaInicio > fechaFin) {
       return res.status(400).json({
         success: false,
         message:
@@ -624,6 +747,7 @@ const listarDocentes = async (req, res) => {
 module.exports = {
   listarGrados,
   listarGruposPorGrado,
+  listarGruposAsignablesCoordinador,
   listarPeriodos,
   obtenerPeriodoActual,
   listarPeriodosAcademicos,

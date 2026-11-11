@@ -107,6 +107,19 @@ const listarAlertasOrientador = async (req, res) => {
       });
     }
 
+    const inicio = (pagina - 1) * LIMITE_PAGINA;
+    const fin = inicio + LIMITE_PAGINA - 1;
+
+    if (
+      !Number.isSafeInteger(inicio) ||
+      fin > 2147483647
+    ) {
+      return res.status(400).json({
+        success: false,
+        message: 'La página solicitada está fuera del rango permitido.',
+      });
+    }
+
     // 1. Consultar exclusivamente los ámbitos
     // académicos activos del orientador.
 
@@ -198,9 +211,6 @@ const listarAlertasOrientador = async (req, res) => {
 
     // 3. Consultar únicamente alertas asociadas
     // a los estudiantes autorizados.
-
-    const inicio = (pagina - 1) * LIMITE_PAGINA;
-    const fin = inicio + LIMITE_PAGINA - 1;
 
     const {
       data: alertas,

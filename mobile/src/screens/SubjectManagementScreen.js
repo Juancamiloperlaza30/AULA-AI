@@ -363,7 +363,7 @@ export default function SubjectManagementScreen({
               <View
                 style={[
                   styles.statusBadge,
-                  String(item.estado || '').toLowerCase() === 'activo'
+                  String(item.estado || '').toLowerCase() === 'activa'
                     ? styles.statusActive
                     : styles.statusInactive,
                 ]}
@@ -371,7 +371,7 @@ export default function SubjectManagementScreen({
                 <View
                   style={[
                     styles.statusDot,
-                    String(item.estado || '').toLowerCase() === 'activo'
+                    String(item.estado || '').toLowerCase() === 'activa'
                       ? styles.statusDotActive
                       : styles.statusDotInactive,
                   ]}
@@ -380,7 +380,7 @@ export default function SubjectManagementScreen({
                 <Text
                   style={[
                     styles.statusText,
-                    String(item.estado || '').toLowerCase() === 'activo'
+                    String(item.estado || '').toLowerCase() === 'activa'
                       ? styles.statusTextActive
                       : styles.statusTextInactive,
                   ]}

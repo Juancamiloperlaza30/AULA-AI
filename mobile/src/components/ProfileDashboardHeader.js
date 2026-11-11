@@ -229,6 +229,7 @@ export default function ProfileDashboardHeader({
   apiUrl,
   accessToken,
   onOpenProfile,
+  onLocation,
   children,
   studentPremium: studentPremiumRequested = false,
   guardianPremium = false,
@@ -390,7 +391,11 @@ export default function ProfileDashboardHeader({
     const controller =
       new AbortController();
 
-    cargarPerfil(controller.signal);
+    Promise.resolve().then(() => {
+      if (!controller.signal.aborted) {
+        cargarPerfil(controller.signal);
+      }
+    });
 
     return () => {
       controller.abort();
@@ -871,6 +876,40 @@ export default function ProfileDashboardHeader({
           </Text>
         ) : null}
 
+      {typeof onLocation === 'function' ? (
+        <TouchableOpacity
+          style={[
+            styles.locationButton,
+            studentPremium &&
+              styles.studentPremiumLocationButton,
+          ]}
+          onPress={onLocation}
+          activeOpacity={0.85}
+          accessibilityRole="button"
+          accessibilityLabel="Consultar ubicación del dispositivo"
+        >
+          <Ionicons
+            name="location-outline"
+            size={18}
+            color={studentPremium ? '#80DDF1' : '#123B73'}
+          />
+          <Text
+            style={[
+              styles.locationButtonText,
+              studentPremium &&
+                styles.studentPremiumLocationButtonText,
+            ]}
+          >
+            Ubicación del dispositivo
+          </Text>
+          <Ionicons
+            name="chevron-forward"
+            size={17}
+            color={studentPremium ? '#80DDF1' : '#64748B'}
+          />
+        </TouchableOpacity>
+      ) : null}
+
       {/* EL RESUMEN ACADÉMICO SIEMPRE
           SE MUESTRA, AUNQUE NO HAYA RED */}
 
@@ -1065,6 +1104,24 @@ const styles = StyleSheet.create({
     borderTopColor: '#EEF1F5',
   },
 
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+    marginTop: 14,
+    paddingVertical: 11,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    backgroundColor: '#EAF3FC',
+  },
+
+  locationButtonText: {
+    flex: 1,
+    color: '#123B73',
+    fontSize: 13,
+    fontWeight: '700',
+  },
+
   profileButton: {
     marginTop: 16,
     paddingVertical: 11,
@@ -1209,6 +1266,14 @@ const styles = StyleSheet.create({
 
   studentPremiumExtraContent: {
     borderTopColor: 'rgba(255,255,255,0.12)',
+  },
+
+  studentPremiumLocationButton: {
+    backgroundColor: '#17375B',
+  },
+
+  studentPremiumLocationButtonText: {
+    color: '#FFFFFF',
   },
 
   studentPremiumProfileButton: {

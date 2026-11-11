@@ -53,6 +53,18 @@ const esObjeto = (valor) =>
   typeof valor === 'object' &&
   !Array.isArray(valor);
 
+const prepararPlanParaAcudiente = (plan) => ({
+  id: plan.id,
+  objetivo: plan.objetivo,
+  acciones: plan.acciones,
+  indicadores_progreso: plan.indicadores_progreso,
+  prioridad: plan.prioridad,
+  estado: plan.estado,
+  fecha_seguimiento: plan.fecha_seguimiento,
+  created_at: plan.created_at,
+  updated_at: plan.updated_at,
+});
+
 // ======================================================
 // MANEJO DE ERRORES
 // ======================================================
@@ -176,11 +188,16 @@ const listarPlanesEstudiante = async (req, res) => {
       limite: 20,
     });
 
+    const datos =
+      req.usuario.rol === 'acudiente'
+        ? planes.map(prepararPlanParaAcudiente)
+        : planes;
+
     return res.status(200).json({
       success: true,
       message:
         'Planes académicos consultados correctamente.',
-      data: planes,
+      data: datos,
     });
 
   } catch (error) {
@@ -255,11 +272,16 @@ const obtenerPlanEstudiante = async (req, res) => {
       });
     }
 
+    const datos =
+      req.usuario.rol === 'acudiente'
+        ? prepararPlanParaAcudiente(plan)
+        : plan;
+
     return res.status(200).json({
       success: true,
       message:
         'Plan académico consultado correctamente.',
-      data: plan,
+      data: datos,
     });
 
   } catch (error) {

@@ -293,7 +293,7 @@ export default function AdminDashboard({
         <DashboardCard
           icon="key-outline"
           title="Roles y permisos"
-          description="Consulta y administra los accesos y permisos del sistema."
+          description="Consulta los seis roles fijos, sus funciones y los usuarios asignados."
           onPress={onManageRoles}
           accentColor="#7C3AED"
         />

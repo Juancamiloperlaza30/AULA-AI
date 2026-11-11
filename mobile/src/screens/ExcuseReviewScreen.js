@@ -1,6 +1,7 @@
 import React, {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 
@@ -252,6 +253,11 @@ export default function ExcuseReviewScreen({
   // ====================================================
 
   const [excusas, setExcusas] = useState([]);
+  const [pagina, setPagina] = useState(1);
+  const [hayMas, setHayMas] = useState(false);
+  const [cargandoMas, setCargandoMas] = useState(false);
+  const solicitudListadoRef = useRef(0);
+  const cargaMasActivaRef = useRef(false);
 
   const [
     excusaSeleccionada,
@@ -358,6 +364,9 @@ export default function ExcuseReviewScreen({
 
   const cargarExcusas = useCallback(
     async (esActualizacion = false) => {
+      const solicitudId =
+        ++solicitudListadoRef.current;
+
       try {
         setError('');
 
@@ -368,23 +377,123 @@ export default function ExcuseReviewScreen({
         }
 
         const datos = await solicitar(
-          '/api/excuse-review'
+          '/api/excuse-review?pagina=1'
         );
+
+        if (
+          solicitudId !== solicitudListadoRef.current
+        ) {
+          return;
+        }
 
         setExcusas(
           Array.isArray(datos.excusas)
             ? datos.excusas
             : []
         );
+        setPagina(1);
+        setHayMas(Boolean(datos.hayMas));
       } catch (errorConsulta) {
-        setError(errorConsulta.message);
+        if (
+          solicitudId === solicitudListadoRef.current
+        ) {
+          setError(errorConsulta.message);
+        }
       } finally {
-        setCargando(false);
-        setActualizando(false);
+        if (
+          solicitudId === solicitudListadoRef.current
+        ) {
+          setCargando(false);
+          setActualizando(false);
+        }
       }
     },
     [solicitar]
   );
+
+  const cargarMasExcusas = useCallback(async () => {
+    if (
+      !hayMas ||
+      cargandoMas ||
+      cargaMasActivaRef.current
+    ) {
+      return;
+    }
+
+    const siguientePagina = pagina + 1;
+    const solicitudListadoId =
+      solicitudListadoRef.current;
+
+    try {
+      cargaMasActivaRef.current = true;
+      setCargandoMas(true);
+
+      const datos = await solicitar(
+        `/api/excuse-review?pagina=${siguientePagina}`
+      );
+      const nuevasExcusas = Array.isArray(
+        datos.excusas
+      )
+        ? datos.excusas
+        : [];
+
+      if (
+        solicitudListadoId !== solicitudListadoRef.current
+      ) {
+        return;
+      }
+
+      const idsExistentes = new Set(
+        excusas.map((excusa) => String(excusa.id))
+      );
+
+      setExcusas((actuales) => [
+        ...actuales,
+        ...nuevasExcusas.filter(
+          (excusa) =>
+            !idsExistentes.has(String(excusa.id))
+        ),
+      ]);
+      setPagina(siguientePagina);
+      setHayMas(Boolean(datos.hayMas));
+    } catch (errorConsulta) {
+      if (
+        solicitudListadoId === solicitudListadoRef.current
+      ) {
+        Alert.alert(
+          'No fue posible cargar más excusas',
+          errorConsulta.message
+        );
+      }
+    } finally {
+      cargaMasActivaRef.current = false;
+      setCargandoMas(false);
+    }
+  }, [
+    cargandoMas,
+    excusas,
+    hayMas,
+    pagina,
+    solicitar,
+  ]);
+
+  const actualizarExcusaEnLista = (excusa) => {
+    setExcusas((actuales) =>
+      actuales.map((actual) =>
+        String(actual.id) === String(excusa.id)
+          ? {
+              ...actual,
+              estado: excusa.estado,
+              revision_asignada_a:
+                excusa.revision_asignada_a,
+              revision_iniciada_at:
+                excusa.revision_iniciada_at,
+              vista_at: excusa.vista_at,
+            }
+          : actual
+      )
+    );
+  };
 
   useEffect(() => {
     const solicitudInicial = setTimeout(() => {
@@ -516,6 +625,7 @@ export default function ExcuseReviewScreen({
       );
 
       setExcusaSeleccionada(detalle.excusa);
+      actualizarExcusaEnLista(detalle.excusa);
 
       Alert.alert(
         'Revisión asignada',
@@ -596,6 +706,7 @@ export default function ExcuseReviewScreen({
         );
 
         setExcusaSeleccionada(detalle.excusa);
+        actualizarExcusaEnLista(detalle.excusa);
         setObservacion('');
 
         mostrarMensaje(
@@ -657,7 +768,6 @@ export default function ExcuseReviewScreen({
     if (excusaSeleccionada) {
       setExcusaSeleccionada(null);
       setObservacion('');
-      void cargarExcusas(true);
       return;
     }
 
@@ -1227,7 +1337,7 @@ export default function ExcuseReviewScreen({
               </Text>
 
               <Text style={styles.listSubtitle}>
-                Consulta las excusas disponibles
+                Los indicadores corresponden a las solicitudes cargadas
               </Text>
             </View>
 
@@ -1306,7 +1416,8 @@ export default function ExcuseReviewScreen({
               </Text>
             </View>
           ) : (
-            excusas.map((excusa) => (
+            <View>
+              {excusas.map((excusa) => (
               <TouchableOpacity
                 key={String(excusa.id)}
                 style={styles.card}
@@ -1380,7 +1491,38 @@ export default function ExcuseReviewScreen({
                   </View>
                 </View>
               </TouchableOpacity>
-            ))
+              ))}
+
+              {hayMas && (
+                <TouchableOpacity
+                  style={[
+                    styles.primaryButton,
+                    cargandoMas && styles.disabledButton,
+                  ]}
+                  onPress={cargarMasExcusas}
+                  disabled={cargandoMas}
+                  activeOpacity={0.85}
+                >
+                  {cargandoMas ? (
+                    <ActivityIndicator
+                      color={COLORS.white}
+                    />
+                  ) : (
+                    <Ionicons
+                      name="chevron-down-circle-outline"
+                      size={20}
+                      color={COLORS.white}
+                    />
+                  )}
+
+                  <Text style={styles.buttonText}>
+                    {cargandoMas
+                      ? 'Cargando...'
+                      : 'Cargar más excusas'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
           )}
 
           <View style={styles.footer}>

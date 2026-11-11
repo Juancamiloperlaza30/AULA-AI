@@ -49,6 +49,7 @@ const verificarPermisoConsultaPlan = async ({
 
   const rolesPermitidos = [
     'estudiante',
+    'acudiente',
     'orientador',
     'coordinador',
   ];

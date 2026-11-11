@@ -7,7 +7,7 @@ export const MENSAJES_UBICACION = {
     'No se concedió permiso para acceder a la ubicación. Esta función no estará disponible, pero puedes seguir utilizando AULA-AI.',
 
   GPS_DESACTIVADO:
-    'Debe activar la ubicación del dispositivo para utilizar esta función.',
+    'La ubicación del dispositivo está desactivada. Actívala para continuar.',
 
   TIEMPO_AGOTADO:
     'No fue posible obtener la ubicación dentro de los 8 segundos permitidos. Inténtalo nuevamente.',

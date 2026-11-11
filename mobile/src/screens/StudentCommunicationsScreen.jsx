@@ -9,6 +9,7 @@
 import React, {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 
@@ -235,6 +236,7 @@ export default function StudentCommunicationsScreen({
 
   const [errorConsulta, setErrorConsulta] =
     useState('');
+  const solicitudComunicadosRef = useRef(0);
 
   // ====================================================
   // CONSULTAR COMUNICADOS
@@ -246,6 +248,9 @@ export default function StudentCommunicationsScreen({
       agregar = false,
       refrescar = false,
     } = {}) => {
+      const solicitudId =
+        ++solicitudComunicadosRef.current;
+
       if (agregar) {
         setCargandoMas(true);
       } else if (refrescar) {
@@ -264,6 +269,12 @@ export default function StudentCommunicationsScreen({
             pagina,
             limite: LIMITE_PAGINA,
           });
+
+        if (
+          solicitudId !== solicitudComunicadosRef.current
+        ) {
+          return;
+        }
 
         const nuevosComunicados =
           resultado.comunicados;
@@ -297,13 +308,21 @@ export default function StudentCommunicationsScreen({
           )
         );
       } catch (error) {
-        setErrorConsulta(
-          obtenerMensajeError(error)
-        );
+        if (
+          solicitudId === solicitudComunicadosRef.current
+        ) {
+          setErrorConsulta(
+            obtenerMensajeError(error)
+          );
+        }
       } finally {
-        setCargando(false);
-        setActualizando(false);
-        setCargandoMas(false);
+        if (
+          solicitudId === solicitudComunicadosRef.current
+        ) {
+          setCargando(false);
+          setActualizando(false);
+          setCargandoMas(false);
+        }
       }
     },
     [apiUrl, accessToken]
@@ -322,6 +341,7 @@ export default function StudentCommunicationsScreen({
 
     return () => {
       clearTimeout(temporizador);
+      solicitudComunicadosRef.current += 1;
     };
   }, [cargarComunicados]);
 

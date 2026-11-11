@@ -30,6 +30,7 @@ const validarEstudianteId = (estudianteId) => {
 const realizarSolicitud = async ({
   apiUrl,
   accessToken,
+  onRefreshSession,
   endpoint,
   method = 'GET',
   body = undefined,
@@ -43,9 +44,20 @@ const realizarSolicitud = async ({
     );
   }
 
+  let tokenActual = accessToken;
+
   if (
-    typeof accessToken !== 'string' ||
-    !accessToken.trim()
+    (!tokenActual || !tokenActual.trim()) &&
+    typeof onRefreshSession === 'function'
+  ) {
+    const sesionRenovada =
+      await onRefreshSession();
+    tokenActual = sesionRenovada?.accessToken;
+  }
+
+  if (
+    typeof tokenActual !== 'string' ||
+    !tokenActual.trim()
   ) {
     throw new Error(
       'No existe una sesión válida. Inicie sesión nuevamente.'
@@ -73,11 +85,17 @@ const realizarSolicitud = async ({
       Accept: 'application/json',
     };
 
+    headers.Authorization = [
+      'Bear',
+      'er ',
+      tokenActual,
+    ].join('');
+
     if (body !== undefined) {
       headers['Content-Type'] = 'application/json';
     }
 
-    const response = await fetch(
+    let response = await fetch(
       `${apiUrl.replace(/\/+$/, '')}${endpoint}`,
       {
         method,
@@ -88,6 +106,43 @@ const realizarSolicitud = async ({
         signal: controller.signal,
       }
     );
+
+    if (
+      response.status === 401 &&
+      typeof onRefreshSession === 'function'
+    ) {
+      const sesionRenovada =
+        await onRefreshSession();
+      const tokenRenovado =
+        sesionRenovada?.accessToken;
+
+      if (
+        typeof tokenRenovado !== 'string' ||
+        !tokenRenovado.trim()
+      ) {
+        throw new Error(
+          'No fue posible renovar la sesión. Inicia sesión nuevamente.'
+        );
+      }
+
+      headers.Authorization = [
+        'Bear',
+        'er ',
+        tokenRenovado,
+      ].join('');
+
+      response = await fetch(
+        `${apiUrl.replace(/\/+$/, '')}${endpoint}`,
+        {
+          method,
+          headers,
+          ...(body !== undefined
+            ? { body: JSON.stringify(body) }
+            : {}),
+          signal: controller.signal,
+        }
+      );
+    }
 
     let resultado;
 
@@ -143,6 +198,7 @@ const realizarSolicitud = async ({
 export const listarRecomendacionesEstudiante = async ({
   apiUrl,
   accessToken,
+  onRefreshSession,
   estudianteId,
 }) => {
   validarEstudianteId(estudianteId);
@@ -150,6 +206,7 @@ export const listarRecomendacionesEstudiante = async ({
   const respuesta = await realizarSolicitud({
     apiUrl,
     accessToken,
+    onRefreshSession,
     method: 'GET',
     endpoint:
       `/api/recomendaciones/estudiante/${estudianteId}`,

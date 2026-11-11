@@ -37,6 +37,7 @@ export default function OrientadorDashboard({
   accessToken,
   onLogout,
   onMyCommunications,
+  onLocation,
 }) {
   const [alertaSeleccionada, setAlertaSeleccionada] =
     useState(null);
@@ -133,6 +134,7 @@ export default function OrientadorDashboard({
               key={usuario?.id}
               apiUrl={apiUrl}
               accessToken={accessToken}
+              onLocation={onLocation}
               orientadorPremium
             />
           </View>

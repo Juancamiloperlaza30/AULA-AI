@@ -3,6 +3,7 @@ const express = require('express');
 const {
   listarGrados,
   listarGruposPorGrado,
+  listarGruposAsignablesCoordinador,
   obtenerPeriodoActual,
   listarPeriodosAcademicos,
   listarPeriodosDisponibles,
@@ -67,6 +68,16 @@ router.get(
   '/grados',
   verificarToken,
   listarGrados
+);
+
+router.get(
+  '/grados/:gradoId/grupos-asignables-coordinador',
+  verificarToken,
+  permitirRoles(
+    'administrador',
+    'coordinador'
+  ),
+  listarGruposAsignablesCoordinador
 );
 
 router.get(

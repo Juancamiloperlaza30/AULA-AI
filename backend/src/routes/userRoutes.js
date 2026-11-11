@@ -7,6 +7,18 @@ const {
 } = require('../controllers/userController');
 
 const {
+  listarUsuarios,
+  obtenerResumenUsuarios,
+  obtenerDetalleUsuario,
+  actualizarUsuario,
+  cambiarEstadoUsuario,
+} = require('../controllers/adminUserController');
+
+const {
+  listarEventosAuditoria,
+} = require('../controllers/adminAuditController');
+
+const {
   verificarToken,
   permitirRoles,
 } = require('../middleware/authMiddleware');
@@ -14,11 +26,38 @@ const {
 const router = express.Router();
 
 /**
- * Registrar usuarios.
+ * ============================================
+ * AULA-AI — GESTIÓN DE USUARIOS
+ * ============================================
  *
- * Solo:
- * - Administrador
- * - Coordinador
+ * Administrador:
+ * - Registrar usuarios.
+ * - Consultar usuarios.
+ * - Buscar y filtrar usuarios.
+ * - Consultar detalles.
+ * - Editar información personal.
+ * - Activar y desactivar cuentas.
+ * - Consultar estadísticas.
+ * - Consultar eventos de auditoría.
+ *
+ * Coordinador:
+ * - Registrar usuarios según las validaciones
+ *   existentes del controlador.
+ * - Buscar estudiantes.
+ *
+ * Los demás roles no pueden acceder
+ * a las operaciones administrativas.
+ */
+
+
+/**
+ * ============================================
+ * 1. BUSCAR ESTUDIANTES
+ * ============================================
+ *
+ * GET /api/users/estudiantes/buscar?q=
+ *
+ * Administrador y Coordinador.
  */
 router.get(
   '/estudiantes/buscar',
@@ -30,6 +69,73 @@ router.get(
   buscarEstudiantes
 );
 
+
+/**
+ * ============================================
+ * 2. RESUMEN DE USUARIOS
+ * ============================================
+ *
+ * GET /api/users/resumen
+ *
+ * Exclusivo para Administrador.
+ */
+router.get(
+  '/resumen',
+  verificarToken,
+  permitirRoles('administrador'),
+  obtenerResumenUsuarios
+);
+
+/**
+ * ============================================
+ * MONITOREO DEL SISTEMA — AUDITORÍA
+ * ============================================
+ *
+ * GET /api/users/auditoria
+ *
+ * Exclusivo para Administrador.
+ */
+router.get(
+  '/auditoria',
+  verificarToken,
+  permitirRoles('administrador'),
+  listarEventosAuditoria
+);
+
+
+/**
+ * ============================================
+ * 3. LISTAR USUARIOS
+ * ============================================
+ *
+ * GET /api/users
+ *
+ * Parámetros opcionales:
+ * - pagina
+ * - limite
+ * - busqueda
+ * - rol
+ * - estado
+ *
+ * Exclusivo para Administrador.
+ */
+router.get(
+  '/',
+  verificarToken,
+  permitirRoles('administrador'),
+  listarUsuarios
+);
+
+
+/**
+ * ============================================
+ * 4. REGISTRAR USUARIO
+ * ============================================
+ *
+ * POST /api/users
+ *
+ * Administrador y Coordinador.
+ */
 router.post(
   '/',
   verificarToken,
@@ -40,9 +146,77 @@ router.post(
   registrarUsuario
 );
 
+
+/**
+ * ============================================
+ * 5. ACTIVACIÓN INICIAL DE CUENTA
+ * ============================================
+ *
+ * POST /api/users/activar-cuenta
+ *
+ * Conserva el funcionamiento existente.
+ *
+ * La validación del token de activación
+ * se realiza dentro del controlador.
+ */
 router.post(
   '/activar-cuenta',
   activarCuenta
 );
+
+
+/**
+ * ============================================
+ * 6. CONSULTAR DETALLE DE USUARIO
+ * ============================================
+ *
+ * GET /api/users/:id
+ *
+ * Exclusivo para Administrador.
+ */
+router.get(
+  '/:id',
+  verificarToken,
+  permitirRoles('administrador'),
+  obtenerDetalleUsuario
+);
+
+
+/**
+ * ============================================
+ * 7. EDITAR USUARIO
+ * ============================================
+ *
+ * PATCH /api/users/:id
+ *
+ * Exclusivo para Administrador.
+ *
+ * Permite modificar únicamente los campos
+ * autorizados por adminUserController.
+ */
+router.patch(
+  '/:id',
+  verificarToken,
+  permitirRoles('administrador'),
+  actualizarUsuario
+);
+
+
+/**
+ * ============================================
+ * 8. ACTIVAR O DESACTIVAR USUARIO
+ * ============================================
+ *
+ * PATCH /api/users/:id/estado
+ *
+ * Exclusivo para Administrador.
+ */
+router.patch(
+  '/:id/estado',
+  verificarToken,
+  permitirRoles('administrador'),
+  cambiarEstadoUsuario
+);
+
 
 module.exports = router;

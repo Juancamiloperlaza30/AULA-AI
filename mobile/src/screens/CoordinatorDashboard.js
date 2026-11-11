@@ -130,8 +130,10 @@ export default function CoordinatorDashboard({
   onRegisterUser,
   onManageSubjects,
   onManagePeriods,
+  onReviewExcuses,
   onMyCommunications,
   onPublishCommunication,
+  onLocation,
 }) {
   return (
     <ScrollView
@@ -204,6 +206,7 @@ export default function CoordinatorDashboard({
               key={usuario?.id}
               apiUrl={apiUrl}
               accessToken={accessToken}
+              onLocation={onLocation}
               coordinatorPremium
             />
           </View>
@@ -217,7 +220,7 @@ export default function CoordinatorDashboard({
         <DashboardCard
           icon="people-outline"
           title="Gestión de usuarios"
-          description="Registra usuarios y consulta las vinculaciones académicas disponibles."
+          description="Registra usuarios, gestiona sus vinculaciones y asigna grupos autorizados a nuevos coordinadores."
           onPress={onRegisterUser}
           accentColor={COLORS.primary}
         />
@@ -240,7 +243,15 @@ export default function CoordinatorDashboard({
 
         <SectionTitle
           title="Seguimiento institucional"
-          subtitle="Consulta las herramientas de acompañamiento académico."
+          subtitle="Consulta las herramientas de acompañamiento y revisión académica."
+        />
+
+        <DashboardCard
+          icon="document-text-outline"
+          title="Revisión de excusas"
+          description="Consulta las excusas, revisa sus soportes y registra una decisión."
+          onPress={onReviewExcuses}
+          accentColor="#C2410C"
         />
 
         <DashboardCard

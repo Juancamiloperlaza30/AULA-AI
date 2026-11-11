@@ -126,11 +126,21 @@ async function solicitar({
 export async function listarAlertasOrientador({
   apiUrl,
   accessToken,
+  pagina = 1,
 }) {
+  if (
+    !Number.isSafeInteger(pagina) ||
+    pagina < 1
+  ) {
+    throw new Error(
+      'La página solicitada no es válida.'
+    );
+  }
+
   return solicitar({
     apiUrl,
     accessToken,
-    ruta: '/orientador',
+    ruta: `/orientador?pagina=${pagina}`,
   });
 }
 

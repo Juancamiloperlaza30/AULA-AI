@@ -555,9 +555,16 @@ export default function MySubjectsScreen({
       return undefined;
     }
 
-    cargarPeriodosDisponibles();
+    let activa = true;
+
+    Promise.resolve().then(() => {
+      if (activa) {
+        cargarPeriodosDisponibles();
+      }
+    });
 
     return () => {
+      activa = false;
       solicitudPeriodosId.current += 1;
     };
   }, [
@@ -566,9 +573,16 @@ export default function MySubjectsScreen({
   ]);
 
   useEffect(() => {
-    cargarMaterias();
+    let activa = true;
+
+    Promise.resolve().then(() => {
+      if (activa) {
+        cargarMaterias();
+      }
+    });
 
     return () => {
+      activa = false;
       solicitudMateriasId.current += 1;
     };
   }, [cargarMaterias]);

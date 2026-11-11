@@ -294,7 +294,17 @@ export default function GuardianExcuses({
   const estudianteId = estudiante?.id;
 
   useEffect(() => {
-    setSoporteEnVista(null);
+    let activo = true;
+
+    Promise.resolve().then(() => {
+      if (activo) {
+        setSoporteEnVista(null);
+      }
+    });
+
+    return () => {
+      activo = false;
+    };
   }, [estudianteId, accessToken]);
 
   const ruta = estudianteId
@@ -669,38 +679,45 @@ export default function GuardianExcuses({
   // =====================================================
 
   useEffect(() => {
-    version.current += 1;
-
-    setSoporteEnVista(null);
-    setDescargandoSoporte(null);
-
-    claveEnvio.current = null;
-    bloqueoEnvio.current = false;
-
-    setDescargandoSoporte(null);
-    setModo('seguimiento');
-    setExcusas([]);
-    setInasistencias([]);
-
-    setAsistenciaId(null);
-    setMotivo('');
-
-    setTotal(0);
-    setError('');
-    setErrorAusencias('');
-
-    const anterior = archivoRef.current;
-
-    archivoRef.current = null;
-    setArchivo(null);
-
-    eliminarTemporal(anterior);
-
+    let activo = true;
     const controller = new AbortController();
 
-    void cargarExcusas(controller.signal);
+    Promise.resolve().then(() => {
+      if (!activo) {
+        return;
+      }
+
+      version.current += 1;
+
+      setSoporteEnVista(null);
+      setDescargandoSoporte(null);
+
+      claveEnvio.current = null;
+      bloqueoEnvio.current = false;
+
+      setModo('seguimiento');
+      setExcusas([]);
+      setInasistencias([]);
+
+      setAsistenciaId(null);
+      setMotivo('');
+
+      setTotal(0);
+      setError('');
+      setErrorAusencias('');
+
+      const anterior = archivoRef.current;
+
+      archivoRef.current = null;
+      setArchivo(null);
+
+      eliminarTemporal(anterior);
+
+      void cargarExcusas(controller.signal);
+    });
 
     return () => {
+      activo = false;
       version.current += 1;
       controller.abort();
     };

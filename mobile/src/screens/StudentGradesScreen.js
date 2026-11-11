@@ -976,6 +976,7 @@ export default function StudentGradesScreen({
           style={styles.backButton}
           onPress={onBack}
           accessibilityRole="button"
+          accessibilityLabel="Volver al panel del estudiante"
         >
           <Ionicons
             name="arrow-back"
@@ -1007,344 +1008,358 @@ export default function StudentGradesScreen({
         </View>
       </View>
 
-      {origen === 'sqlite' && (
-        <View style={styles.offlineBanner}>
-          <Text style={styles.offlineTitle}>
-            Copia local de SQLite — puede estar desactualizada
-          </Text>
-
-          <Text style={styles.offlineText}>
-            Última descarga:{' '}
-            {formatearActualizacion(
-              ultimaActualizacion
-            )}
-          </Text>
-        </View>
-      )}
-
-      {origen === 'servidor' && (
-        <View style={styles.onlineBanner}>
-          <Text style={styles.onlineTitle}>
-            Información actualizada desde el servidor
-          </Text>
-
-          <Text style={styles.onlineDate}>
-            Última consulta:{' '}
-            {formatearActualizacion(
-              ultimaActualizacion
-            )}
-          </Text>
-        </View>
-      )}
-
-      {aviso ? (
-        <View style={styles.noticeBox}>
-          <Text style={styles.noticeText}>
-            {aviso}
-          </Text>
-        </View>
-      ) : null}
-
-      {error ? (
-        <View style={styles.errorBox}>
-          <Text style={styles.errorText}>
-            {error}
-          </Text>
-
-          <TouchableOpacity
-            style={styles.retryButton}
-            onPress={() =>
+      <FlatList
+        style={styles.resultsList}
+        data={
+          cargando && !origen
+            ? []
+            : calificacionesFiltradas
+        }
+        keyExtractor={(item) =>
+          String(item.id)
+        }
+        renderItem={renderCalificacion}
+        contentContainerStyle={
+          calificacionesFiltradas.length ||
+          (cargando && !origen)
+            ? styles.lista
+            : styles.listaVacia
+        }
+        showsVerticalScrollIndicator
+        keyboardShouldPersistTaps="handled"
+        refreshControl={
+          <RefreshControl
+            refreshing={actualizando}
+            onRefresh={() =>
               cargarCalificaciones(false)
             }
-          >
-            <Text style={styles.retryText}>
-              Reintentar
-            </Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
-
-      {cargando && !origen ? (
-        <View style={styles.centro}>
-          <ActivityIndicator
-            size="large"
-            color="#1D4E7A"
           />
-
-          <Text style={styles.cargandoTexto}>
-            Cargando tus calificaciones...
-          </Text>
-        </View>
-      ) : (
-        <>
-          <View style={styles.periodosWrapper}>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={
-                styles.periodosContent
-              }
-            >
-              <TouchableOpacity
-                style={[
-                  styles.periodoChip,
-                  periodoSeleccionado === 'Todos' &&
-                    styles.periodoChipActivo,
-                ]}
-                onPress={() =>
-                  setPeriodoSeleccionado('Todos')
-                }
-              >
-                <Text
-                  style={[
-                    styles.periodoChipTexto,
-                    periodoSeleccionado === 'Todos' &&
-                      styles.periodoChipTextoActivo,
-                  ]}
-                >
-                  Año
+        }
+        ListHeaderComponent={
+          <>
+            {origen === 'sqlite' && (
+              <View style={styles.offlineBanner}>
+                <Text style={styles.offlineTitle}>
+                  Copia local de SQLite — puede estar desactualizada
                 </Text>
-              </TouchableOpacity>
 
-              {periodosDisponibles.map(
-                (periodo) => {
-                  const seleccionado =
-                    String(periodoSeleccionado) ===
-                    String(periodo.periodoId);
+                <Text style={styles.offlineText}>
+                  Última descarga:{' '}
+                  {formatearActualizacion(
+                    ultimaActualizacion
+                  )}
+                </Text>
+              </View>
+            )}
 
-                  return (
+            {origen === 'servidor' && (
+              <View style={styles.onlineBanner}>
+                <Text style={styles.onlineTitle}>
+                  Información actualizada desde el servidor
+                </Text>
+
+                <Text style={styles.onlineDate}>
+                  Última consulta:{' '}
+                  {formatearActualizacion(
+                    ultimaActualizacion
+                  )}
+                </Text>
+              </View>
+            )}
+
+            {aviso ? (
+              <View style={styles.noticeBox}>
+                <Text style={styles.noticeText}>
+                  {aviso}
+                </Text>
+              </View>
+            ) : null}
+
+            {error ? (
+              <View style={styles.errorBox}>
+                <Text style={styles.errorText}>
+                  {error}
+                </Text>
+
+                <TouchableOpacity
+                  style={styles.retryButton}
+                  onPress={() =>
+                    cargarCalificaciones(false)
+                  }
+                >
+                  <Text style={styles.retryText}>
+                    Reintentar
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            ) : null}
+
+            {cargando && !origen ? (
+              <View style={styles.centro}>
+                <ActivityIndicator
+                  size="large"
+                  color="#1D4E7A"
+                />
+
+                <Text style={styles.cargandoTexto}>
+                  Cargando tus calificaciones...
+                </Text>
+              </View>
+            ) : (
+              <>
+                <View style={styles.periodosWrapper}>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={
+                      styles.periodosContent
+                    }
+                  >
                     <TouchableOpacity
-                      key={String(
-                        periodo.periodoId
-                      )}
                       style={[
                         styles.periodoChip,
-                        seleccionado &&
+                        periodoSeleccionado === 'Todos' &&
                           styles.periodoChipActivo,
                       ]}
                       onPress={() =>
-                        setPeriodoSeleccionado(
-                          periodo.periodoId
-                        )
+                        setPeriodoSeleccionado('Todos')
                       }
                     >
                       <Text
                         style={[
                           styles.periodoChipTexto,
-                          seleccionado &&
+                          periodoSeleccionado === 'Todos' &&
                             styles.periodoChipTextoActivo,
                         ]}
-                        numberOfLines={1}
                       >
-                        {periodo.nombre}
+                        Año
                       </Text>
                     </TouchableOpacity>
-                  );
-                }
-              )}
-            </ScrollView>
-          </View>
 
-          <View style={styles.summaryContainer}>
-            <View style={styles.summaryCard}>
-              <Ionicons
-                name="stats-chart-outline"
-                size={22}
-                color="#27C4E8"
-              />
+                    {periodosDisponibles.map(
+                      (periodo) => {
+                        const seleccionado =
+                          String(periodoSeleccionado) ===
+                          String(periodo.periodoId);
 
-              <Text style={styles.summaryLabel}>
-                {periodoSeleccionado === 'Todos'
-                  ? 'Promedio anual'
-                  : 'Promedio periodo'}
-              </Text>
-
-              <Text style={styles.summaryValue}>
-                {promedioVisible !== null &&
-                Number.isFinite(
-                  Number(promedioVisible)
-                )
-                  ? Number(
-                      promedioVisible
-                    ).toFixed(2)
-                  : '-'}
-              </Text>
-
-              <Text style={styles.summarySmall}>
-                {modoOffline
-                  ? 'Estimado · media simple'
-                  : promedioVisible !== null
-                    ? 'sobre 5.00'
-                    : 'Pendiente'}
-              </Text>
-            </View>
-
-            <View style={styles.summaryCard}>
-              <Ionicons
-                name="ribbon-outline"
-                size={22}
-                color="#27C4E8"
-              />
-
-              <Text style={styles.summaryLabel}>
-                Calificaciones
-              </Text>
-
-              <Text style={styles.summaryValue}>
-                {notasFiltradas.length}
-              </Text>
-
-              <Text style={styles.summarySmall}>
-                registradas
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.filterSection}>
-            <Text style={styles.filterTitle}>
-              Filtrar por materia
-            </Text>
-
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={
-                styles.filterScrollContent
-              }
-            >
-              {materiasDisponibles.map(
-                (materia) => {
-                  const activa =
-                    materiaSeleccionada === materia;
-
-                  return (
-                    <TouchableOpacity
-                      key={materia}
-                      style={[
-                        styles.filterChip,
-                        activa &&
-                          styles.filterChipActive,
-                      ]}
-                      onPress={() =>
-                        setMateriaSeleccionada(
-                          materia
-                        )
+                        return (
+                          <TouchableOpacity
+                            key={String(
+                              periodo.periodoId
+                            )}
+                            style={[
+                              styles.periodoChip,
+                              seleccionado &&
+                                styles.periodoChipActivo,
+                            ]}
+                            onPress={() =>
+                              setPeriodoSeleccionado(
+                                periodo.periodoId
+                              )
+                            }
+                          >
+                            <Text
+                              style={[
+                                styles.periodoChipTexto,
+                                seleccionado &&
+                                  styles.periodoChipTextoActivo,
+                              ]}
+                              numberOfLines={1}
+                            >
+                              {periodo.nombre}
+                            </Text>
+                          </TouchableOpacity>
+                        );
                       }
-                    >
+                    )}
+                  </ScrollView>
+                </View>
+
+                <View style={styles.summaryContainer}>
+                  <View style={styles.summaryCard}>
+                    <Ionicons
+                      name="stats-chart-outline"
+                      size={22}
+                      color="#27C4E8"
+                    />
+
+                    <Text style={styles.summaryLabel}>
+                      {periodoSeleccionado === 'Todos'
+                        ? 'Promedio anual'
+                        : 'Promedio periodo'}
+                    </Text>
+
+                    <Text style={styles.summaryValue}>
+                      {promedioVisible !== null &&
+                      Number.isFinite(
+                        Number(promedioVisible)
+                      )
+                        ? Number(
+                            promedioVisible
+                          ).toFixed(2)
+                        : '-'}
+                    </Text>
+
+                    <Text style={styles.summarySmall}>
+                      {modoOffline
+                        ? 'Estimado · media simple'
+                        : promedioVisible !== null
+                          ? 'sobre 5.00'
+                          : 'Pendiente'}
+                    </Text>
+                  </View>
+
+                  <View style={styles.summaryCard}>
+                    <Ionicons
+                      name="ribbon-outline"
+                      size={22}
+                      color="#27C4E8"
+                    />
+
+                    <Text style={styles.summaryLabel}>
+                      Calificaciones
+                    </Text>
+
+                    <Text style={styles.summaryValue}>
+                      {notasFiltradas.length}
+                    </Text>
+
+                    <Text style={styles.summarySmall}>
+                      registradas
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.filterSection}>
+                  <Text style={styles.filterTitle}>
+                    Filtrar por materia
+                  </Text>
+
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    contentContainerStyle={
+                      styles.filterScrollContent
+                    }
+                  >
+                    {materiasDisponibles.map(
+                      (materia) => {
+                        const activa =
+                          materiaSeleccionada === materia;
+
+                        return (
+                          <TouchableOpacity
+                            key={materia}
+                            style={[
+                              styles.filterChip,
+                              activa &&
+                                styles.filterChipActive,
+                            ]}
+                            onPress={() =>
+                              setMateriaSeleccionada(
+                                materia
+                              )
+                            }
+                          >
+                            <Text
+                              style={[
+                                styles.filterChipText,
+                                activa &&
+                                  styles.filterChipTextActive,
+                              ]}
+                            >
+                              {materia}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      }
+                    )}
+                  </ScrollView>
+                </View>
+
+                <View style={styles.performanceCard}>
+                  <Text style={styles.performanceTitle}>
+                    Resumen de rendimiento
+                  </Text>
+
+                  <View style={styles.performanceRow}>
+                    <View style={styles.performanceItem}>
                       <Text
-                        style={[
-                          styles.filterChipText,
-                          activa &&
-                            styles.filterChipTextActive,
-                        ]}
+                        style={styles.performanceNumber}
                       >
-                        {materia}
+                        {resumenRendimiento.alto}
                       </Text>
-                    </TouchableOpacity>
-                  );
-                }
-              )}
-            </ScrollView>
-          </View>
 
-          <View style={styles.performanceCard}>
-            <Text style={styles.performanceTitle}>
-              Resumen de rendimiento
-            </Text>
+                      <Text
+                        style={styles.performanceLabel}
+                      >
+                        Alto
+                      </Text>
+                    </View>
 
-            <View style={styles.performanceRow}>
-              <View style={styles.performanceItem}>
-                <Text
-                  style={styles.performanceNumber}
-                >
-                  {resumenRendimiento.alto}
-                </Text>
+                    <View style={styles.performanceItem}>
+                      <Text
+                        style={styles.performanceNumber}
+                      >
+                        {resumenRendimiento.medio}
+                      </Text>
 
-                <Text
-                  style={styles.performanceLabel}
-                >
-                  Alto
-                </Text>
-              </View>
+                      <Text
+                        style={styles.performanceLabel}
+                      >
+                        Medio
+                      </Text>
+                    </View>
 
-              <View style={styles.performanceItem}>
-                <Text
-                  style={styles.performanceNumber}
-                >
-                  {resumenRendimiento.medio}
-                </Text>
+                    <View style={styles.performanceItem}>
+                      <Text
+                        style={styles.performanceNumber}
+                      >
+                        {resumenRendimiento.bajo}
+                      </Text>
 
-                <Text
-                  style={styles.performanceLabel}
-                >
-                  Medio
-                </Text>
-              </View>
+                      <Text
+                        style={styles.performanceLabel}
+                      >
+                        Por mejorar
+                      </Text>
+                    </View>
+                  </View>
+                </View>
 
-              <View style={styles.performanceItem}>
-                <Text
-                  style={styles.performanceNumber}
-                >
-                  {resumenRendimiento.bajo}
-                </Text>
+                <View style={styles.sectionHeader}>
+                  <Text style={styles.sectionTitle}>
+                    Resultados
+                  </Text>
 
-                <Text
-                  style={styles.performanceLabel}
-                >
-                  Por mejorar
-                </Text>
-              </View>
+                  <Text style={styles.sectionCount}>
+                    {notasFiltradas.length}
+                  </Text>
+                </View>
+              </>
+            )}
+          </>
+        }
+        ListEmptyComponent={
+          cargando && !origen ? (
+            null
+          ) : (
+            <View style={styles.emptyCard}>
+              <Text style={styles.emptyTitle}>
+                {error
+                  ? 'No hay información disponible'
+                  : 'Aún no tienes calificaciones'}
+              </Text>
+
+              <Text style={styles.emptyText}>
+                {error
+                  ? 'Conéctate a internet para descargar tus calificaciones.'
+                  : 'Cuando tus docentes registren notas, aparecerán aquí.'}
+              </Text>
             </View>
-          </View>
-
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>
-              Resultados
-            </Text>
-
-            <Text style={styles.sectionCount}>
-              {notasFiltradas.length}
-            </Text>
-          </View>
-
-          <FlatList
-            data={calificacionesFiltradas}
-            keyExtractor={(item) =>
-              String(item.id)
-            }
-            renderItem={renderCalificacion}
-            contentContainerStyle={
-              calificacionesFiltradas.length
-                ? styles.lista
-                : styles.listaVacia
-            }
-            showsVerticalScrollIndicator={false}
-            refreshControl={
-              <RefreshControl
-                refreshing={actualizando}
-                onRefresh={() =>
-                  cargarCalificaciones(false)
-                }
-              />
-            }
-            ListEmptyComponent={
-              <View style={styles.emptyCard}>
-                <Text style={styles.emptyTitle}>
-                  {error
-                    ? 'No hay información disponible'
-                    : 'Aún no tienes calificaciones'}
-                </Text>
-
-                <Text style={styles.emptyText}>
-                  {error
-                    ? 'Conéctate a internet para descargar tus calificaciones.'
-                    : 'Cuando tus docentes registren notas, aparecerán aquí.'}
-                </Text>
-              </View>
-            }
-          />
-        </>
-      )}
+          )
+        }
+      />
     </SafeAreaView>
   );
 }
@@ -1357,6 +1372,9 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F4F7FB',
+  },
+  resultsList: {
+    flex: 1,
   },
   header: {
     flexDirection: 'row',

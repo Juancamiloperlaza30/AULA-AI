@@ -711,9 +711,16 @@ export default function GuardianAlertHistory({
   );
 
   useEffect(() => {
-    consultarHistorial();
+    let activo = true;
+
+    Promise.resolve().then(() => {
+      if (activo) {
+        consultarHistorial();
+      }
+    });
 
     return () => {
+      activo = false;
       cancelarConsulta();
     };
   }, [

@@ -526,9 +526,16 @@ export default function StudentActivitiesScreen({
   );
 
   useEffect(() => {
-    cargarActividades(true);
+    let activo = true;
+
+    Promise.resolve().then(() => {
+      if (activo) {
+        cargarActividades(true);
+      }
+    });
 
     return () => {
+      activo = false;
       solicitudId.current += 1;
 
       if (solicitudController.current) {
@@ -659,7 +666,7 @@ export default function StudentActivitiesScreen({
       }
 
       await Linking.openURL(url);
-    } catch (fallo) {
+    } catch (_fallo) {
       Alert.alert(
         'Error',
         'No fue posible abrir el recurso.'

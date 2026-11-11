@@ -194,6 +194,8 @@ export default function EstudianteDashboard({
   onMyGrades,
   onMyAttendance,
   onMyCommunications,
+  onRefreshSession,
+  onLocation,
 }) {
   const [resumen, setResumen] =
     useState(RESUMEN_INICIAL);
@@ -203,9 +205,6 @@ export default function EstudianteDashboard({
 
   const [cargandoResumen, setCargandoResumen] =
     useState(true);
-
-  const [actualizando, setActualizando] =
-    useState(false);
 
   const [aviso, setAviso] =
     useState('');
@@ -515,7 +514,7 @@ export default function EstudianteDashboard({
             );
           }
         }
-      } catch (error) {
+      } catch (_error) {
         if (!signal.aborted) {
           setAviso(
             hayCopia
@@ -526,7 +525,6 @@ export default function EstudianteDashboard({
       } finally {
         if (!signal.aborted) {
           setCargandoResumen(false);
-          setActualizando(false);
         }
       }
     },
@@ -540,9 +538,16 @@ export default function EstudianteDashboard({
   useEffect(() => {
     const controller = new AbortController();
 
-    cargarResumen(controller.signal);
+    let activo = true;
+
+    Promise.resolve().then(() => {
+      if (activo) {
+        cargarResumen(controller.signal);
+      }
+    });
 
     return () => {
+      activo = false;
       controller.abort();
     };
   }, [cargarResumen]);
@@ -571,6 +576,7 @@ export default function EstudianteDashboard({
       <ProfileDashboardHeader
         apiUrl={apiUrl}
         accessToken={accessToken}
+        onLocation={onLocation}
         studentPremium
       >
         <View style={styles.academicSummary}>
@@ -901,6 +907,7 @@ export default function EstudianteDashboard({
         estudianteId={usuario?.id}
         apiUrl={apiUrl}
         accessToken={accessToken}
+        onRefreshSession={onRefreshSession}
       />
 
       <TouchableOpacity
@@ -945,14 +952,14 @@ const styles = StyleSheet.create({
   summaryValue: {
     fontSize: 21,
     fontWeight: '900',
-    color: '#123B73',
+    color: '#FFFFFF',
   },
 
   summaryLabel: {
     marginTop: 5,
     fontSize: 11,
     fontWeight: '600',
-    color: '#64748B',
+    color: '#FFFFFF',
     textAlign: 'center',
   },
 

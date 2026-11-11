@@ -38,6 +38,7 @@ router.get(
   '/estudiante/:estudianteId',
   permitirRoles(
     'estudiante',
+    'acudiente',
     'orientador',
     'coordinador'
   ),
@@ -54,6 +55,7 @@ router.get(
   '/estudiante/:estudianteId/:planId',
   permitirRoles(
     'estudiante',
+    'acudiente',
     'orientador',
     'coordinador'
   ),

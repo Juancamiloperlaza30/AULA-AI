@@ -14,6 +14,78 @@ const ROLES_PERMITIDOS = [
   'coordinador',
 ];
 
+const consultarAmbitosCoordinador = async ({
+  coordinadorId,
+  grupoIds = null,
+}) => {
+  let consulta = supabaseAdmin
+    .from('coordinador_ambito')
+    .select('grado_id, grupo_id')
+    .eq('coordinador_id', coordinadorId)
+    .eq('activo', true);
+
+  if (Array.isArray(grupoIds)) {
+    consulta = consulta.in(
+      'grupo_id',
+      [...new Set(grupoIds)]
+    );
+  }
+
+  return consulta;
+};
+
+const verificarGruposEnAmbitoCoordinador = async ({
+  usuario,
+  asignaciones,
+}) => {
+  if (usuario?.rol !== 'coordinador') {
+    return {
+      autorizado: true,
+      error: null,
+    };
+  }
+
+  const gruposIds = [
+    ...new Set(
+      asignaciones.map(
+        ({ grupoId }) => Number(grupoId)
+      )
+    ),
+  ];
+
+  const {
+    data: ambitos,
+    error,
+  } = await consultarAmbitosCoordinador({
+    coordinadorId: usuario.id,
+    grupoIds: gruposIds,
+  });
+
+  if (error) {
+    return {
+      autorizado: false,
+      error,
+    };
+  }
+
+  const ambitosAutorizados = new Set(
+    (ambitos || []).map(
+      ({ grado_id, grupo_id }) =>
+        `${grado_id}:${grupo_id}`
+    )
+  );
+
+  return {
+    autorizado: asignaciones.every(
+      ({ gradoId, grupoId }) =>
+        ambitosAutorizados.has(
+          `${Number(gradoId)}:${Number(grupoId)}`
+        )
+    ),
+    error: null,
+  };
+};
+
 /**
  * Registrar un nuevo usuario.
  *
@@ -33,6 +105,7 @@ const registrarUsuario = async (req, res) => {
       gradoId,
       grupoId,
       ambitosOrientador,
+      ambitosCoordinador,
       estudiantesVinculados = [],
     } = req.body;
 
@@ -95,6 +168,32 @@ const registrarUsuario = async (req, res) => {
             'El estudiante debe tener grado y grupo.',
         });
       }
+
+      const permisoGrupo = await verificarGruposEnAmbitoCoordinador({
+        usuario: req.usuario,
+        asignaciones: [{ gradoId, grupoId }],
+      });
+
+      if (permisoGrupo.error) {
+        console.error(
+          'Error validando el grupo del estudiante para el coordinador:',
+          permisoGrupo.error.message
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            'No fue posible verificar el grupo autorizado para el estudiante.',
+        });
+      }
+
+      if (!permisoGrupo.autorizado) {
+        return res.status(403).json({
+          success: false,
+          message:
+            'El coordinador solo puede registrar estudiantes en los grupos de su propio ámbito.',
+        });
+      }
     }
 
     if (rol === 'acudiente') {
@@ -112,20 +211,32 @@ const registrarUsuario = async (req, res) => {
 
     let ambitosOrientadorNormalizados = [];
 
-    if (rol === 'orientador') {
+    let ambitosCoordinadorNormalizados = [];
+
+    if (
+      rol === 'orientador' ||
+      rol === 'coordinador'
+    ) {
+      const ambitosRecibidos =
+        rol === 'orientador'
+          ? ambitosOrientador
+          : ambitosCoordinador;
+
       if (
-        !Array.isArray(ambitosOrientador) ||
-        ambitosOrientador.length === 0
+        !Array.isArray(ambitosRecibidos) ||
+        ambitosRecibidos.length === 0
       ) {
         return res.status(400).json({
           success: false,
           message:
-            'El orientador debe tener al menos un grado y grupo asignado.',
+            rol === 'orientador'
+              ? 'El orientador debe tener al menos un grado y grupo asignado.'
+              : 'El coordinador debe tener al menos un grado y grupo asignado.',
         });
       }
 
-      ambitosOrientadorNormalizados =
-        ambitosOrientador.map((ambito) => {
+      const ambitosNormalizados =
+        ambitosRecibidos.map((ambito) => {
           const gradoIdTexto =
             String(ambito?.gradoId ?? '');
           const grupoIdTexto =
@@ -157,7 +268,7 @@ const registrarUsuario = async (req, res) => {
         });
 
       if (
-        ambitosOrientadorNormalizados.some(
+        ambitosNormalizados.some(
           (ambito) => !ambito
         )
       ) {
@@ -169,7 +280,7 @@ const registrarUsuario = async (req, res) => {
       }
 
       const paresAmbitos = new Set(
-        ambitosOrientadorNormalizados.map(
+        ambitosNormalizados.map(
           ({ grado_id, grupo_id }) =>
             `${grado_id}:${grupo_id}`
         )
@@ -177,7 +288,7 @@ const registrarUsuario = async (req, res) => {
 
       if (
         paresAmbitos.size !==
-        ambitosOrientadorNormalizados.length
+        ambitosNormalizados.length
       ) {
         return res.status(400).json({
           success: false,
@@ -188,7 +299,7 @@ const registrarUsuario = async (req, res) => {
 
       const gruposIds = [
         ...new Set(
-          ambitosOrientadorNormalizados.map(
+          ambitosNormalizados.map(
             ({ grupo_id }) => grupo_id
           )
         ),
@@ -204,14 +315,14 @@ const registrarUsuario = async (req, res) => {
 
       if (gruposAsignadosError) {
         console.error(
-          'Error validando ámbitos del orientador:',
+          `Error validando ámbitos del ${rol}:`,
           gruposAsignadosError.message
         );
 
         return res.status(500).json({
           success: false,
           message:
-            'No fue posible validar los grupos asignados al orientador.',
+            `No fue posible validar los grupos asignados al ${rol}.`,
         });
       }
 
@@ -223,7 +334,7 @@ const registrarUsuario = async (req, res) => {
       );
 
       const ambitosValidos =
-        ambitosOrientadorNormalizados.every(
+        ambitosNormalizados.every(
           ({ grado_id, grupo_id }) => {
             const grupo = gruposAsignadosPorId.get(
               String(grupo_id)
@@ -242,7 +353,46 @@ const registrarUsuario = async (req, res) => {
         return res.status(400).json({
           success: false,
           message:
-            'Uno o más grupos no están activos o no pertenecen al grado indicado.',
+            `Uno o más grupos no están activos o no pertenecen al grado indicado para el ${rol}.`,
+        });
+      }
+
+      if (rol === 'orientador') {
+        ambitosOrientadorNormalizados =
+          ambitosNormalizados;
+      } else {
+        ambitosCoordinadorNormalizados =
+          ambitosNormalizados;
+      }
+
+      const permisoAmbitos = await verificarGruposEnAmbitoCoordinador({
+        usuario: req.usuario,
+        asignaciones: ambitosNormalizados.map(
+          ({ grado_id, grupo_id }) => ({
+            gradoId: grado_id,
+            grupoId: grupo_id,
+          })
+        ),
+      });
+
+      if (permisoAmbitos.error) {
+        console.error(
+          'Error validando el ámbito del coordinador autenticado:',
+          permisoAmbitos.error.message
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            'No fue posible validar los grupos que puede asignar el coordinador.',
+        });
+      }
+
+      if (!permisoAmbitos.autorizado) {
+        return res.status(403).json({
+          success: false,
+          message:
+            'El coordinador solo puede asignar grupos incluidos en su propio ámbito.',
         });
       }
     }
@@ -380,12 +530,12 @@ const registrarUsuario = async (req, res) => {
         error: grupoError,
       } = await supabaseAdmin
         .from('grupos')
-        .select('id, grado_id')
+        .select('id, grado_id, activo')
         .eq('id', grupoId)
         .eq('grado_id', gradoId)
         .maybeSingle();
 
-      if (grupoError || !grupo) {
+      if (grupoError || !grupo || !grupo.activo) {
         await limpiarUsuarioCreado(userId);
 
         return res.status(400).json({
@@ -453,9 +603,82 @@ const registrarUsuario = async (req, res) => {
         });
       }
 
+      const {
+        data: ubicacionesEstudiantes,
+        error: ubicacionesError,
+      } = await supabaseAdmin
+        .from('estudiantes')
+        .select('usuario_id, grado_id, grupo_id')
+        .in('usuario_id', estudiantesVinculados);
+
+      if (ubicacionesError) {
+        console.error(
+            'Error consultando grupos de estudiantes vinculados:',
+            ubicacionesError.message
+        );
+
+        await limpiarUsuarioCreado(userId);
+
+        return res.status(500).json({
+            success: false,
+            message:
+              'No fue posible verificar los grupos de los estudiantes seleccionados.',
+        });
+      }
+
+      if (
+        !ubicacionesEstudiantes ||
+        ubicacionesEstudiantes.length !==
+            estudiantesVinculados.length
+      ) {
+        await limpiarUsuarioCreado(userId);
+
+        return res.status(400).json({
+            success: false,
+            message:
+              'Uno o más estudiantes no tienen una asignación académica válida.',
+        });
+      }
+
+      const permisoVinculacion =
+        await verificarGruposEnAmbitoCoordinador({
+            usuario: req.usuario,
+            asignaciones: ubicacionesEstudiantes.map(
+              ({ grado_id, grupo_id }) => ({
+                gradoId: grado_id,
+                grupoId: grupo_id,
+              })
+            ),
+        });
+
+      if (permisoVinculacion.error) {
+        console.error(
+            'Error verificando el ámbito de los estudiantes vinculados:',
+            permisoVinculacion.error.message
+        );
+
+        await limpiarUsuarioCreado(userId);
+
+        return res.status(500).json({
+            success: false,
+            message:
+              'No fue posible verificar los estudiantes que puede vincular el coordinador.',
+        });
+      }
+
+      if (!permisoVinculacion.autorizado) {
+        await limpiarUsuarioCreado(userId);
+
+        return res.status(403).json({
+            success: false,
+            message:
+              'El coordinador solo puede vincular acudientes con estudiantes de su propio ámbito.',
+        });
+      }
+
       const relaciones =
         estudiantesVinculados.map(
-          (estudianteId) => ({
+            (estudianteId) => ({
             acudiente_id: userId,
             estudiante_id: estudianteId,
           })
@@ -521,7 +744,44 @@ const registrarUsuario = async (req, res) => {
     }
 
     // =====================================
-    // 10. Registrar auditoría
+    // 10. Asignar ámbitos del coordinador
+    // =====================================
+
+    if (rol === 'coordinador') {
+      const ambitosParaInsertar =
+        ambitosCoordinadorNormalizados.map(
+          ({ grado_id, grupo_id }) => ({
+            coordinador_id: userId,
+            grado_id,
+            grupo_id,
+            activo: true,
+          })
+        );
+
+      const {
+        error: ambitosError,
+      } = await supabaseAdmin
+        .from('coordinador_ambito')
+        .insert(ambitosParaInsertar);
+
+      if (ambitosError) {
+        console.error(
+          'Error asignando ámbitos al coordinador:',
+          ambitosError.message
+        );
+
+        await limpiarUsuarioCreado(userId);
+
+        return res.status(500).json({
+          success: false,
+          message:
+            'No fue posible asignar los grados y grupos al coordinador.',
+        });
+      }
+    }
+
+    // =====================================
+    // 11. Registrar auditoría
     // =====================================
 
     await registrarAuditoria({
@@ -537,11 +797,22 @@ const registrarUsuario = async (req, res) => {
       metadata: {
         usuarioCreadoId: userId,
         rolCreado: rol,
+        ...(rol === 'coordinador'
+          ? {
+              ambitosCoordinador:
+                ambitosCoordinadorNormalizados.map(
+                  ({ grado_id, grupo_id }) => ({
+                    gradoId: grado_id,
+                    grupoId: grupo_id,
+                  })
+                ),
+            }
+          : {}),
       },
     });
 
     // =====================================
-    // 11. Respuesta
+    // 12. Respuesta
     // =====================================
 
     return res.status(201).json({
@@ -732,10 +1003,94 @@ const buscarEstudiantes = async (req, res) => {
 
     const termino = q.trim();
 
-    const {
-      data,
-      error,
-    } = await supabaseAdmin
+    let estudianteIdsPermitidos = null;
+
+    if (req.usuario.rol === 'coordinador') {
+      const {
+        data: ambitos,
+        error: ambitosError,
+      } = await consultarAmbitosCoordinador({
+        coordinadorId: req.usuario.id,
+      });
+
+      if (ambitosError) {
+        console.error(
+          'Error consultando el ámbito del coordinador para buscar estudiantes:',
+          ambitosError.message
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            'No fue posible consultar los estudiantes de su ámbito.',
+        });
+      }
+
+      const paresAutorizados = new Set(
+        (ambitos || []).map(
+          ({ grado_id, grupo_id }) =>
+            `${grado_id}:${grupo_id}`
+        )
+      );
+
+      const gruposIds = [
+        ...new Set(
+          (ambitos || []).map(
+            (ambito) => ambito.grupo_id
+          )
+        ),
+      ];
+
+      if (gruposIds.length === 0) {
+        return res.status(200).json({
+          success: true,
+          estudiantes: [],
+        });
+      }
+
+      const {
+        data: estudiantesEnGrupos,
+        error: errorEstudiantes,
+      } = await supabaseAdmin
+        .from('estudiantes')
+        .select('usuario_id, grado_id, grupo_id')
+        .in('grupo_id', gruposIds);
+
+      if (errorEstudiantes) {
+        console.error(
+          'Error consultando estudiantes del ámbito del coordinador:',
+          errorEstudiantes.message
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            'No fue posible consultar los estudiantes de su ámbito.',
+        });
+      }
+
+      estudianteIdsPermitidos = [
+        ...new Set(
+          (estudiantesEnGrupos || [])
+            .filter((estudiante) =>
+              paresAutorizados.has(
+                `${estudiante.grado_id}:${estudiante.grupo_id}`
+              )
+            )
+            .map((estudiante) => estudiante.usuario_id)
+            .filter(Boolean)
+        ),
+      ];
+
+      if (estudianteIdsPermitidos.length === 0) {
+        return res.status(200).json({
+          success: true,
+          estudiantes: [],
+        });
+      }
+    }
+
+    let consulta = supabaseAdmin
       .from('usuarios')
       .select(`
         id,
@@ -750,6 +1105,18 @@ const buscarEstudiantes = async (req, res) => {
         `nombres.ilike.%${termino}%,apellidos.ilike.%${termino}%,numero_documento.ilike.%${termino}%`
       )
       .limit(20);
+
+    if (estudianteIdsPermitidos) {
+      consulta = consulta.in(
+        'id',
+        estudianteIdsPermitidos
+      );
+    }
+
+    const {
+      data,
+      error,
+    } = await consulta;
 
     if (error) {
       console.error(

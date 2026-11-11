@@ -114,7 +114,8 @@ export default function RegisterUserScreen({
   useEffect(() => {
     if (
       rol === 'estudiante' ||
-      rol === 'orientador'
+      rol === 'orientador' ||
+      rol === 'coordinador'
     ) {
       Promise.resolve().then(
         cargarGrados
@@ -130,7 +131,9 @@ export default function RegisterUserScreen({
       setGrupoId(null);
 
       const response = await fetch(
-        `${apiUrl}/api/academic/grados/${idGrado}/grupos`,
+        rolAutenticado === 'coordinador'
+          ? `${apiUrl}/api/academic/grados/${idGrado}/grupos-asignables-coordinador`
+          : `${apiUrl}/api/academic/grados/${idGrado}/grupos`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -171,7 +174,10 @@ export default function RegisterUserScreen({
 
     try {
       const response = await fetch(
-        `${apiUrl}/api/academic/grados/${idGrado}/grupos`,
+        rol === 'coordinador'
+        || rolAutenticado === 'coordinador'
+          ? `${apiUrl}/api/academic/grados/${idGrado}/grupos-asignables-coordinador`
+          : `${apiUrl}/api/academic/grados/${idGrado}/grupos`,
         {
           headers: {
             Authorization: `Bearer ${accessToken}`,
@@ -201,7 +207,7 @@ export default function RegisterUserScreen({
       }
     } catch (error) {
       console.log(
-        'Error cargando grupos del orientador:',
+        `Error cargando grupos para ${rol}:`,
         error
       );
 
@@ -464,6 +470,13 @@ export default function RegisterUserScreen({
     }
 
     if (
+      rol === 'coordinador' &&
+      ambitosOrientador.length === 0
+    ) {
+      return 'Seleccione al menos un grado y grupo autorizado para el coordinador.';
+    }
+
+    if (
       rol === 'acudiente' &&
       estudiantesSeleccionados.length === 0
     ) {
@@ -517,6 +530,14 @@ export default function RegisterUserScreen({
 
       if (rol === 'orientador') {
         body.ambitosOrientador =
+          ambitosOrientador.map((ambito) => ({
+            gradoId: ambito.gradoId,
+            grupoId: ambito.grupoId,
+          }));
+      }
+
+      if (rol === 'coordinador') {
+        body.ambitosCoordinador =
           ambitosOrientador.map((ambito) => ({
             gradoId: ambito.gradoId,
             grupoId: ambito.grupoId,
@@ -913,15 +934,19 @@ export default function RegisterUserScreen({
         </View>
       )}
 
-      {rol === 'orientador' && (
+      {(rol === 'orientador' ||
+        rol === 'coordinador') && (
         <View style={styles.infoBox}>
           <Text style={styles.sectionTitle}>
-            Ámbito de atención
+            {rol === 'coordinador'
+              ? 'Ámbito de coordinación'
+              : 'Ámbito de atención'}
           </Text>
 
           <Text style={styles.infoText}>
-            Seleccione todos los pares de grado y
-            grupo que tendrá asignados el orientador.
+            {rol === 'coordinador'
+              ? 'Seleccione los grupos que tendrá asignados el coordinador. El Administrador puede elegir cualquier grupo activo; un Coordinador solo puede delegar grupos de su propio ámbito.'
+              : 'Seleccione todos los pares de grado y grupo que tendrá asignados el orientador.'}
           </Text>
 
           <Text style={styles.label}>
@@ -979,6 +1004,12 @@ export default function RegisterUserScreen({
                     Cargando grupos...
                   </Text>
                 </View>
+              ) : gruposAmbito.length === 0 ? (
+                <Text style={styles.infoText}>
+                  {rol === 'coordinador'
+                    ? 'No tienes grupos autorizados para delegar en este grado.'
+                    : 'Este grado no tiene grupos activos disponibles.'}
+                </Text>
               ) : (
                 <View style={styles.optionsContainer}>
                   {gruposAmbito.map((grupo) => {

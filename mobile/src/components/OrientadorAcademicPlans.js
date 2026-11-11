@@ -527,7 +527,17 @@ export default function OrientadorAcademicPlans({
   }, [estudianteId, apiUrl, accessToken]);
 
   useEffect(() => {
-    cargar();
+    let activo = true;
+
+    Promise.resolve().then(() => {
+      if (activo) {
+        cargar();
+      }
+    });
+
+    return () => {
+      activo = false;
+    };
   }, [cargar]);
 
   // ====================================================

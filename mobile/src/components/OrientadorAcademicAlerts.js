@@ -1,6 +1,7 @@
 import React, {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 
@@ -134,26 +135,86 @@ export default function OrientadorAcademicAlerts({
   const [actualizando, setActualizando] =
     useState(false);
   const [error, setError] = useState('');
+  const [errorPaginacion, setErrorPaginacion] =
+    useState('');
+  const [pagina, setPagina] = useState(1);
+  const [totalPaginas, setTotalPaginas] =
+    useState(1);
+  const [totalAlertas, setTotalAlertas] =
+    useState(0);
+  const [cargandoMas, setCargandoMas] =
+    useState(false);
+  const solicitudRef = useRef(0);
 
-  const cargarAlertas = useCallback(async () => {
+  const cargarAlertas = useCallback(async (
+    paginaSolicitada = 1,
+    anexar = false
+  ) => {
+    const solicitud = ++solicitudRef.current;
+
     try {
-      setError('');
+      if (anexar) {
+        setErrorPaginacion('');
+        setCargandoMas(true);
+      } else {
+        setError('');
+      }
 
       const resultado =
         await listarAlertasOrientador({
           apiUrl,
           accessToken,
+          pagina: paginaSolicitada,
         });
 
-      setAlertas(normalizarAlertas(resultado));
-    } catch (err) {
-      setError(
-        err.message ||
-        'No fue posible cargar las alertas.'
+      if (solicitud !== solicitudRef.current) {
+        return;
+      }
+
+      const alertasPagina =
+        normalizarAlertas(resultado);
+
+      setAlertas((alertasActuales) =>
+        anexar
+          ? [
+              ...alertasActuales,
+              ...alertasPagina.filter(
+                (alerta) =>
+                  !alertasActuales.some(
+                    (actual) =>
+                      String(actual.id) ===
+                      String(alerta.id)
+                  )
+              ),
+            ]
+          : alertasPagina
       );
+      setPagina(paginaSolicitada);
+      setTotalPaginas(
+        resultado?.paginacion?.totalPaginas ?? 1
+      );
+      setTotalAlertas(
+        resultado?.paginacion?.total ??
+          alertasPagina.length
+      );
+    } catch (err) {
+      const mensaje =
+        err.message ||
+        'No fue posible cargar las alertas.';
+
+      if (solicitud === solicitudRef.current) {
+        if (anexar) {
+          setErrorPaginacion(mensaje);
+        } else {
+          setError(mensaje);
+        }
+      }
     } finally {
-      setCargando(false);
-      setActualizando(false);
+      if (solicitud === solicitudRef.current) {
+        setCargando(false);
+        setActualizando(false);
+        setCargandoMas(false);
+      }
     }
   }, [apiUrl, accessToken]);
 
@@ -168,13 +229,26 @@ export default function OrientadorAcademicAlerts({
 
     return () => {
       activo = false;
+      solicitudRef.current += 1;
     };
   }, [cargarAlertas]);
 
   const actualizar = useCallback(() => {
     setActualizando(true);
-    cargarAlertas();
+    setPagina(1);
+    cargarAlertas(1);
   }, [cargarAlertas]);
+
+  const cargarMas = () => {
+    if (
+      cargandoMas ||
+      pagina >= totalPaginas
+    ) {
+      return;
+    }
+
+    cargarAlertas(pagina + 1, true);
+  };
 
   const resumen = alertas.reduce(
     (conteo, alerta) => {
@@ -271,7 +345,7 @@ export default function OrientadorAcademicAlerts({
               </Text>
 
               <Text style={styles.resumenCaption}>
-                {resumen.total} {resumen.total === 1
+                {resumen.total} de {totalAlertas} {totalAlertas === 1
                   ? 'alerta cargada'
                   : 'alertas cargadas'}
               </Text>
@@ -527,6 +601,54 @@ export default function OrientadorAcademicAlerts({
                   </TouchableOpacity>
                 );
               })}
+              {pagina < totalPaginas && (
+                <View style={styles.paginacion}>
+                  {errorPaginacion ? (
+                    <>
+                      <Text style={styles.errorTexto}>
+                        {errorPaginacion}
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.cargarMasBoton}
+                        onPress={cargarMas}
+                        accessibilityRole="button"
+                      >
+                        <Text style={styles.cargarMasTexto}>
+                          Reintentar carga
+                        </Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <TouchableOpacity
+                      style={styles.cargarMasBoton}
+                      onPress={cargarMas}
+                      disabled={cargandoMas}
+                      accessibilityRole="button"
+                    >
+                      {cargandoMas ? (
+                        <ActivityIndicator
+                          size="small"
+                          color={COLORS.blue}
+                        />
+                      ) : (
+                        <Ionicons
+                          name="chevron-down"
+                          size={18}
+                          color={COLORS.blue}
+                        />
+                      )}
+                      <Text style={styles.cargarMasTexto}>
+                        {cargandoMas
+                          ? 'Cargando alertas...'
+                          : 'Cargar más alertas'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
+                  <Text style={styles.paginacionTexto}>
+                    Mostrando {alertas.length} de {totalAlertas}
+                  </Text>
+                </View>
+              )}
             </ScrollView>
           )}
         </>
@@ -716,6 +838,32 @@ const styles = StyleSheet.create({
   },
   lista: {
     maxHeight: 520,
+  },
+  paginacion: {
+    alignItems: 'center',
+    paddingVertical: 10,
+    gap: 7,
+  },
+  cargarMasBoton: {
+    minHeight: 42,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 7,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: COLORS.background,
+  },
+  cargarMasTexto: {
+    color: COLORS.blue,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  paginacionTexto: {
+    color: COLORS.muted,
+    fontSize: 11,
   },
   alertaCard: {
     borderWidth: 1,

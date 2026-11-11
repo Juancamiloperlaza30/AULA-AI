@@ -923,9 +923,16 @@ export default function GuardianAcademicAlerts({
   );
 
   useEffect(() => {
-    consultarAlertas();
+    let activo = true;
+
+    Promise.resolve().then(() => {
+      if (activo) {
+        consultarAlertas();
+      }
+    });
 
     return () => {
+      activo = false;
       cancelarConsulta();
     };
   }, [

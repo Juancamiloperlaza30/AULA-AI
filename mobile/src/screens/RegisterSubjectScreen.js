@@ -100,7 +100,11 @@ export default function RegisterSubjectScreen({
       }
 
       setGrados(gradosData.grados || []);
-      setPeriodos(periodosData.periodos || []);
+      setPeriodos(
+        (periodosData.periodos || []).filter(
+          (periodo) => periodo.activo
+        )
+      );
     } catch (error) {
       console.log(
         'Error cargando datos:',
@@ -129,7 +133,7 @@ export default function RegisterSubjectScreen({
       setBusquedaGrupoAplicada('');
 
       const response = await fetch(
-        `${apiUrl}/api/academic/grados/${idGrado}/grupos`,
+        `${apiUrl}/api/academic/grados/${idGrado}/grupos-asignables-coordinador`,
         {
           headers: {
             Authorization:

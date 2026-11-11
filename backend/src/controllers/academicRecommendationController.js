@@ -37,6 +37,18 @@ const validarRecomendacionId = (recomendacionId) => {
   );
 };
 
+const prepararRecomendacionParaAcudiente = (
+  recomendacion
+) => ({
+  id: recomendacion.id,
+  origen: recomendacion.origen,
+  indicadores: recomendacion.indicadores,
+  contenido: recomendacion.contenido,
+  estado: recomendacion.estado,
+  created_at: recomendacion.created_at,
+  updated_at: recomendacion.updated_at,
+});
+
 // ======================================================
 // AUTORIZACIÓN
 // ======================================================
@@ -101,11 +113,22 @@ const listarRecomendacionesEstudiante = async (
         limite: 20,
       });
 
+    const datos =
+      req.usuario.rol === 'acudiente'
+        ? {
+            ...resultado,
+            recomendaciones:
+              resultado.recomendaciones.map(
+                prepararRecomendacionParaAcudiente
+              ),
+          }
+        : resultado;
+
     return res.status(200).json({
       success: true,
       message:
         'Recomendaciones académicas consultadas correctamente.',
-      data: resultado,
+      data: datos,
     });
   } catch (error) {
     console.error(
@@ -188,11 +211,18 @@ const obtenerRecomendacionEstudiante = async (
       });
     }
 
+    const datos =
+      req.usuario.rol === 'acudiente'
+        ? prepararRecomendacionParaAcudiente(
+            recomendacion
+          )
+        : recomendacion;
+
     return res.status(200).json({
       success: true,
       message:
         'Recomendación académica consultada correctamente.',
-      data: recomendacion,
+      data: datos,
     });
   } catch (error) {
     console.error(

@@ -6,6 +6,8 @@ const {
 } = require('../services/pushService');
 
 const ESTADO_PENDIENTE = 'pendiente_revision';
+const LIMITE_PAGINA_EXCUSAS = 50;
+const LIMITE_MAXIMO_PAGINA_EXCUSAS = 100;
 
 function obtenerIdExcusa(req, res) {
   const id = Number(req.params.excusaId);
@@ -127,6 +129,32 @@ async function obtenerExcusaAutorizada(req, res) {
 
 async function listarExcusasRevision(req, res) {
   try {
+    const pagina = req.query.pagina === undefined
+      ? 1
+      : Number(req.query.pagina);
+    const limite = req.query.limite === undefined
+      ? LIMITE_PAGINA_EXCUSAS
+      : Number(req.query.limite);
+
+    if (
+      !Number.isSafeInteger(pagina) ||
+      pagina < 1 ||
+      !Number.isSafeInteger(limite) ||
+      limite < 1 ||
+      limite > LIMITE_MAXIMO_PAGINA_EXCUSAS ||
+      !Number.isSafeInteger((pagina - 1) * limite) ||
+      !Number.isSafeInteger(
+        (pagina - 1) * limite + limite
+      )
+    ) {
+      return res.status(400).json({
+        ok: false,
+        mensaje: 'La paginación solicitada no es válida.',
+      });
+    }
+
+    const desde = (pagina - 1) * limite;
+
     let consulta = supabaseAdmin
       .from('excusas')
       .select(`
@@ -142,7 +170,8 @@ async function listarExcusasRevision(req, res) {
         created_at
       `)
       .order('created_at', { ascending: false })
-      .limit(200);
+      .order('id', { ascending: false })
+      .range(desde, desde + limite);
 
     if (req.usuario.rol === 'docente') {
       const { data: asistencias, error } =
@@ -163,6 +192,9 @@ async function listarExcusasRevision(req, res) {
         return res.json({
           ok: true,
           excusas: [],
+          pagina,
+          limite,
+          hayMas: false,
         });
       }
 
@@ -175,9 +207,14 @@ async function listarExcusasRevision(req, res) {
       throw error;
     }
 
+    const resultados = data || [];
+
     return res.json({
       ok: true,
-      excusas: data || [],
+      excusas: resultados.slice(0, limite),
+      pagina,
+      limite,
+      hayMas: resultados.length > limite,
     });
   } catch (error) {
     return responderError(

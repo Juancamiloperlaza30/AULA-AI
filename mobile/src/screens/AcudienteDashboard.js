@@ -27,8 +27,14 @@ import ProfileDashboardHeader from
 import GuardianAcademicAlerts from
   '../components/GuardianAcademicAlerts';
 
+import GuardianAcademicRecommendations from
+  '../components/GuardianAcademicRecommendations';
+
 import GuardianExcuses from
   '../components/GuardianExcuses';
+
+import GuardianNotifications from
+  '../components/GuardianNotifications';
 
 // =====================================================
 // AULA-AI | HU-08
@@ -67,6 +73,7 @@ const PESTANAS = [
   ['notas', 'Calificaciones', 'ribbon-outline'],
   ['actividades', 'Actividades', 'clipboard-outline'],
   ['asistencia', 'Asistencia', 'calendar-outline'],
+  ['acompanamiento', 'Acompañamiento', 'sparkles-outline'],
   ['excusas', 'Excusas', 'document-text-outline'],
   ['alertas', 'Alertas', 'notifications-outline'],
 ];
@@ -514,8 +521,10 @@ export default function AcudienteDashboard({
   usuario,
   apiUrl,
   accessToken,
+  onRefreshSession,
   onLogout,
   onMyCommunications,
+  onLocation,
 }) {
   const [pantalla, setPantalla] =
     useState('inicio');
@@ -1095,11 +1104,45 @@ export default function AcudienteDashboard({
 
           <View style={styles.menuTextContainer}>
             <Text style={styles.menuTitulo}>
-              Alertas y notificaciones
+              Alertas académicas
             </Text>
 
             <Text style={styles.menuDescripcion}>
-              Avisos académicos e institucionales.
+              Consulta las alertas académicas de tus estudiantes vinculados.
+            </Text>
+          </View>
+
+          <Ionicons
+            name="arrow-forward-circle-outline"
+            size={24}
+            color={C.cyan}
+          />
+        </View>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.menuCard}
+        onPress={() => setPantalla('notificaciones')}
+        activeOpacity={0.85}
+        accessibilityRole="button"
+        accessibilityLabel="Consultar notificaciones de tu cuenta"
+      >
+        <View style={styles.menuCardTop}>
+          <View style={[styles.menuIcon, styles.menuIconAmber]}>
+            <Ionicons
+              name="notifications-outline"
+              size={24}
+              color={C.amarillo}
+            />
+          </View>
+
+          <View style={styles.menuTextContainer}>
+            <Text style={styles.menuTitulo}>
+              Notificaciones
+            </Text>
+
+            <Text style={styles.menuDescripcion}>
+              Consulta las notificaciones recibidas en tu cuenta y marca las que ya leíste.
             </Text>
           </View>
 
@@ -2057,7 +2100,14 @@ export default function AcudienteDashboard({
         </View>
       )}
 
-      {tab === 'alertas' || tab === 'excusas' ? (
+      {tab === 'acompanamiento' ? (
+        <GuardianAcademicRecommendations
+          key={estudiante.id}
+          apiUrl={apiUrl}
+          accessToken={accessToken}
+          estudianteId={estudiante.id}
+        />
+      ) : tab === 'alertas' || tab === 'excusas' ? (
         tab === 'alertas' && (
           <View style={styles.contenido}>
             <GuardianAcademicAlerts
@@ -2198,6 +2248,7 @@ export default function AcudienteDashboard({
         key={usuario?.id}
         apiUrl={apiUrl}
         accessToken={accessToken}
+        onLocation={onLocation}
         guardianPremium
       />
 
@@ -2231,6 +2282,16 @@ export default function AcudienteDashboard({
             {renderLista()}
           </>
         )
+      )}
+
+      {pantalla === 'notificaciones' && (
+        <GuardianNotifications
+          apiUrl={apiUrl}
+          accessToken={accessToken}
+          onRefreshSession={onRefreshSession}
+          onOpenCommunications={onMyCommunications}
+          onOpenAlerts={abrirAlertas}
+        />
       )}
 
       <TouchableOpacity
