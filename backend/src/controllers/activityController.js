@@ -998,53 +998,81 @@ const listarActividadesAdministrativas =
           });
         }
 
-        const {
-          data: asignaciones,
-          error: errorAsignaciones,
-        } = await supabaseAdmin
-          .from(
-            'materia_grupo_periodo'
-          )
-          .select(`
-            id,
-            grado_id,
-            grupo_id
-          `);
+        const ambitosValidos = ambitos.map((ambito) => {
+          const gradoId = Number(ambito.grado_id);
+          const grupoId = Number(ambito.grupo_id);
 
-        if (errorAsignaciones) {
-          console.error(
-            'Error consultando asignaciones académicas:',
-            errorAsignaciones.message
-          );
+          if (
+            !Number.isSafeInteger(gradoId) ||
+            gradoId <= 0 ||
+            !Number.isSafeInteger(grupoId) ||
+            grupoId <= 0
+          ) {
+            throw new Error(
+              'Identificadores invalidos en el ambito del coordinador.'
+            );
+          }
 
-          return res.status(500).json({
-            success: false,
-            message:
-              'No fue posible consultar las asignaciones académicas.',
-          });
-        }
+          return {
+            gradoId,
+            grupoId,
+          };
+        });
 
-        const ambitosPermitidos =
-          new Set(
-            ambitos.map(
-              (ambito) =>
-                `${ambito.grado_id}-${ambito.grupo_id}`
+        const filtros = [
+          ...new Set(
+            ambitosValidos.map(
+              ({ gradoId, grupoId }) =>
+                `and(grado_id.eq.${gradoId},grupo_id.eq.${grupoId})`
             )
-          );
+          ),
+        ];
 
-        idsAsignacionesPermitidas =
-          (asignaciones || [])
-            .filter(
-              (asignacion) =>
-                ambitosPermitidos.has(
-                  `${asignacion.grado_id}-${asignacion.grupo_id}`
-                )
-            )
-            .map(
-              (asignacion) =>
-                asignacion.id
+        const idsEncontrados = [];
+        const tamanoPagina = 500;
+
+        for (let indice = 0; indice < filtros.length; indice += 20) {
+          const bloqueFiltros = filtros
+            .slice(indice, indice + 20)
+            .join(',');
+
+          let desde = 0;
+          let continuar = true;
+
+          while (continuar) {
+            const { data: asignaciones, error: errorAsignaciones } =
+              await supabaseAdmin
+                .from('materia_grupo_periodo')
+                .select('id')
+                .or(bloqueFiltros)
+                .order('id', { ascending: true })
+                .range(desde, desde + tamanoPagina - 1);
+
+            if (errorAsignaciones) {
+              console.error(
+                'Error consultando asignaciones autorizadas:',
+                errorAsignaciones.message
+              );
+
+              return res.status(500).json({
+                success: false,
+                message:
+                  'No fue posible consultar las asignaciones academicas.',
+              });
+            }
+
+            idsEncontrados.push(
+              ...(asignaciones || []).map((asignacion) => asignacion.id)
             );
 
+            continuar = (asignaciones || []).length === tamanoPagina;
+            desde += tamanoPagina;
+          }
+        }
+
+        idsAsignacionesPermitidas = [
+          ...new Set(idsEncontrados),
+        ];
         if (
           idsAsignacionesPermitidas.length ===
           0
@@ -1121,34 +1149,46 @@ const listarActividadesAdministrativas =
           );
       }
 
-      const {
-        data,
-        error,
-      } =
-        await consulta.order(
-          'fecha_entrega',
-          {
-            ascending: true,
-          }
-        );
+      // Consultar actividades en lotes de 500 registros.
+      const actividades = [];
+      const tamanoLote = 500;
+      let desde = 0;
 
-      if (error) {
-        console.error(
-          'Error consultando actividades administrativas:',
-          error.message
-        );
+      // Aplicar el orden una sola vez para evitar duplicarlo por lote.
+      consulta = consulta
+        .order('fecha_entrega', { ascending: true })
+        .order('id', { ascending: true });
 
-        return res.status(500).json({
-          success: false,
-          message:
-            'No fue posible consultar las actividades académicas.',
-        });
+      while (true) {
+        const { data, error } = await consulta
+          .range(desde, desde + tamanoLote - 1);
+
+        if (error) {
+          console.error(
+            'Error consultando actividades administrativas:',
+            error.message
+          );
+
+          return res.status(500).json({
+            success: false,
+            message:
+              'No fue posible consultar las actividades académicas.',
+          });
+        }
+
+        const lote = data || [];
+        actividades.push(...lote);
+
+        if (lote.length < tamanoLote) {
+          break;
+        }
+
+        desde += tamanoLote;
       }
 
       return res.status(200).json({
         success: true,
-        actividades:
-          data || [],
+        actividades,
       });
     } catch (error) {
       console.error(
