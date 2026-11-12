@@ -1,4 +1,4 @@
-'use strict';
+﻿'use strict';
 
 require('dotenv').config({ quiet: true });
 
@@ -12,7 +12,7 @@ const {
 
 const {
   generarRecomendacionesAcademicas,
-} = require('../src/services/academicOpenAIService');
+} = require('../src/services/academicGeminiService');
 
 const {
   guardarRecomendacionAcademica,
@@ -27,9 +27,9 @@ const ejecutarPrueba = async () => {
   console.log('PRUEBA DE ALMACENAMIENTO');
   console.log('====================================');
 
-  if (process.env.OPENAI_ENABLED !== 'false') {
+  if (process.env.GEMINI_ENABLED !== 'false') {
     throw new Error(
-      'La prueba requiere OPENAI_ENABLED=false.'
+      'La prueba requiere GEMINI_ENABLED=false.'
     );
   }
 
@@ -113,3 +113,4 @@ ejecutarPrueba().catch((error) => {
 
   process.exitCode = 1;
 });
+
