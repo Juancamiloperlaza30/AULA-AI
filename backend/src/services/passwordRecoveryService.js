@@ -164,6 +164,21 @@ const recuperarPasswordSeguro = async ({
     .maybeSingle();
 
   if (errorPerfil || perfilActualizado?.id !== usuarioId) {
+    // Diagnostico interno: nunca registrar contrasenas, OTP ni tokens.
+    console.error('PASSWORD_RECOVERY_PROFILE_UPDATE_FAILED', {
+      codigo: 'PROFILE_UPDATE_FAILED',
+      supabaseCode:
+        typeof errorPerfil?.code === 'string'
+          ? errorPerfil.code
+          : null,
+      supabaseStatus:
+        typeof errorPerfil?.status === 'number'
+          ? errorPerfil.status
+          : null,
+      motivo: errorPerfil
+        ? 'SUPABASE_UPDATE_ERROR'
+        : 'PROFILE_NOT_RETURNED',
+    });
     try {
       const auditoriaRegistrada = await registrarAuditoria({
         usuarioId,
