@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 
 const {
 	login,
@@ -21,10 +21,13 @@ const {
   limitarSolicitudRecuperacion,
   limitarCompletarRecuperacion,
 } = require('../middleware/passwordRecoveryRateLimit');
+const {
+  limitarLogin,
+} = require('../middleware/loginRateLimit');
 const router = express.Router();
 
 // Iniciar sesión
-router.post('/login', login);
+router.post('/login', limitarLogin, login);
 
 // Cerrar sesión
 router.post(
