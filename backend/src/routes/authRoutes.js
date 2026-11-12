@@ -14,6 +14,13 @@ const {
 	verificarToken,
 } = require('../middleware/authMiddleware');
 
+const {
+  completarRecuperacionPassword,
+} = require('../controllers/passwordRecoveryController');
+const {
+  limitarSolicitudRecuperacion,
+  limitarCompletarRecuperacion,
+} = require('../middleware/passwordRecoveryRateLimit');
 const router = express.Router();
 
 // Iniciar sesión
@@ -28,8 +35,9 @@ router.post(
 
 // Solicitar recuperación de contraseña
 router.post(
-	'/recuperar-password',
-	recuperarPassword
+  '/recuperar-password',
+  limitarSolicitudRecuperacion,
+  recuperarPassword
 );
 
 router.post(
@@ -38,9 +46,11 @@ router.post(
 );
 
 router.post(
-	'/actualizar-password',
-	actualizarPassword
+  '/completar-recuperacion-password',
+  limitarCompletarRecuperacion,
+  completarRecuperacionPassword
 );
+// Ruta /actualizar-password deshabilitada por seguridad.
 
 router.put(
 	'/cambiar-password-inicial',
@@ -48,11 +58,7 @@ router.put(
 	cambiarPasswordInicial
 );
 
-router.put(
-	'/confirmar-recuperacion-password',
-	verificarToken,
-	confirmarRecuperacionPassword
-);
+// Ruta /confirmar-recuperacion-password deshabilitada temporalmente por seguridad.
 
 // Consultar la sesión y perfil actual del usuario
 router.get(
@@ -70,7 +76,7 @@ router.get(
 				rol: req.usuario.rol,
 				activo: req.usuario.activo,
 				debeCambiarPassword:
-					req.usuario.debe_cambiar_password === true,
+					req.usuario.debe_cambiar_password !== false,
 				passwordCambiadoAt:
 					req.usuario.password_cambiado_at || null,
 			},

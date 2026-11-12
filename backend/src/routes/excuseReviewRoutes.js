@@ -14,10 +14,12 @@
 
 const express = require('express');
 
+const {
+  requireAcademicAccess,
+} = require('../middleware/requireAcademicAccess');
 const router = express.Router();
 
 const {
-  verificarToken,
   permitirRoles,
 } = require('../middleware/authMiddleware');
 
@@ -34,7 +36,7 @@ const {
 } = require('../controllers/excuseReviewSupportController');
 
 // Autenticacion y autorizacion obligatorias.
-router.use(verificarToken);
+router.use(requireAcademicAccess);
 
 router.use(
   permitirRoles('docente', 'coordinador')

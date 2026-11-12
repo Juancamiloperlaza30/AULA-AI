@@ -6,7 +6,6 @@
 const express = require('express');
 
 const {
-  verificarToken,
   permitirRoles,
 } = require('../middleware/authMiddleware');
 
@@ -23,10 +22,13 @@ const {
   '../controllers/academicRecommendationGenerationController'
 );
 
+const {
+  requireAcademicAccess,
+} = require('../middleware/requireAcademicAccess');
 const router = express.Router();
 
 // Todas las rutas requieren autenticación.
-router.use(verificarToken);
+router.use(requireAcademicAccess);
 
 // Los roles autorizados pueden acceder al módulo.
 // Cada controlador valida el estudiante solicitado.

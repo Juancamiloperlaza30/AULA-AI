@@ -8,7 +8,6 @@
 const express = require('express');
 
 const {
-  verificarToken,
   permitirRoles,
 } = require('../middleware/authMiddleware');
 
@@ -19,6 +18,9 @@ const {
   modificarPlanAcompanamiento,
 } = require('../controllers/academicPlanController');
 
+const {
+  requireAcademicAccess,
+} = require('../middleware/requireAcademicAccess');
 const router = express.Router();
 
 // ======================================================
@@ -26,7 +28,7 @@ const router = express.Router();
 // ======================================================
 
 // Todas las rutas requieren un JWT válido.
-router.use(verificarToken);
+router.use(requireAcademicAccess);
 
 // ======================================================
 // CONSULTAR PLANES DE UN ESTUDIANTE

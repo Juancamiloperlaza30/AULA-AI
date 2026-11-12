@@ -13,11 +13,6 @@ import {
   ScrollView,
 } from 'react-native';
 
-import {
-  supabase,
-  supabaseConfigurado,
-} from '../../supabaseClient';
-
 const ResetPasswordScreen = ({
   apiUrl,
   recoveryEmail,
@@ -44,259 +39,149 @@ const ResetPasswordScreen = ({
     setGuardando,
   ] = useState(false);
 
-  const [
-    sesionVerificada,
-    setSesionVerificada,
-  ] = useState(Boolean(recoverySession));
+  const finalizarRecuperacion = async () => {
+    try {
+      await onPasswordChanged();
+    } catch (error) {
+      console.error(
+        'Error finalizando recuperación:',
+        error
+      );
 
-  const finalizarRecuperacion =
-    async () => {
-      try {
-        const {
-          error,
-        } = await supabase.auth.signOut();
+      Alert.alert(
+        'Aviso',
+        'La contraseña cambió, pero no fue posible volver al inicio de sesión.'
+      );
+    }
+  };
 
-        if (error) {
-          console.error(
-            'Error cerrando sesión de recuperación:',
-            error.message
-          );
+  const cambiarPassword = async () => {
+    if (guardando) {
+      return;
+    }
+
+    if (!recoveryEmail?.trim()) {
+      Alert.alert(
+        'Correo no disponible',
+        'Inicia nuevamente la recuperación desde la pantalla de acceso.'
+      );
+      return;
+    }
+
+    if (!codigoRecuperacion.trim()) {
+      Alert.alert(
+        'Código obligatorio',
+        'Ingresa el código de recuperación que recibiste por correo.'
+      );
+      return;
+    }
+
+    if (!nuevaContrasena.trim()) {
+      Alert.alert(
+        'Campo obligatorio',
+        'Ingrese una nueva contraseña.'
+      );
+      return;
+    }
+
+    if (!confirmarContrasena.trim()) {
+      Alert.alert(
+        'Campo obligatorio',
+        'Confirme la nueva contraseña.'
+      );
+      return;
+    }
+
+    if (nuevaContrasena.length < 8) {
+      Alert.alert(
+        'Contraseña no segura',
+        'La contraseña debe tener mínimo 8 caracteres.'
+      );
+      return;
+    }
+
+    if (
+      !/[A-Z]/.test(nuevaContrasena) ||
+      !/[a-z]/.test(nuevaContrasena) ||
+      !/[0-9]/.test(nuevaContrasena)
+    ) {
+      Alert.alert(
+        'Contraseña no segura',
+        'Debe incluir al menos una mayúscula, una minúscula y un número.'
+      );
+      return;
+    }
+
+    if (nuevaContrasena !== confirmarContrasena) {
+      Alert.alert(
+        'Las contraseñas no coinciden',
+        'Verifique la nueva contraseña y su confirmación.'
+      );
+      return;
+    }
+
+    try {
+      setGuardando(true);
+
+      const response = await fetch(
+        `${apiUrl}/api/auth/completar-recuperacion-password`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            correo: recoveryEmail.trim().toLowerCase(),
+            codigo: codigoRecuperacion.trim(),
+            nuevaContrasena,
+            confirmarContrasena,
+          }),
         }
-      } catch (error) {
-        console.error(
-          'Error cerrando sesión de recuperación:',
-          error
-        );
-      } finally {
-        await onPasswordChanged();
-      }
-    };
+      );
 
-  const cambiarPassword =
-    async () => {
-      if (
-        !supabaseConfigurado ||
-        !supabase
-      ) {
-        Alert.alert(
-          'Configuración incompleta',
-          'La recuperación de contraseña no está disponible en esta versión de AULA-AI.'
-        );
+      const data = await response.json();
 
-        return;
-      }
-
-      if (
-        !recoverySession &&
-        !sesionVerificada &&
-        !codigoRecuperacion.trim()
-      ) {
-        Alert.alert(
-          'Código obligatorio',
-          'Ingresa el código de recuperación que recibiste por correo.'
-        );
-
-        return;
-      }
-
-      if (
-        !nuevaContrasena.trim()
-      ) {
-        Alert.alert(
-          'Campo obligatorio',
-          'Ingrese una nueva contraseña.'
-        );
-
-        return;
-      }
-
-      if (
-        !confirmarContrasena.trim()
-      ) {
-        Alert.alert(
-          'Campo obligatorio',
-          'Confirme la nueva contraseña.'
-        );
-
-        return;
-      }
-
-      if (
-        nuevaContrasena.length < 8
-      ) {
-        Alert.alert(
-          'Contraseña no segura',
-          'La contraseña debe tener mínimo 8 caracteres.'
-        );
-
-        return;
-      }
-
-      const tieneMayuscula =
-        /[A-Z]/.test(
-          nuevaContrasena
-        );
-
-      const tieneMinuscula =
-        /[a-z]/.test(
-          nuevaContrasena
-        );
-
-      const tieneNumero =
-        /[0-9]/.test(
-          nuevaContrasena
-        );
-
-      if (
-        !tieneMayuscula ||
-        !tieneMinuscula ||
-        !tieneNumero
-      ) {
-        Alert.alert(
-          'Contraseña no segura',
-          'Debe incluir al menos una mayúscula, una minúscula y un número.'
-        );
-
-        return;
-      }
-
-      if (
-        nuevaContrasena !==
-        confirmarContrasena
-      ) {
-        Alert.alert(
-          'Las contraseñas no coinciden',
-          'Verifique la nueva contraseña y su confirmación.'
-        );
-
-        return;
-      }
-
-      try {
-        setGuardando(true);
-
-        if (
-          !recoverySession &&
-          !sesionVerificada
-        ) {
-          if (!recoveryEmail) {
-            throw new Error(
-              'No se encontró el correo asociado a la solicitud. Inicia nuevamente la recuperación.'
-            );
-          }
-
-          const {
-            data: recoveryData,
-            error: recoveryError,
-          } =
-            await supabase.auth.verifyOtp({
-              email: recoveryEmail,
-              token:
-                codigoRecuperacion.trim(),
-              type: 'recovery',
-            });
-
-          if (recoveryError) {
-            throw recoveryError;
-          }
-
-          if (!recoveryData?.session) {
-            throw new Error(
-              'El código no generó una sesión de recuperación válida. Verifica el código o solicita uno nuevo.'
-            );
-          }
-
-          setSesionVerificada(true);
-        }
-
-        const {
-          error: updateError,
-        } =
-          await supabase.auth.updateUser({
-            password:
-              nuevaContrasena,
-          });
-
-        if (updateError) {
-          throw updateError;
-        }
-
-        const {
-          data: sessionData,
-          error: sessionError,
-        } =
-          await supabase.auth.getSession();
-
-        if (sessionError) {
-          throw sessionError;
-        }
-
-        const recoveryAccessToken =
-          sessionData?.session
-            ?.access_token;
-
-        if (!recoveryAccessToken) {
-          throw new Error(
-            'No se encontró la sesión segura de recuperación.'
-          );
-        }
-
-        const response =
-          await fetch(
-            `${apiUrl}/api/auth/confirmar-recuperacion-password`,
-            {
-              method: 'PUT',
-              headers: {
-                Authorization:
-                  `Bearer ${recoveryAccessToken}`,
-                'Content-Type':
-                  'application/json',
-              },
-            }
-          );
-
-        const data =
-          await response.json();
-
-        if (!response.ok) {
-          console.log(
-            'Error sincronizando recuperación:',
-            data
-          );
-
+      if (!response.ok || data.success !== true) {
+        if (data.code === 'PROFILE_UPDATE_FAILED') {
           Alert.alert(
-            'Contraseña actualizada',
-            'La contraseña fue cambiada en Supabase, pero no fue posible finalizar la sincronización del perfil. Intente nuevamente.'
+            'Recuperación parcialmente completada',
+            'La contraseña cambió, pero no se pudo actualizar el perfil institucional. Contacta al administrador antes de volver a intentarlo.'
           );
-
           return;
         }
 
         Alert.alert(
-          'Contraseña actualizada',
-          'Tu contraseña fue restablecida correctamente. Ya puedes iniciar sesión con tu nueva contraseña.',
-          [
-            {
-              text: 'Ir al inicio de sesión',
-              onPress: finalizarRecuperacion,
-            },
-          ]
-        );
-      } catch (error) {
-        console.log(
-          'Error restableciendo contraseña:',
-          error
-        );
-
-        Alert.alert(
           'No fue posible cambiar la contraseña',
-          error.message ||
-            'El código puede ser incorrecto o haber vencido. Solicita una nueva recuperación.'
+          data.message ||
+            'Verifica el código o solicita una nueva recuperación.'
         );
-      } finally {
-        setGuardando(false);
+        return;
       }
-    };
+
+      Alert.alert(
+        'Contraseña actualizada',
+        'Tu contraseña fue restablecida correctamente. Ya puedes iniciar sesión con tu nueva contraseña.',
+        [
+          {
+            text: 'Ir al inicio de sesión',
+            onPress: finalizarRecuperacion,
+          },
+        ]
+      );
+    } catch (error) {
+      console.error(
+        'Error restableciendo contraseña:',
+        error.message
+      );
+
+      Alert.alert(
+        'Error de conexión',
+        'No fue posible comunicarse con el servidor de AULA-AI.'
+      );
+    } finally {
+      setGuardando(false);
+    }
+  };
 
   return (
     <ScrollView
@@ -321,26 +206,19 @@ const ResetPasswordScreen = ({
           segura para tu cuenta.
         </Text>
 
-        {!recoverySession &&
-          !sesionVerificada && (
-            <>
-              <Text style={styles.label}>
-                Código de recuperación
-              </Text>
+        <Text style={styles.label}>
+          Código de recuperación
+        </Text>
 
-              <TextInput
-                style={styles.input}
-                value={codigoRecuperacion}
-                onChangeText={
-                  setCodigoRecuperacion
-                }
-                placeholder="Código recibido por correo"
-                keyboardType="number-pad"
-                autoCapitalize="none"
-                editable={!guardando}
-              />
-            </>
-          )}
+        <TextInput
+          style={styles.input}
+          value={codigoRecuperacion}
+          onChangeText={setCodigoRecuperacion}
+          placeholder="Código recibido por correo"
+          keyboardType="number-pad"
+          autoCapitalize="none"
+          editable={!guardando}
+        />
 
         <Text style={styles.label}>
           Nueva contraseña

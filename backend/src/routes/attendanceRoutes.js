@@ -1,7 +1,6 @@
 const express = require('express');
 
 const {
-  verificarToken,
   permitirRoles,
 } = require('../middleware/authMiddleware');
 
@@ -30,6 +29,9 @@ const {
   consultarMiHistorial,
 } = require('../controllers/studentAttendanceController');
 
+const {
+  requireAcademicAccess,
+} = require('../middleware/requireAcademicAccess');
 const router = express.Router();
 
 // ==========================================
@@ -38,7 +40,7 @@ const router = express.Router();
 // Todas las rutas requieren sesión válida.
 // ==========================================
 
-router.use(verificarToken);
+router.use(requireAcademicAccess);
 
 // ==========================================
 // HU-07 - ESTUDIANTE

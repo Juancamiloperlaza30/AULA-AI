@@ -16,6 +16,9 @@
 
 const express = require('express');
 
+const {
+  requireAcademicAccess,
+} = require('../middleware/requireAcademicAccess');
 const router = express.Router();
 
 // ======================================================
@@ -23,7 +26,6 @@ const router = express.Router();
 // ======================================================
 
 const {
-  verificarToken,
   permitirRoles,
 } = require('../middleware/authMiddleware');
 
@@ -100,7 +102,7 @@ const {
 // PROTEGER TODAS LAS RUTAS DEL ACUDIENTE
 // ======================================================
 
-router.use(verificarToken);
+router.use(requireAcademicAccess);
 
 router.use(
   permitirRoles('acudiente')

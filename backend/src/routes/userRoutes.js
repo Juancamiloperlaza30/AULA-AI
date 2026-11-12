@@ -159,10 +159,21 @@ router.post(
  * La validación del token de activación
  * se realiza dentro del controlador.
  */
+/*
+ * AUDITORIA DE SEGURIDAD - AULA-AI
+ *
+ * Ruta de activacion deshabilitada temporalmente.
+ * Un accessToken valido no demuestra que exista
+ * una invitacion de activacion pendiente.
+ *
+ * No reactivar sin implementar una validacion
+ * especifica de activacion y pruebas de seguridad.
+ *
 router.post(
   '/activar-cuenta',
   activarCuenta
 );
+*/
 
 
 /**

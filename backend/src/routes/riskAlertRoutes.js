@@ -9,7 +9,6 @@
 const express = require('express');
 
 const {
-  verificarToken,
   permitirRoles,
 } = require('../middleware/authMiddleware');
 
@@ -22,13 +21,16 @@ const {
   cerrarAlertaAcademica,
 } = require('../controllers/riskAlertController');
 
+const {
+  requireAcademicAccess,
+} = require('../middleware/requireAcademicAccess');
 const router = express.Router();
 
 // ======================================================
 // SEGURIDAD GENERAL DEL MÓDULO
 // ======================================================
 
-router.use(verificarToken);
+router.use(requireAcademicAccess);
 router.use(permitirRoles('orientador'));
 
 // ======================================================

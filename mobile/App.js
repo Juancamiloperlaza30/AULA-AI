@@ -8,10 +8,6 @@ import {
   useState,
 } from 'react';
 
-import {
-  supabase,
-  supabaseConfigurado,
-} from './supabaseClient';
 
 import {
   AppState,
@@ -190,17 +186,9 @@ export default function App() {
   ] = useState(false);
 
   const [
-    sesionRecuperacion,
-    setSesionRecuperacion,
-  ] = useState(null);
-
-  const [
     correoRecuperacion,
     setCorreoRecuperacion,
   ] = useState(null);
-
-  const procesandoEnlaceRecuperacion =
-    useRef(false);
 
   const renovacionSesionEnCurso = useRef(null);
 
@@ -573,128 +561,12 @@ export default function App() {
     }
 
     if (esRecuperacion) {
-      if (
-        !supabaseConfigurado ||
-        !supabase
-      ) {
-        console.log(
-          'Supabase móvil no está configurado.'
-        );
-
-        return;
-      }
-
-      const query =
-        url.split('#')[0].split('?')[1] ||
-        '';
-      const fragment =
-        url.split('#')[1] || '';
-
-      const parametros =
-        new URLSearchParams(
-          `${query}&${fragment}`
-        );
-
-      const accessTokenRecuperacion =
-        parametros.get(
-          'access_token'
-        );
-
-      const refreshTokenRecuperacion =
-        parametros.get(
-          'refresh_token'
-        );
-
-      const tipo =
-        parametros.get('type');
-
-      if (
-        tipo &&
-        tipo !== 'recovery'
-      ) {
-        return;
-      }
-
-      if (
-        !accessTokenRecuperacion ||
-        !refreshTokenRecuperacion
-      ) {
-        Alert.alert(
-          'Enlace inválido',
-          'El enlace de recuperación no contiene una sesión válida.'
-        );
-
-        return;
-      }
-
-      if (
-        procesandoEnlaceRecuperacion.current
-      ) {
-        return;
-      }
-
-      procesandoEnlaceRecuperacion.current =
-        true;
-
-      let data;
-      let error;
-
-      try {
-        ({
-          data,
-          error,
-        } = await supabase.auth.setSession({
-          access_token:
-            accessTokenRecuperacion,
-          refresh_token:
-            refreshTokenRecuperacion,
-        }));
-      } catch (errorSesion) {
-        procesandoEnlaceRecuperacion.current =
-          false;
-
-        console.log(
-          'Error estableciendo sesión de recuperación:',
-          errorSesion
-        );
-
-        Alert.alert(
-          'Enlace inválido',
-          'No fue posible validar la sesión de recuperación. Solicite un nuevo enlace.'
-        );
-
-        return;
-      }
-
-      if (error || !data?.session) {
-        procesandoEnlaceRecuperacion.current =
-          false;
-
-        console.log(
-          'Error estableciendo sesión de recuperación:',
-          error?.message
-        );
-
-        Alert.alert(
-          'Enlace inválido',
-          'No fue posible validar la sesión de recuperación. Solicite un nuevo enlace.'
-        );
-
-        return;
-      }
-
-      console.log(
-        'Sesión de recuperación establecida correctamente.'
+      Alert.alert(
+        'Recuperación mediante código',
+        'Por seguridad, los enlaces antiguos ya no permiten restablecer contraseñas. Solicita un nuevo código desde la pantalla de inicio de sesión.'
       );
 
-      setSesionRecuperacion(
-        data.session
-      );
-      setCorreoRecuperacion(
-        data.session.user?.email || null
-      );
-
-      setRecuperandoPassword(true);
+      return;
     }
   };
 
@@ -1398,7 +1270,6 @@ export default function App() {
               setCorreoRecuperacion(
                 correoDestino
               );
-              setSesionRecuperacion(null);
               setRecuperandoPassword(true);
             },
           },
@@ -1645,19 +1516,13 @@ export default function App() {
 
   if (
     recuperandoPassword &&
-    (
-      sesionRecuperacion ||
-      correoRecuperacion
-    )
+    correoRecuperacion
   ) {
     return (
       <ResetPasswordScreen
         apiUrl={API_URL}
         recoveryEmail={
           correoRecuperacion
-        }
-        recoverySession={
-          sesionRecuperacion
         }
         onPasswordChanged={
           async () => {
@@ -1671,9 +1536,6 @@ export default function App() {
             setCorreoRecuperacion(
               null
             );
-
-            procesandoEnlaceRecuperacion.current =
-              false;
 
             await eliminarSesion();
 

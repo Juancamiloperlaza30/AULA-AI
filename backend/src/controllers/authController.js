@@ -183,7 +183,7 @@ const login = async (req, res) => {
         correo: usuario.correo,
         rol: usuario.rol,
         debeCambiarPassword:
-          usuario.debe_cambiar_password === true,
+          usuario.debe_cambiar_password !== false,
         passwordCambiadoAt:
           usuario.password_cambiado_at || null,
       },
@@ -447,7 +447,7 @@ const renovarSesion = async (req, res) => {
         rol: usuario.rol,
         activo: usuario.activo,
         debeCambiarPassword:
-          usuario.debe_cambiar_password === true,
+          usuario.debe_cambiar_password !== false,
         passwordCambiadoAt:
           usuario.password_cambiado_at || null,
       },
