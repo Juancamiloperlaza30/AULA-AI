@@ -957,47 +957,52 @@ const listarActividadesAdministrativas =
       // ==================================================
 
       if (rol === 'coordinador') {
-        const {
-          data: ambitos,
-          error: errorAmbitos,
-        } = await supabaseAdmin
-          .from('coordinador_ambito')
-          .select(`
-            grado_id,
-            grupo_id
-          `)
-          .eq(
-            'coordinador_id',
-            usuarioId
-          )
-          .eq(
-            'activo',
-            true
-          );
+        const ambitos = [];
+        const tamanoPaginaAmbitos = 500;
+        let desdeAmbitos = 0;
 
-        if (errorAmbitos) {
-          console.error(
-            'Error consultando ámbito del coordinador:',
-            errorAmbitos.message
-          );
+        while (true) {
+          const { data: paginaAmbitos, error: errorAmbitos } =
+            await supabaseAdmin
+              .from('coordinador_ambito')
+              .select('id, grado_id, grupo_id')
+              .eq('coordinador_id', usuarioId)
+              .eq('activo', true)
+              .order('id', { ascending: true })
+              .range(
+                desdeAmbitos,
+                desdeAmbitos + tamanoPaginaAmbitos - 1
+              );
 
-          return res.status(500).json({
-            success: false,
-            message:
-              'No fue posible consultar el ámbito del coordinador.',
-          });
+          if (errorAmbitos) {
+            console.error(
+              'Error consultando ámbito del coordinador:',
+              errorAmbitos.message
+            );
+
+            return res.status(500).json({
+              success: false,
+              message:
+                'No fue posible consultar el ámbito del coordinador.',
+            });
+          }
+
+          const pagina = paginaAmbitos || [];
+          ambitos.push(...pagina);
+
+          if (pagina.length < tamanoPaginaAmbitos) {
+            break;
+          }
+
+          desdeAmbitos += tamanoPaginaAmbitos;
         }
 
-        if (
-          !ambitos ||
-          ambitos.length === 0
-        ) {
+        if (ambitos.length === 0) {
           return res.status(200).json({
             success: true,
             actividades: [],
           });
         }
-
         const ambitosValidos = ambitos.map((ambito) => {
           const gradoId = Number(ambito.grado_id);
           const grupoId = Number(ambito.grupo_id);

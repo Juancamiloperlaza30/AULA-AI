@@ -39,6 +39,13 @@ async function ejecutarEscenario(escenario) {
         async range(inicio, fin) {
           llamadas.push({ tabla, inicio, fin });
 
+          if (tabla === 'coordinador_ambito') {
+            return {
+              data: (escenario.ambitos || []).slice(inicio, fin + 1),
+              error: null,
+            };
+          }
+
           if (tabla === 'materia_grupo_periodo') {
             return {
               data: escenario.asignaciones || [],
@@ -223,4 +230,39 @@ test('Coordinador sin ambitos recibe lista vacia', async () => {
   assert.equal(respuesta.statusCode, 200);
   assert.equal(respuesta.body.success, true);
   assert.deepEqual(respuesta.body.actividades, []);
+});
+test('Coordinador recupera mas de 1000 ambitos paginados', async () => {
+  const ambitos = Array.from(
+    { length: 1200 },
+    (_, indice) => ({
+      id: indice + 1,
+      grado_id: indice + 1,
+      grupo_id: 1,
+    })
+  );
+
+  const { respuesta, llamadas } = await ejecutarEscenario({
+    rol: 'coordinador',
+    ambitos,
+    asignaciones: [{ id: 3 }],
+    actividades: [
+      { id: 1, materia_grupo_periodo_id: 3 },
+    ],
+  });
+
+  assert.equal(respuesta.statusCode, 200);
+  assert.equal(respuesta.body.success, true);
+
+  assert.deepEqual(
+    llamadas
+      .filter((llamada) =>
+        llamada.tabla === 'coordinador_ambito'
+      )
+      .map(({ inicio, fin }) => [inicio, fin]),
+    [
+      [0, 499],
+      [500, 999],
+      [1000, 1499],
+    ]
+  );
 });
