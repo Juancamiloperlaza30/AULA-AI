@@ -3,6 +3,10 @@ const {
   supabaseAdmin,
 } = require('../config/supabase');
 
+const {
+  registrarAuditoria,
+} = require('../services/auditService');
+
 /**
  * Verifica que la petición tenga una sesión válida.
  *
@@ -113,6 +117,27 @@ const permitirRoles = (...rolesPermitidos) => {
     if (
       !rolesPermitidos.includes(req.usuario.rol)
     ) {
+      Promise.resolve()
+        .then(() => registrarAuditoria({
+          usuarioId: req.usuario.id,
+          correo: req.usuario.correo,
+          rol: req.usuario.rol,
+          evento: 'ACCESO_DENEGADO',
+          descripcion: 'Intento de acceso sin permisos.',
+          direccionIp: req.ip,
+          dispositivo: req.headers['user-agent'] || null,
+          metadata: {
+            metodo: req.method,
+            ruta: req.route?.path || req.path,
+          },
+        }))
+        .catch((error) => {
+          console.error(
+            'Error registrando acceso denegado:',
+            error.message
+          );
+        });
+
       return res.status(403).json({
         success: false,
         message:

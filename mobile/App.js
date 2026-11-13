@@ -1524,15 +1524,16 @@ export default function App() {
         recoveryEmail={
           correoRecuperacion
         }
+        onBack={() => {
+          setRecuperandoPassword(false);
+          setCorreoRecuperacion(null);
+        }}
         onPasswordChanged={
           async () => {
             setRecuperandoPassword(
               false
             );
 
-            setSesionRecuperacion(
-              null
-            );
             setCorreoRecuperacion(
               null
             );

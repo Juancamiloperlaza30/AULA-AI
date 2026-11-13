@@ -18,6 +18,7 @@ const ResetPasswordScreen = ({
   recoveryEmail,
   recoverySession,
   onPasswordChanged,
+  onBack,
 }) => {
   const [
     codigoRecuperacion,
@@ -42,6 +43,7 @@ const ResetPasswordScreen = ({
   const finalizarRecuperacion = async () => {
     try {
       await onPasswordChanged();
+      return true;
     } catch (error) {
       console.error(
         'Error finalizando recuperación:',
@@ -52,6 +54,7 @@ const ResetPasswordScreen = ({
         'Aviso',
         'La contraseña cambió, pero no fue posible volver al inicio de sesión.'
       );
+      return false;
     }
   };
 
@@ -158,16 +161,15 @@ const ResetPasswordScreen = ({
         return;
       }
 
-      Alert.alert(
-        'Contraseña actualizada',
-        'Tu contraseña fue restablecida correctamente. Ya puedes iniciar sesión con tu nueva contraseña.',
-        [
-          {
-            text: 'Ir al inicio de sesión',
-            onPress: finalizarRecuperacion,
-          },
-        ]
-      );
+      const finalizada =
+        await finalizarRecuperacion();
+
+      if (finalizada) {
+        Alert.alert(
+          'Contraseña actualizada',
+          'Tu contraseña fue restablecida correctamente. Ya puedes iniciar sesión con tu nueva contraseña.'
+        );
+      }
     } catch (error) {
       console.error(
         'Error restableciendo contraseña:',
@@ -281,6 +283,16 @@ const ResetPasswordScreen = ({
             </Text>
           )}
         </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.backButton}
+          onPress={onBack}
+          disabled={guardando}
+        >
+          <Text style={styles.backButtonText}>
+            Volver al inicio de sesión
+          </Text>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
@@ -365,6 +377,19 @@ const styles =
       color: '#FFFFFF',
       fontSize: 16,
       fontWeight: '800',
+    },
+
+    backButton: {
+      minHeight: 48,
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginTop: 10,
+    },
+
+    backButtonText: {
+      color: '#1D4E7A',
+      fontSize: 15,
+      fontWeight: '700',
     },
   });
 
