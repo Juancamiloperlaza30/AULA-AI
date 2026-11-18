@@ -6,9 +6,195 @@ const {
   registrarAuditoria,
 } = require('../services/auditService');
 
-const {
-  enviarNotificacionesMultiples,
-} = require('../services/pushService');
+const notificarActividadPublicada = (...argumentos) =>
+  require('../services/activityPublicationService')
+    .notificarActividadPublicada(...argumentos);
+
+const UUID_REGEX =
+  /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+
+const normalizarIdPositivo = (valor) => {
+  if (
+    typeof valor !== 'number' &&
+    typeof valor !== 'string'
+  ) {
+    return null;
+  }
+
+  const texto = String(valor);
+
+  if (!/^[1-9]\d*$/.test(texto)) {
+    return null;
+  }
+
+  const id = Number(texto);
+
+  return Number.isSafeInteger(id)
+    ? id
+    : null;
+};
+
+const parsearFechaIsoConZona = (valor) => {
+  if (typeof valor !== 'string') {
+    return null;
+  }
+
+  const coincidencia = valor.match(
+    /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,3}))?(Z|([+-])(\d{2}):(\d{2}))$/
+  );
+
+  if (!coincidencia) {
+    return null;
+  }
+
+  const [
+    ,
+    anioTexto,
+    mesTexto,
+    diaTexto,
+    horaTexto,
+    minutoTexto,
+    segundoTexto,
+    ,
+    zona,
+    ,
+    desfaseHoraTexto,
+    desfaseMinutoTexto,
+  ] = coincidencia;
+  const anio = Number(anioTexto);
+  const mes = Number(mesTexto);
+  const dia = Number(diaTexto);
+  const hora = Number(horaTexto);
+  const minuto = Number(minutoTexto);
+  const segundo = Number(segundoTexto);
+  const diasPorMes = [
+    31,
+    anio % 4 === 0 &&
+      (anio % 100 !== 0 || anio % 400 === 0)
+      ? 29
+      : 28,
+    31,
+    30,
+    31,
+    30,
+    31,
+    31,
+    30,
+    31,
+    30,
+    31,
+  ];
+
+  if (
+    anio < 1 ||
+    mes < 1 ||
+    mes > 12 ||
+    dia < 1 ||
+    dia > diasPorMes[mes - 1] ||
+    hora > 23 ||
+    minuto > 59 ||
+    segundo > 59
+  ) {
+    return null;
+  }
+
+  if (zona !== 'Z') {
+    const desfaseHora = Number(desfaseHoraTexto);
+    const desfaseMinuto = Number(desfaseMinutoTexto);
+
+    if (
+      desfaseHora > 14 ||
+      desfaseMinuto > 59 ||
+      (desfaseHora === 14 && desfaseMinuto !== 0)
+    ) {
+      return null;
+    }
+  }
+
+  const milisegundos = Date.parse(valor);
+
+  return Number.isFinite(milisegundos)
+    ? new Date(milisegundos)
+    : null;
+};
+
+const obtenerRelacion = (valor) => {
+  if (Array.isArray(valor)) {
+    return valor[0] || null;
+  }
+
+  return valor || null;
+};
+
+const TAMANO_PAGINA_ACTIVIDADES = 500;
+
+const consultarEnPaginas = async (crearConsulta) => {
+  const registros = [];
+  let desde = 0;
+
+  while (true) {
+    const {
+      data,
+      error,
+    } = await crearConsulta().range(
+      desde,
+      desde + TAMANO_PAGINA_ACTIVIDADES - 1
+    );
+
+    if (error) {
+      return {
+        data: null,
+        error,
+      };
+    }
+
+    const pagina = data || [];
+    registros.push(...pagina);
+
+    if (pagina.length < TAMANO_PAGINA_ACTIVIDADES) {
+      break;
+    }
+
+    desde += TAMANO_PAGINA_ACTIVIDADES;
+  }
+
+  return {
+    data: registros,
+    error: null,
+  };
+};
+
+const consultarPorLotesEnPaginas = async (
+  ids,
+  crearConsulta
+) => {
+  const registros = [];
+
+  for (
+    let inicio = 0;
+    inicio < ids.length;
+    inicio += TAMANO_PAGINA_ACTIVIDADES
+  ) {
+    const lote = ids.slice(
+      inicio,
+      inicio + TAMANO_PAGINA_ACTIVIDADES
+    );
+    const resultado = await consultarEnPaginas(
+      () => crearConsulta(lote)
+    );
+
+    if (resultado.error) {
+      return resultado;
+    }
+
+    registros.push(...resultado.data);
+  }
+
+  return {
+    data: registros,
+    error: null,
+  };
+};
 
 const listarAsignacionesDocente =
   async (req, res) => {
@@ -82,7 +268,8 @@ const listarAsignacionesDocente =
               item &&
               item.estado === 'activa' &&
               item.materia?.estado ===
-                'activa'
+                'activa' &&
+              obtenerRelacion(item.periodo)?.activo === true
           );
 
       return res.status(200).json({
@@ -109,6 +296,18 @@ const registrarActividad =
       const docenteId =
         req.usuario.id;
 
+      if (
+        !req.body ||
+        typeof req.body !== 'object' ||
+        Array.isArray(req.body)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Los datos enviados para la actividad no son válidos.',
+        });
+      }
+
       const {
         materiaGrupoPeriodoId,
         tipo,
@@ -119,19 +318,35 @@ const registrarActividad =
         clientRequestId,
       } = req.body;
 
-      // Validaciones básicas
+      const materiaGrupoPeriodoIdNormalizado =
+        normalizarIdPositivo(
+          materiaGrupoPeriodoId
+        );
+      const tituloNormalizado =
+        typeof titulo === 'string'
+          ? titulo.trim()
+          : '';
+      const descripcionNormalizada =
+        typeof descripcion === 'string'
+          ? descripcion.trim()
+          : '';
+      const fechaPublicacionDate =
+        parsearFechaIsoConZona(fechaPublicacion);
+      const fechaEntregaDate =
+        parsearFechaIsoConZona(fechaEntrega);
+
       if (
-        !materiaGrupoPeriodoId ||
-        !tipo ||
-        !titulo?.trim() ||
-        !descripcion?.trim() ||
-        !fechaPublicacion ||
-        !fechaEntrega
+        materiaGrupoPeriodoIdNormalizado === null ||
+        !tituloNormalizado ||
+        !descripcionNormalizada ||
+        typeof tipo !== 'string' ||
+        !fechaPublicacionDate ||
+        !fechaEntregaDate
       ) {
         return res.status(400).json({
           success: false,
           message:
-            'Complete todos los campos obligatorios.',
+            'Complete los campos obligatorios con valores válidos.',
         });
       }
 
@@ -149,35 +364,29 @@ const registrarActividad =
         });
       }
 
-      const fechaPublicacionDate =
-        new Date(fechaPublicacion);
-
-      const fechaEntregaDate =
-        new Date(fechaEntrega);
-
       if (
-        Number.isNaN(
-          fechaPublicacionDate.getTime()
-        ) ||
-        Number.isNaN(
-          fechaEntregaDate.getTime()
+        clientRequestId !== undefined &&
+        clientRequestId !== null &&
+        (
+          typeof clientRequestId !== 'string' ||
+          !UUID_REGEX.test(clientRequestId)
         )
       ) {
         return res.status(400).json({
           success: false,
           message:
-            'Las fechas ingresadas no son válidas.',
+            'El identificador de solicitud no es válido.',
         });
       }
 
       if (
-        fechaEntregaDate <
-        fechaPublicacionDate
+        fechaEntregaDate.getTime() <=
+        fechaPublicacionDate.getTime()
       ) {
         return res.status(400).json({
           success: false,
           message:
-            'La fecha de entrega no puede ser anterior a la fecha de publicación.',
+            'La fecha de entrega debe ser posterior a la fecha de publicación.',
         });
       }
 
@@ -198,7 +407,7 @@ const registrarActividad =
         )
         .eq(
           'materia_grupo_periodo_id',
-          materiaGrupoPeriodoId
+          materiaGrupoPeriodoIdNormalizado
         )
         .maybeSingle();
 
@@ -223,43 +432,137 @@ const registrarActividad =
         });
       }
 
+      const {
+        data: asignacion,
+        error: errorAsignacion,
+      } = await supabaseAdmin
+        .from('materia_grupo_periodo')
+        .select(`
+          id,
+          estado,
+          grado_id,
+          grupo_id,
+          materia:materias (
+            nombre
+          ),
+          periodo:periodos_academicos (
+            activo
+          )
+        `)
+        .eq('id', materiaGrupoPeriodoIdNormalizado)
+        .maybeSingle();
+
+      if (errorAsignacion) {
+        console.error(
+          'Error validando el estado de la asignación:',
+          errorAsignacion.message
+        );
+
+        return res.status(500).json({
+          success: false,
+          message:
+            'No fue posible validar la vigencia de la asignación académica.',
+        });
+      }
+
+      const periodoAsignacion =
+        obtenerRelacion(asignacion?.periodo);
+
+      if (
+        !asignacion ||
+        asignacion.estado !== 'activa' ||
+        periodoAsignacion?.activo !== true
+      ) {
+        return res.status(409).json({
+          success: false,
+          message:
+            'La materia, grupo o periodo seleccionado ya no está activo.',
+        });
+      }
+
       // Evitar duplicados por reintento.
       if (clientRequestId) {
-        const {
-          data: actividadExistente,
-          error: errorExistente,
-        } = await supabaseAdmin
-          .from(
-            'actividades_academicas'
-          )
-          .select('id')
-          .eq(
-            'client_request_id',
-            clientRequestId
-          )
-          .maybeSingle();
+        const resolverActividadExistente =
+          async () => {
+            const {
+              data: actividadExistente,
+              error: errorExistente,
+            } = await supabaseAdmin
+              .from('actividades_academicas')
+              .select(`
+                id,
+                docente_id,
+                materia_grupo_periodo_id,
+                tipo,
+                titulo,
+                descripcion,
+                fecha_publicacion,
+                fecha_entrega
+              `)
+              .eq(
+                'client_request_id',
+                clientRequestId
+              )
+              .maybeSingle();
 
-        if (errorExistente) {
-          console.error(
-            'Error verificando solicitud:',
-            errorExistente.message
-          );
+            if (errorExistente) {
+              console.error(
+                'Error verificando solicitud:',
+                errorExistente.message
+              );
 
-          return res.status(500).json({
-            success: false,
-            message:
-              'No fue posible verificar la solicitud.',
-          });
-        }
+              return res.status(500).json({
+                success: false,
+                message:
+                  'No fue posible verificar la solicitud.',
+              });
+            }
 
-        if (actividadExistente) {
-          return res.status(200).json({
-            success: true,
-            message:
-              'Actividad registrada con éxito.',
-            actividadId:
-              actividadExistente.id,
-          });
+            if (!actividadExistente) {
+              return null;
+            }
+
+            const mismoContenido =
+              actividadExistente.docente_id ===
+                docenteId &&
+              Number(
+                actividadExistente
+                  .materia_grupo_periodo_id
+              ) === materiaGrupoPeriodoIdNormalizado &&
+              actividadExistente.tipo === tipo &&
+              actividadExistente.titulo ===
+                tituloNormalizado &&
+              actividadExistente.descripcion ===
+                descripcionNormalizada &&
+              Date.parse(
+                actividadExistente.fecha_publicacion
+              ) === fechaPublicacionDate.getTime() &&
+              Date.parse(
+                actividadExistente.fecha_entrega
+              ) === fechaEntregaDate.getTime();
+
+            if (!mismoContenido) {
+              return res.status(409).json({
+                success: false,
+                message:
+                  'El identificador de solicitud ya fue utilizado para otra actividad.',
+              });
+            }
+
+            return res.status(200).json({
+              success: true,
+              message:
+                'Actividad registrada con éxito.',
+              actividadId:
+                actividadExistente.id,
+            });
+          };
+
+        const respuestaExistente =
+          await resolverActividadExistente();
+
+        if (respuestaExistente) {
+          return respuestaExistente;
         }
       }
 
@@ -272,7 +575,7 @@ const registrarActividad =
         )
         .insert({
           materia_grupo_periodo_id:
-            materiaGrupoPeriodoId,
+            materiaGrupoPeriodoIdNormalizado,
 
           docente_id:
             docenteId,
@@ -280,16 +583,16 @@ const registrarActividad =
           tipo,
 
           titulo:
-            titulo.trim(),
+            tituloNormalizado,
 
           descripcion:
-            descripcion.trim(),
+            descripcionNormalizada,
 
           fecha_publicacion:
-            fechaPublicacion,
+            fechaPublicacionDate.toISOString(),
 
           fecha_entrega:
-            fechaEntrega,
+            fechaEntregaDate.toISOString(),
 
           estado: 'publicada',
 
@@ -309,6 +612,80 @@ const registrarActividad =
           errorActividad.code ===
           '23505'
         ) {
+          if (clientRequestId) {
+            const {
+              data: actividadExistente,
+              error: errorExistente,
+            } = await supabaseAdmin
+              .from('actividades_academicas')
+              .select(`
+                id,
+                docente_id,
+                materia_grupo_periodo_id,
+                tipo,
+                titulo,
+                descripcion,
+                fecha_publicacion,
+                fecha_entrega
+              `)
+              .eq(
+                'client_request_id',
+                clientRequestId
+              )
+              .maybeSingle();
+
+            if (errorExistente) {
+              console.error(
+                'Error verificando el reintento de actividad:',
+                errorExistente.message
+              );
+
+              return res.status(500).json({
+                success: false,
+                message:
+                  'No fue posible verificar el resultado del registro.',
+              });
+            }
+
+            if (actividadExistente) {
+              const mismoContenido =
+                actividadExistente.docente_id ===
+                  docenteId &&
+                Number(
+                  actividadExistente
+                    .materia_grupo_periodo_id
+                ) ===
+                  materiaGrupoPeriodoIdNormalizado &&
+                actividadExistente.tipo === tipo &&
+                actividadExistente.titulo ===
+                  tituloNormalizado &&
+                actividadExistente.descripcion ===
+                  descripcionNormalizada &&
+                Date.parse(
+                  actividadExistente.fecha_publicacion
+                ) === fechaPublicacionDate.getTime() &&
+                Date.parse(
+                  actividadExistente.fecha_entrega
+                ) === fechaEntregaDate.getTime();
+
+              if (mismoContenido) {
+                return res.status(200).json({
+                  success: true,
+                  message:
+                    'Actividad registrada con éxito.',
+                  actividadId:
+                    actividadExistente.id,
+                });
+              }
+
+              return res.status(409).json({
+                success: false,
+                message:
+                  'El identificador de solicitud ya fue utilizado para otra actividad.',
+              });
+            }
+          }
+
           return res.status(409).json({
             success: false,
             message:
@@ -343,151 +720,29 @@ const registrarActividad =
             actividad.id,
           detalle: {
             tipo,
-            titulo:
-              titulo.trim(),
-            descripcion:
-              descripcion.trim(),
-            materiaGrupoPeriodoId,
-            fechaPublicacion,
-            fechaEntrega,
+            titulo: tituloNormalizado,
+            descripcion: descripcionNormalizada,
+            materiaGrupoPeriodoId:
+              materiaGrupoPeriodoIdNormalizado,
+            fechaPublicacion:
+              fechaPublicacionDate.toISOString(),
+            fechaEntrega:
+              fechaEntregaDate.toISOString(),
             estado:
               'publicada',
           },
         },
       });
 
-      try {
-        console.log(
-          'FCM ACTIVIDAD - Inicio',
-          {
-            actividadId: actividad.id,
-            materiaGrupoPeriodoId,
-          }
-        );
-
-        const {
-          data: asignacionActividad,
-          error: errorAsignacion,
-        } = await supabaseAdmin
-          .from('materia_grupo_periodo')
-          .select(`
-            grado_id,
-            grupo_id,
-            materia:materias (
-              nombre
-            )
-          `)
-          .eq(
-            'id',
-            materiaGrupoPeriodoId
-          )
-          .single();
-
-        console.log(
-          'FCM ACTIVIDAD - Asignación:',
-          asignacionActividad
-        );
-
-        if (
-          !errorAsignacion &&
-          asignacionActividad
-        ) {
-          const {
-            data: estudiantesGrupo,
-            error: errorEstudiantes,
-          } = await supabaseAdmin
-            .from('estudiantes')
-            .select('usuario_id')
-            .eq(
-              'grado_id',
-              asignacionActividad.grado_id
-            )
-            .eq(
-              'grupo_id',
-              asignacionActividad.grupo_id
-            );
-
-          console.log(
-            'FCM ACTIVIDAD - Estudiantes encontrados:',
-            estudiantesGrupo?.length || 0
+      if (fechaPublicacionDate.getTime() <= Date.now()) {
+        notificarActividadPublicada(
+          actividad.id
+        ).catch((errorNotificacion) => {
+          console.error(
+            'Error encolando notificación de actividad:',
+            errorNotificacion.message
           );
-
-          if (
-            !errorEstudiantes &&
-            estudiantesGrupo?.length
-          ) {
-            const usuariosIds =
-              estudiantesGrupo.map(
-                (estudiante) =>
-                  estudiante.usuario_id
-              );
-
-            const {
-              data: dispositivos,
-              error: errorDispositivos,
-            } = await supabaseAdmin
-              .from('dispositivos_push')
-              .select('token_fcm')
-              .in(
-                'usuario_id',
-                usuariosIds
-              )
-              .eq(
-                'activo',
-                true
-              );
-
-            console.log(
-              'FCM ACTIVIDAD - Dispositivos encontrados:',
-              dispositivos?.length || 0
-            );
-
-            if (
-              !errorDispositivos &&
-              dispositivos?.length
-            ) {
-              const tokens =
-                dispositivos.map(
-                  (dispositivo) =>
-                    dispositivo.token_fcm
-                );
-
-              await enviarNotificacionesMultiples({
-                tokens,
-
-                titulo:
-                  tipo === 'examen'
-                    ? 'Nuevo examen'
-                    : tipo === 'tarea'
-                    ? 'Nueva tarea'
-                    : 'Nueva actividad',
-
-                mensaje:
-                  `${titulo} - ${asignacionActividad.materia?.nombre || 'AULA-AI'}`,
-
-                data: {
-                  tipo:
-                    'actividad_publicada',
-
-                  actividadId:
-                    actividad.id,
-
-                  tipoActividad:
-                    tipo,
-                },
-              });
-
-              console.log(
-                'FCM ACTIVIDAD - Notificación enviada correctamente'
-              );
-            }
-          }
-        }
-      } catch (errorNotificacion) {
-        console.error(
-          'Error enviando notificación de actividad:',
-          errorNotificacion
-        );
+        });
       }
 
       return res.status(201).json({
@@ -520,11 +775,10 @@ const listarActividadesDocente =
       const {
         data,
         error,
-      } = await supabaseAdmin
-        .from(
-          'actividades_academicas'
-        )
-        .select(`
+      } = await consultarEnPaginas(
+        () => supabaseAdmin
+          .from('actividades_academicas')
+          .select(`
           id,
           tipo,
           titulo,
@@ -552,17 +806,15 @@ const listarActividadesDocente =
               nombre
             )
           )
-        `)
-        .eq(
-          'docente_id',
-          docenteId
-        )
-        .order(
-          'fecha_publicacion',
-          {
+          `)
+          .eq('docente_id', docenteId)
+          .order('fecha_publicacion', {
             ascending: false,
-          }
-        );
+          })
+          .order('id', {
+            ascending: true,
+          })
+      );
 
       if (error) {
         console.error(
@@ -643,23 +895,15 @@ const listarActividadesEstudiante =
       const {
         data: asignaciones,
         error: errorAsignaciones,
-      } = await supabaseAdmin
-        .from(
-          'materia_grupo_periodo'
-        )
-        .select('id')
-        .eq(
-          'grado_id',
-          estudiante.grado_id
-        )
-        .eq(
-          'grupo_id',
-          estudiante.grupo_id
-        )
-        .eq(
-          'estado',
-          'activa'
-        );
+      } = await consultarEnPaginas(
+        () => supabaseAdmin
+          .from('materia_grupo_periodo')
+          .select('id')
+          .eq('grado_id', estudiante.grado_id)
+          .eq('grupo_id', estudiante.grupo_id)
+          .eq('estado', 'activa')
+          .order('id', { ascending: true })
+      );
 
       if (errorAsignaciones) {
         console.error(
@@ -692,11 +936,11 @@ const listarActividadesEstudiante =
       const {
         data: actividades,
         error: errorActividades,
-      } = await supabaseAdmin
-        .from(
-          'actividades_academicas'
-        )
-        .select(`
+      } = await consultarPorLotesEnPaginas(
+        asignacionesIds,
+        (lote) => supabaseAdmin
+          .from('actividades_academicas')
+          .select(`
           id,
           tipo,
           titulo,
@@ -723,21 +967,13 @@ const listarActividadesEstudiante =
               nombre
             )
           )
-        `)
-        .in(
-          'materia_grupo_periodo_id',
-          asignacionesIds
-        )
-        .eq(
-          'estado',
-          'publicada'
-        )
-        .order(
-          'fecha_entrega',
-          {
-            ascending: true,
-          }
-        );
+          `)
+          .in('materia_grupo_periodo_id', lote)
+          .eq('estado', 'publicada')
+          .lte('fecha_publicacion', new Date().toISOString())
+          .order('fecha_entrega', { ascending: true })
+          .order('id', { ascending: true })
+      );
 
       if (errorActividades) {
         console.error(
@@ -763,9 +999,11 @@ const listarActividadesEstudiante =
         const {
           data: entregasData,
           error: errorEntregas,
-        } = await supabaseAdmin
-          .from('entregas_actividades')
-          .select(`
+        } = await consultarPorLotesEnPaginas(
+          actividadesIds,
+          (lote) => supabaseAdmin
+            .from('entregas_actividades')
+            .select(`
             id,
             actividad_id,
             comentario,
@@ -774,20 +1012,10 @@ const listarActividadesEstudiante =
             created_at,
             updated_at
           `)
-          .eq(
-            'estudiante_id',
-            estudianteId
-          )
-          .in(
-            'actividad_id',
-            actividadesIds
-          )
-          .order(
-            'created_at',
-            {
-              ascending: false,
-            }
-          );
+            .eq('estudiante_id', estudianteId)
+            .in('actividad_id', lote)
+            .order('created_at', { ascending: false })
+        );
 
         if (errorEntregas) {
           console.error(
@@ -812,9 +1040,11 @@ const listarActividadesEstudiante =
         const {
           data: calificacionesData,
           error: errorCalificaciones,
-        } = await supabaseAdmin
-          .from('calificaciones')
-          .select(`
+        } = await consultarPorLotesEnPaginas(
+          actividadesIds,
+          (lote) => supabaseAdmin
+            .from('calificaciones')
+            .select(`
             id,
             actividad_id,
             valor,
@@ -823,18 +1053,11 @@ const listarActividadesEstudiante =
             created_at,
             updated_at
           `)
-          .eq(
-            'estudiante_id',
-            estudianteId
-          )
-          .in(
-            'actividad_id',
-            actividadesIds
-          )
-          .eq(
-            'estado',
-            'registrada'
-          );
+            .eq('estudiante_id', estudianteId)
+            .in('actividad_id', lote)
+            .eq('estado', 'registrada')
+            .order('updated_at', { ascending: false })
+        );
 
         if (errorCalificaciones) {
           console.error(
@@ -853,24 +1076,40 @@ const listarActividadesEstudiante =
           calificacionesData || [];
       }
 
+      const entregasPorActividad = new Map();
+
+      for (const entrega of entregas) {
+        const clave = String(entrega.actividad_id);
+
+        if (
+          entrega.estado !== 'anulada' &&
+          !entregasPorActividad.has(clave)
+        ) {
+          entregasPorActividad.set(clave, entrega);
+        }
+      }
+
+      const calificacionesPorActividad = new Map();
+
+      for (const calificacion of calificaciones) {
+        const clave = String(calificacion.actividad_id);
+
+        if (!calificacionesPorActividad.has(clave)) {
+          calificacionesPorActividad.set(
+            clave,
+            calificacion
+          );
+        }
+      }
+
       const actividadesConEntrega =
         (actividades || []).map(
           (actividad) => {
+            const clave = String(actividad.id);
             const entrega =
-              entregas.find(
-                (item) =>
-                  item.actividad_id ===
-                    actividad.id &&
-                  item.estado !==
-                    'anulada'
-              ) || null;
-
+              entregasPorActividad.get(clave) || null;
             const calificacion =
-              calificaciones.find(
-                (item) =>
-                  item.actividad_id ===
-                  actividad.id
-              ) || null;
+              calificacionesPorActividad.get(clave) || null;
 
             return {
               ...actividad,
@@ -1213,7 +1452,19 @@ const actualizarActividadAdministrativa =
   async (req, res) => {
     try {
       const actividadId =
-        Number(req.params.id);
+        normalizarIdPositivo(req.params.id);
+
+      if (
+        !req.body ||
+        typeof req.body !== 'object' ||
+        Array.isArray(req.body)
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Los datos enviados para la actividad no son válidos.',
+        });
+      }
 
       const {
         tipo,
@@ -1224,7 +1475,20 @@ const actualizarActividadAdministrativa =
         estado,
       } = req.body;
 
-      if (!actividadId) {
+      const tituloNormalizado =
+        typeof titulo === 'string'
+          ? titulo.trim()
+          : '';
+      const descripcionNormalizada =
+        typeof descripcion === 'string'
+          ? descripcion.trim()
+          : '';
+      const fechaPublicacionDate =
+        parsearFechaIsoConZona(fechaPublicacion);
+      const fechaEntregaDate =
+        parsearFechaIsoConZona(fechaEntrega);
+
+      if (actividadId === null) {
         return res.status(400).json({
           success: false,
           message:
@@ -1233,17 +1497,17 @@ const actualizarActividadAdministrativa =
       }
 
       if (
-        !tipo ||
-        !titulo?.trim() ||
-        !descripcion?.trim() ||
-        !fechaPublicacion ||
-        !fechaEntrega ||
-        !estado
+        typeof tipo !== 'string' ||
+        !tituloNormalizado ||
+        !descripcionNormalizada ||
+        !fechaPublicacionDate ||
+        !fechaEntregaDate ||
+        typeof estado !== 'string'
       ) {
         return res.status(400).json({
           success: false,
           message:
-            'Complete todos los campos obligatorios.',
+            'Complete los campos obligatorios con valores válidos.',
         });
       }
 
@@ -1274,35 +1538,14 @@ const actualizarActividadAdministrativa =
         });
       }
 
-      const fechaPublicacionDate =
-        new Date(fechaPublicacion);
-
-      const fechaEntregaDate =
-        new Date(fechaEntrega);
-
       if (
-        Number.isNaN(
-          fechaPublicacionDate.getTime()
-        ) ||
-        Number.isNaN(
-          fechaEntregaDate.getTime()
-        )
+        fechaEntregaDate.getTime() <=
+        fechaPublicacionDate.getTime()
       ) {
         return res.status(400).json({
           success: false,
           message:
-            'Las fechas ingresadas no son válidas.',
-        });
-      }
-
-      if (
-        fechaEntregaDate <
-        fechaPublicacionDate
-      ) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'La fecha de entrega no puede ser anterior a la fecha de publicación.',
+            'La fecha de entrega debe ser posterior a la fecha de publicación.',
         });
       }
 
@@ -1406,13 +1649,12 @@ const actualizarActividadAdministrativa =
         .from('actividades_academicas')
         .update({
           tipo,
-          titulo: titulo.trim(),
-          descripcion:
-            descripcion.trim(),
+          titulo: tituloNormalizado,
+          descripcion: descripcionNormalizada,
           fecha_publicacion:
-            fechaPublicacion,
+            fechaPublicacionDate.toISOString(),
           fecha_entrega:
-            fechaEntrega,
+            fechaEntregaDate.toISOString(),
           estado,
           updated_at:
             new Date().toISOString(),
@@ -1467,12 +1709,12 @@ const actualizarActividadAdministrativa =
             },
             despues: {
               tipo,
-              titulo:
-                titulo.trim(),
-              descripcion:
-                descripcion.trim(),
-              fechaPublicacion,
-              fechaEntrega,
+              titulo: tituloNormalizado,
+              descripcion: descripcionNormalizada,
+              fechaPublicacion:
+                fechaPublicacionDate.toISOString(),
+              fechaEntrega:
+                fechaEntregaDate.toISOString(),
               estado,
             },
           },
@@ -1922,6 +2164,8 @@ const listarRecursosActividad =
         .select(`
           id,
           docente_id,
+          estado,
+          fecha_publicacion,
           materia_grupo_periodo:materia_grupo_periodo_id (
             grado_id,
             grupo_id
@@ -1948,6 +2192,23 @@ const listarRecursosActividad =
           success: false,
           message:
             'La actividad no existe.',
+        });
+      }
+
+      if (
+        rol === 'estudiante' &&
+        (
+          actividad.estado !== 'publicada' ||
+          !Number.isFinite(
+            Date.parse(actividad.fecha_publicacion)
+          ) ||
+          Date.parse(actividad.fecha_publicacion) > Date.now()
+        )
+      ) {
+        return res.status(404).json({
+          success: false,
+          message:
+            'La actividad no está disponible.',
         });
       }
 
@@ -2270,6 +2531,7 @@ const registrarEntregaEstudiante =
         .select(`
           id,
           titulo,
+          fecha_publicacion,
           fecha_entrega,
           estado,
           materia_grupo_periodo_id,
@@ -2315,6 +2577,17 @@ const registrarEntregaEstudiante =
           success: false,
           message:
             'Esta actividad no está disponible para entrega.',
+        });
+      }
+
+      if (
+        Date.parse(actividad.fecha_publicacion) >
+        Date.now()
+      ) {
+        return res.status(400).json({
+          success: false,
+          message:
+            'Esta actividad aún no está disponible.',
         });
       }
 

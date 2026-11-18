@@ -8,6 +8,10 @@ const {
   permitirRoles,
 } = require('../middleware/authMiddleware');
 
+const {
+  medirTiempoRespuestaActividad,
+} = require('../middleware/activityResponseTimeMiddleware');
+
 const upload =
   require('../middleware/uploadMiddleware');
 
@@ -47,6 +51,7 @@ const {
 
 router.get(
   '/mis-asignaciones',
+  medirTiempoRespuestaActividad('listar_asignaciones_docente'),
   verificarToken,
   permitirRoles('docente'),
   listarAsignacionesDocente
@@ -58,6 +63,7 @@ router.get(
 
 router.get(
   '/mis-actividades',
+  medirTiempoRespuestaActividad('listar_actividades_docente'),
   verificarToken,
   permitirRoles('docente'),
   listarActividadesDocente
@@ -69,6 +75,7 @@ router.get(
 
 router.get(
   '/mis-actividades-estudiante',
+  medirTiempoRespuestaActividad('listar_actividades_estudiante'),
   verificarToken,
   permitirRoles('estudiante'),
   listarActividadesEstudiante
@@ -80,6 +87,7 @@ router.get(
 
 router.get(
   '/administrativas',
+  medirTiempoRespuestaActividad('listar_actividades_administrativas'),
   verificarToken,
   permitirRoles(
     'administrador',
@@ -223,6 +231,7 @@ router.get(
 
 router.put(
   '/:id',
+  medirTiempoRespuestaActividad('actualizar_actividad'),
   verificarToken,
   permitirRoles(
     'administrador',
@@ -238,6 +247,7 @@ router.put(
 
 router.post(
   '/',
+  medirTiempoRespuestaActividad('registrar_actividad'),
   verificarToken,
   permitirRoles('docente'),
   registrarActividad

@@ -307,6 +307,10 @@ const listarActividadesAcudiente = async (
             lote
           )
           .eq('estado', 'publicada')
+          .lte(
+            'fecha_publicacion',
+            new Date().toISOString()
+          )
           .order('id', {
             ascending: true,
           })

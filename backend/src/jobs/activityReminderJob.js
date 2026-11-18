@@ -4,6 +4,12 @@ const {
   ejecutarRecordatoriosActividades,
 } = require('../services/activityReminderService');
 
+const {
+  ejecutarNotificacionesPublicacionesProgramadas,
+} = require('../services/activityPublicationService');
+
+let procesandoPublicaciones = false;
+
 const iniciarRecordatoriosActividades = () => {
   cron.schedule(
     '0 * * * *',
@@ -19,6 +25,34 @@ const iniciarRecordatoriosActividades = () => {
         'Resultado recordatorios:',
         resultado
       );
+    }
+  );
+
+  cron.schedule(
+    '*/5 * * * *',
+    async () => {
+      if (procesandoPublicaciones) {
+        return;
+      }
+
+      procesandoPublicaciones = true;
+
+      try {
+        const resultado =
+          await ejecutarNotificacionesPublicacionesProgramadas();
+
+        console.log(
+          'Resultado publicaciones programadas:',
+          resultado
+        );
+      } catch (error) {
+        console.error(
+          'Error procesando publicaciones programadas:',
+          error.message
+        );
+      } finally {
+        procesandoPublicaciones = false;
+      }
     }
   );
 };
