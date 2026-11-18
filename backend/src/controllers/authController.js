@@ -19,6 +19,7 @@ const {
  */
 const login = async (req, res) => {
   try {
+    const inicioLogin = performance.now();
     const { correo, contrasena } = req.body;
 
     // -----------------------------
@@ -46,6 +47,7 @@ const login = async (req, res) => {
     // 2. Supabase Authentication
     // -----------------------------
 
+    const inicioAuth = performance.now();
     const {
       data: authData,
       error: authError,
@@ -53,6 +55,7 @@ const login = async (req, res) => {
       email: correoNormalizado,
       password: contrasena,
     });
+    const finAuth = performance.now();
 
     if (
       authError ||
@@ -89,6 +92,7 @@ const login = async (req, res) => {
     // 3. Perfil AULA-AI
     // -----------------------------
 
+    const inicioPerfil = performance.now();
     const {
       data: usuario,
       error: usuarioError,
@@ -106,6 +110,7 @@ const login = async (req, res) => {
       `)
       .eq('id', authData.user.id)
       .maybeSingle();
+    const finPerfil = performance.now();
 
     if (usuarioError) {
       console.error(
@@ -160,6 +165,7 @@ const login = async (req, res) => {
     // 5. Login correcto
     // -----------------------------
 
+    const inicioAuditoria = performance.now();
     await registrarAuditoria({
       usuarioId: usuario.id,
       correo: usuario.correo,
@@ -170,6 +176,15 @@ const login = async (req, res) => {
       direccionIp: req.ip,
       dispositivo:
         req.headers['user-agent'] || null,
+    });
+
+    const finAuditoria = performance.now();
+
+    console.log('[RNF-01.5] Tiempos de login (ms):', {
+      autenticacion: Math.round(finAuth - inicioAuth),
+      perfil: Math.round(finPerfil - inicioPerfil),
+      auditoria: Math.round(finAuditoria - inicioAuditoria),
+      total: Math.round(performance.now() - inicioLogin),
     });
 
     return res.status(200).json({
@@ -248,6 +263,12 @@ const logout = async (req, res) => {
         'Error revocando sesión:',
         error.message
       );
+
+      return res.status(503).json({
+        success: false,
+        message:
+          'No fue posible cerrar la sesión en el servidor. Inténtelo nuevamente.',
+      });
     }
 
     await registrarAuditoria({
