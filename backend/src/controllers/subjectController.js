@@ -6,6 +6,59 @@ const {
   registrarAuditoria,
 } = require('../services/auditService');
 
+const normalizarIdEnteroPositivo = (valor) => {
+  const texto = String(valor ?? '');
+
+  if (!/^[1-9]\d*$/.test(texto)) {
+    return null;
+  }
+
+  const id = Number(texto);
+
+  return Number.isSafeInteger(id)
+    ? id
+    : null;
+};
+
+const normalizarIdsEnteros = (valores) => {
+  if (!Array.isArray(valores) || valores.length === 0) {
+    return null;
+  }
+
+  const ids = valores.map(
+    normalizarIdEnteroPositivo
+  );
+
+  if (
+    ids.some((id) => id === null) ||
+    new Set(ids).size !== ids.length
+  ) {
+    return null;
+  }
+
+  return ids;
+};
+
+const normalizarIdsUuid = (valores) => {
+  const uuidRegex =
+    /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
+
+  if (
+    !Array.isArray(valores) ||
+    valores.length === 0 ||
+    valores.some(
+      (id) =>
+        typeof id !== 'string' ||
+        !uuidRegex.test(id)
+    ) ||
+    new Set(valores).size !== valores.length
+  ) {
+    return null;
+  }
+
+  return valores;
+};
+
 const verificarAmbitoCoordinador = async ({
   usuario,
   gradoId,
@@ -52,6 +105,18 @@ const verificarAmbitoCoordinador = async ({
 
 const registrarMateria = async (req, res) => {
   try {
+    if (
+      !req.body ||
+      typeof req.body !== 'object' ||
+      Array.isArray(req.body)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Los datos enviados para la materia no son válidos.',
+      });
+    }
+
     const {
       nombre,
       gradoId,
@@ -65,7 +130,20 @@ const registrarMateria = async (req, res) => {
     // 1. Validar campos obligatorios
     // =====================================
 
-    if (!nombre?.trim()) {
+    const nombreNormalizado =
+      typeof nombre === 'string'
+        ? nombre.trim()
+        : '';
+    const gradoIdNormalizado =
+      normalizarIdEnteroPositivo(gradoId);
+    const gruposIdsNormalizados =
+      normalizarIdsEnteros(gruposIds);
+    const docentesIdsNormalizados =
+      normalizarIdsUuid(docentesIds);
+    const periodoIdNormalizado =
+      normalizarIdEnteroPositivo(periodoId);
+
+    if (!nombreNormalizado) {
       return res.status(400).json({
         success: false,
         message:
@@ -73,41 +151,35 @@ const registrarMateria = async (req, res) => {
       });
     }
 
-    if (!gradoId) {
+    if (gradoIdNormalizado === null) {
       return res.status(400).json({
         success: false,
         message:
-          'Debe seleccionar un grado.',
+          'Debe seleccionar un grado válido.',
       });
     }
 
-    if (
-      !Array.isArray(gruposIds) ||
-      gruposIds.length === 0
-    ) {
+    if (!gruposIdsNormalizados) {
       return res.status(400).json({
         success: false,
         message:
-          'Debe seleccionar al menos un grupo.',
+          'Seleccione grupos válidos y sin duplicados.',
       });
     }
 
-    if (
-      !Array.isArray(docentesIds) ||
-      docentesIds.length === 0
-    ) {
+    if (!docentesIdsNormalizados) {
       return res.status(400).json({
         success: false,
         message:
-          'Debe seleccionar al menos un docente responsable.',
+          'Seleccione docentes responsables válidos y sin duplicados.',
       });
     }
 
-    if (!periodoId) {
+    if (periodoIdNormalizado === null) {
       return res.status(400).json({
         success: false,
         message:
-          'Debe seleccionar un periodo académico.',
+          'Debe seleccionar un periodo académico válido.',
       });
     }
 
@@ -132,15 +204,28 @@ const registrarMateria = async (req, res) => {
     } = await supabaseAdmin
       .from('grupos')
       .select('id, grado_id, activo')
-      .in('id', gruposIds);
+      .in('id', gruposIdsNormalizados);
+
+    if (gruposError) {
+      console.error(
+        'Error consultando grupos para registrar materia:',
+        gruposError.message
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          'No fue posible validar los grupos seleccionados.',
+      });
+    }
 
     if (
-      gruposError ||
       !grupos ||
-      grupos.length !== gruposIds.length ||
+      grupos.length !== gruposIdsNormalizados.length ||
       grupos.some(
         (grupo) =>
-          grupo.grado_id !== gradoId ||
+          Number(grupo.grado_id) !==
+            gradoIdNormalizado ||
           !grupo.activo
       )
     ) {
@@ -153,8 +238,8 @@ const registrarMateria = async (req, res) => {
 
     const permisoAmbito = await verificarAmbitoCoordinador({
       usuario: req.usuario,
-      gradoId,
-      gruposIds,
+      gradoId: gradoIdNormalizado,
+      gruposIds: gruposIdsNormalizados,
     });
 
     if (permisoAmbito.error) {
@@ -188,12 +273,24 @@ const registrarMateria = async (req, res) => {
     } = await supabaseAdmin
       .from('usuarios')
       .select('id, rol, activo')
-      .in('id', docentesIds);
+      .in('id', docentesIdsNormalizados);
+
+    if (docentesError) {
+      console.error(
+        'Error consultando docentes para registrar materia:',
+        docentesError.message
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          'No fue posible validar los docentes seleccionados.',
+      });
+    }
 
     if (
-      docentesError ||
       !docentes ||
-      docentes.length !== docentesIds.length ||
+      docentes.length !== docentesIdsNormalizados.length ||
       docentes.some(
         (docente) =>
           docente.rol !== 'docente' ||
@@ -217,14 +314,23 @@ const registrarMateria = async (req, res) => {
     } = await supabaseAdmin
       .from('periodos_academicos')
       .select('id, activo')
-      .eq('id', periodoId)
+      .eq('id', periodoIdNormalizado)
       .maybeSingle();
 
-    if (
-      periodoError ||
-      !periodo ||
-      !periodo.activo
-    ) {
+    if (periodoError) {
+      console.error(
+        'Error consultando periodo para registrar materia:',
+        periodoError.message
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          'No fue posible validar el periodo académico seleccionado.',
+      });
+    }
+
+    if (!periodo || !periodo.activo) {
       return res.status(400).json({
         success: false,
         message:
@@ -238,11 +344,11 @@ const registrarMateria = async (req, res) => {
     } = await supabaseAdmin.rpc(
       'registrar_materia_transaccional',
       {
-        p_nombre: nombre.trim(),
-        p_grado_id: gradoId,
-        p_grupos_ids: gruposIds,
-        p_docentes_ids: docentesIds,
-        p_periodo_id: periodoId,
+        p_nombre: nombreNormalizado,
+        p_grado_id: gradoIdNormalizado,
+        p_grupos_ids: gruposIdsNormalizados,
+        p_docentes_ids: docentesIdsNormalizados,
+        p_periodo_id: periodoIdNormalizado,
         p_estado: estado || 'activa',
       }
     );
@@ -267,7 +373,6 @@ const registrarMateria = async (req, res) => {
       return res.status(500).json({
         success: false,
         message:
-          errorRegistro.message ||
           'No fue posible registrar la materia.',
       });
     }
@@ -277,18 +382,18 @@ const registrarMateria = async (req, res) => {
       correo: req.usuario.correo,
       evento: 'MATERIA_REGISTRADA',
       descripcion:
-        `Se registró la materia ${nombre.trim()}.`,
+        `Se registró la materia ${nombreNormalizado}.`,
       rol: req.usuario.rol,
       direccionIp: req.ip,
       dispositivo:
         req.headers['user-agent'] || null,
       metadata: {
         materiaId,
-        nombre: nombre.trim(),
-        gradoId,
-        gruposIds,
-        docentesIds,
-        periodoId,
+        nombre: nombreNormalizado,
+        gradoId: gradoIdNormalizado,
+        gruposIds: gruposIdsNormalizados,
+        docentesIds: docentesIdsNormalizados,
+        periodoId: periodoIdNormalizado,
       },
     });
 
@@ -426,7 +531,20 @@ const listarMaterias = async (req, res) => {
 
 const actualizarMateria = async (req, res) => {
   try {
-    const asignacionId = Number(req.params.id);
+    const asignacionId =
+      normalizarIdEnteroPositivo(req.params.id);
+
+    if (
+      !req.body ||
+      typeof req.body !== 'object' ||
+      Array.isArray(req.body)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Los datos enviados para la materia no son válidos.',
+      });
+    }
 
     const {
       nombre,
@@ -437,8 +555,20 @@ const actualizarMateria = async (req, res) => {
       estado,
     } = req.body;
 
-    // Validaciones
-    if (!asignacionId) {
+    const nombreNormalizado =
+      typeof nombre === 'string'
+        ? nombre.trim()
+        : '';
+    const gradoIdNormalizado =
+      normalizarIdEnteroPositivo(gradoId);
+    const grupoIdNormalizado =
+      normalizarIdEnteroPositivo(grupoId);
+    const periodoIdNormalizado =
+      normalizarIdEnteroPositivo(periodoId);
+    const docentesIdsNormalizados =
+      normalizarIdsUuid(docentesIds);
+
+    if (asignacionId === null) {
       return res.status(400).json({
         success: false,
         message:
@@ -447,12 +577,11 @@ const actualizarMateria = async (req, res) => {
     }
 
     if (
-      !nombre?.trim() ||
-      !gradoId ||
-      !grupoId ||
-      !periodoId ||
-      !Array.isArray(docentesIds) ||
-      docentesIds.length === 0 ||
+      !nombreNormalizado ||
+      gradoIdNormalizado === null ||
+      grupoIdNormalizado === null ||
+      periodoIdNormalizado === null ||
+      !docentesIdsNormalizados ||
       !estado
     ) {
       return res.status(400).json({
@@ -469,6 +598,109 @@ const actualizarMateria = async (req, res) => {
         success: false,
         message:
           'El estado seleccionado no es válido.',
+      });
+    }
+
+    const {
+      data: gruposDestino,
+      error: gruposDestinoError,
+    } = await supabaseAdmin
+      .from('grupos')
+      .select('id, grado_id, activo')
+      .eq('id', grupoIdNormalizado);
+
+    if (gruposDestinoError) {
+      console.error(
+        'Error validando el grupo destino de la materia:',
+        gruposDestinoError.message
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          'No fue posible validar el grupo seleccionado.',
+      });
+    }
+
+    if (
+      !gruposDestino ||
+      gruposDestino.length !== 1 ||
+      Number(gruposDestino[0].grado_id) !==
+        gradoIdNormalizado ||
+      !gruposDestino[0].activo
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'El grupo seleccionado no corresponde al grado o no está activo.',
+      });
+    }
+
+    const {
+      data: docentesDestino,
+      error: docentesDestinoError,
+    } = await supabaseAdmin
+      .from('usuarios')
+      .select('id, rol, activo')
+      .in('id', docentesIdsNormalizados);
+
+    if (docentesDestinoError) {
+      console.error(
+        'Error validando los docentes de la materia:',
+        docentesDestinoError.message
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          'No fue posible validar los docentes seleccionados.',
+      });
+    }
+
+    if (
+      !docentesDestino ||
+      docentesDestino.length !==
+        docentesIdsNormalizados.length ||
+      docentesDestino.some(
+        (docente) =>
+          docente.rol !== 'docente' ||
+          !docente.activo
+      )
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Uno o más docentes seleccionados no son válidos.',
+      });
+    }
+
+    const {
+      data: periodoDestino,
+      error: periodoDestinoError,
+    } = await supabaseAdmin
+      .from('periodos_academicos')
+      .select('id, activo')
+      .eq('id', periodoIdNormalizado)
+      .maybeSingle();
+
+    if (periodoDestinoError) {
+      console.error(
+        'Error validando el periodo de la materia:',
+        periodoDestinoError.message
+      );
+
+      return res.status(500).json({
+        success: false,
+        message:
+          'No fue posible validar el periodo académico seleccionado.',
+      });
+    }
+
+    if (!periodoDestino || !periodoDestino.activo) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'El periodo académico seleccionado no es válido.',
       });
     }
 
@@ -534,8 +766,8 @@ const actualizarMateria = async (req, res) => {
 
     const permisoAmbito = await verificarAmbitoCoordinador({
       usuario: req.usuario,
-      gradoId,
-      gruposIds: [grupoId],
+      gradoId: gradoIdNormalizado,
+      gruposIds: [grupoIdNormalizado],
     });
 
     if (permisoAmbito.error) {
@@ -566,11 +798,11 @@ const actualizarMateria = async (req, res) => {
       'actualizar_asignacion_materia',
       {
         p_asignacion_id: asignacionId,
-        p_nombre: nombre.trim(),
-        p_grado_id: gradoId,
-        p_grupo_id: grupoId,
-        p_periodo_id: periodoId,
-        p_docentes_ids: docentesIds,
+        p_nombre: nombreNormalizado,
+        p_grado_id: gradoIdNormalizado,
+        p_grupo_id: grupoIdNormalizado,
+        p_periodo_id: periodoIdNormalizado,
+        p_docentes_ids: docentesIdsNormalizados,
         p_estado: estado,
       }
     );
@@ -592,7 +824,6 @@ const actualizarMateria = async (req, res) => {
       return res.status(500).json({
         success: false,
         message:
-          error.message ||
           'No fue posible actualizar la materia.',
       });
     }
@@ -610,11 +841,11 @@ const actualizarMateria = async (req, res) => {
       metadata: {
         asignacionId,
         materiaId,
-        nombre: nombre.trim(),
-        gradoId,
-        grupoId,
-        periodoId,
-        docentesIds,
+        nombre: nombreNormalizado,
+        gradoId: gradoIdNormalizado,
+        grupoId: grupoIdNormalizado,
+        periodoId: periodoIdNormalizado,
+        docentesIds: docentesIdsNormalizados,
         estado,
       },
     });
@@ -710,9 +941,24 @@ const listarMateriasDocente = async (req, res) => {
 const listarMateriasEstudiante = async (req, res) => {
   try {
     const estudianteId = req.usuario.id;
-    const periodoId = req.query.periodoId
-      ? Number(req.query.periodoId)
-      : null;
+    const periodoSolicitado = req.query?.periodoId;
+    const periodoId =
+      periodoSolicitado === undefined
+        ? null
+        : normalizarIdEnteroPositivo(
+            periodoSolicitado
+          );
+
+    if (
+      periodoSolicitado !== undefined &&
+      periodoId === null
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'El periodo académico solicitado no es válido.',
+      });
+    }
 
     // =====================================
     // 1. Obtener grado y grupo del estudiante

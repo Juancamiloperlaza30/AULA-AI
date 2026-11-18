@@ -1,4 +1,5 @@
 const express = require('express');
+const { performance } = require('node:perf_hooks');
 
 const {
   registrarMateria,
@@ -15,8 +16,27 @@ const {
 
 const router = express.Router();
 
+const medirTiempoRespuesta = (operacion) => (
+  req,
+  res,
+  next
+) => {
+  const inicio = performance.now();
+
+  res.once('finish', () => {
+    console.info('[RNF-03.4] Tiempo de respuesta (ms):', {
+      operacion,
+      estado: res.statusCode,
+      total: Math.round(performance.now() - inicio),
+    });
+  });
+
+  next();
+};
+
 router.get(
   '/mis-materias',
+  medirTiempoRespuesta('listar_materias_docente'),
   verificarToken,
   permitirRoles('docente'),
   listarMateriasDocente
@@ -24,6 +44,7 @@ router.get(
 
 router.get(
   '/mis-materias-estudiante',
+  medirTiempoRespuesta('listar_materias_estudiante'),
   verificarToken,
   permitirRoles('estudiante'),
   listarMateriasEstudiante
@@ -31,6 +52,7 @@ router.get(
 
 router.get(
   '/',
+  medirTiempoRespuesta('listar_materias'),
   verificarToken,
   permitirRoles(
     'administrador',
@@ -48,6 +70,7 @@ router.get(
  */
 router.post(
   '/',
+  medirTiempoRespuesta('registrar_materia'),
   verificarToken,
   permitirRoles(
     'administrador',
@@ -58,6 +81,7 @@ router.post(
 
 router.put(
   '/:id',
+  medirTiempoRespuesta('actualizar_materia'),
   verificarToken,
   permitirRoles(
     'administrador',
