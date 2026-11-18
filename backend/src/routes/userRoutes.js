@@ -23,6 +23,10 @@ const {
   permitirRoles,
 } = require('../middleware/authMiddleware');
 
+const {
+  auditarRegistroFallido,
+} = require('../middleware/registrationAuditMiddleware');
+
 const router = express.Router();
 
 /**
@@ -138,6 +142,7 @@ router.get(
  */
 router.post(
   '/',
+  auditarRegistroFallido,
   verificarToken,
   permitirRoles(
     'administrador',

@@ -94,6 +94,20 @@ const verificarGruposEnAmbitoCoordinador = async ({
  */
 const registrarUsuario = async (req, res) => {
   try {
+    const inicioRegistro = performance.now();
+
+    if (
+      !req.body ||
+      typeof req.body !== 'object' ||
+      Array.isArray(req.body)
+    ) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'Los datos enviados para el registro no son válidos.',
+      });
+    }
+
     const {
       nombres,
       apellidos,
@@ -113,14 +127,22 @@ const registrarUsuario = async (req, res) => {
     // 1. Validar campos obligatorios
     // =====================================
 
+    const camposTexto = [
+      nombres,
+      apellidos,
+      tipoDocumento,
+      numeroDocumento,
+      correo,
+      telefono,
+      rol,
+    ];
+
     if (
-      !nombres ||
-      !apellidos ||
-      !tipoDocumento ||
-      !numeroDocumento ||
-      !correo ||
-      !telefono ||
-      !rol
+      camposTexto.some(
+        (campo) =>
+          typeof campo !== 'string' ||
+          !campo.trim()
+      )
     ) {
       return res.status(400).json({
         success: false,
@@ -129,6 +151,13 @@ const registrarUsuario = async (req, res) => {
       });
     }
 
+    const nombresNormalizados = nombres.trim();
+    const apellidosNormalizados = apellidos.trim();
+    const tipoDocumentoNormalizado =
+      tipoDocumento.trim();
+    const numeroDocumentoNormalizado =
+      numeroDocumento.trim();
+    const telefonoNormalizado = telefono.trim();
     const correoNormalizado =
       correo.trim().toLowerCase();
 
@@ -156,16 +185,32 @@ const registrarUsuario = async (req, res) => {
       });
     }
 
+    if (numeroDocumentoNormalizado.length < 6) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'El número de documento debe tener al menos 6 caracteres.',
+      });
+    }
+
     // =====================================
     // 3. Validaciones específicas por rol
     // =====================================
 
     if (rol === 'estudiante') {
-      if (!gradoId || !grupoId) {
+      const gradoIdTexto = String(gradoId ?? '');
+      const grupoIdTexto = String(grupoId ?? '');
+
+      if (
+        !/^[1-9]\d*$/.test(gradoIdTexto) ||
+        !/^[1-9]\d*$/.test(grupoIdTexto) ||
+        !Number.isSafeInteger(Number(gradoIdTexto)) ||
+        !Number.isSafeInteger(Number(grupoIdTexto))
+      ) {
         return res.status(400).json({
           success: false,
           message:
-            'El estudiante debe tener grado y grupo.',
+            'El estudiante debe tener un grado y grupo válidos.',
         });
       }
 
@@ -401,21 +446,33 @@ const registrarUsuario = async (req, res) => {
     // 4. Validar duplicados
     // =====================================
 
-    const {
-      data: usuarioExistente,
-      error: duplicadoError,
-    } = await supabaseAdmin
-      .from('usuarios')
-      .select('id, correo, numero_documento')
-      .or(
-        `correo.eq.${correoNormalizado},numero_documento.eq.${numeroDocumento}`
-      )
-      .maybeSingle();
+    const [
+      resultadoCorreo,
+      resultadoDocumento,
+    ] = await Promise.all([
+      supabaseAdmin
+        .from('usuarios')
+        .select('id')
+        .eq('correo', correoNormalizado)
+        .maybeSingle(),
+      supabaseAdmin
+        .from('usuarios')
+        .select('id')
+        .eq(
+          'numero_documento',
+          numeroDocumentoNormalizado
+        )
+        .maybeSingle(),
+    ]);
 
-    if (duplicadoError) {
+    if (
+      resultadoCorreo.error ||
+      resultadoDocumento.error
+    ) {
       console.error(
         'Error validando duplicados:',
-        duplicadoError
+        resultadoCorreo.error ||
+          resultadoDocumento.error
       );
 
       return res.status(500).json({
@@ -425,7 +482,10 @@ const registrarUsuario = async (req, res) => {
       });
     }
 
-    if (usuarioExistente) {
+    if (
+      resultadoCorreo.data ||
+      resultadoDocumento.data
+    ) {
       return res.status(409).json({
         success: false,
         message:
@@ -437,16 +497,7 @@ const registrarUsuario = async (req, res) => {
     // 5. Crear cuenta con contraseña temporal
     // =====================================
 
-    const passwordTemporal =
-      numeroDocumento.trim();
-
-    if (passwordTemporal.length < 6) {
-      return res.status(400).json({
-        success: false,
-        message:
-          'El número de documento debe tener al menos 6 caracteres para utilizarlo como contraseña temporal.',
-      });
-    }
+    const passwordTemporal = require('node:crypto').randomBytes(32).toString('base64url') + 'Aa9!';
 
     const {
       data: authData,
@@ -457,8 +508,8 @@ const registrarUsuario = async (req, res) => {
         password: passwordTemporal,
         email_confirm: true,
         user_metadata: {
-          nombres: nombres.trim(),
-          apellidos: apellidos.trim(),
+          nombres: nombresNormalizados,
+          apellidos: apellidosNormalizados,
           rol,
           debe_cambiar_password: true,
         },
@@ -467,8 +518,25 @@ const registrarUsuario = async (req, res) => {
     if (authError || !authData?.user) {
       console.error(
         'Error creando usuario en Auth:',
-        authError?.message
+        authError?.code || authError?.message
       );
+
+      if (
+        [
+          'email_exists',
+          'user_already_exists',
+          'email_already_exists',
+        ].includes(authError?.code) ||
+        /already (registered|exists)|email.{0,30}(registered|exists)/i.test(
+          authError?.message || ''
+        )
+      ) {
+        return res.status(409).json({
+          success: false,
+          message:
+            'Ya existe un usuario con este correo o documento.',
+        });
+      }
 
       return res.status(500).json({
         success: false,
@@ -489,13 +557,12 @@ const registrarUsuario = async (req, res) => {
       .from('usuarios')
       .insert({
         id: userId,
-        nombres: nombres.trim(),
-        apellidos: apellidos.trim(),
-        tipo_documento: tipoDocumento,
-        numero_documento:
-          numeroDocumento.trim(),
+        nombres: nombresNormalizados,
+        apellidos: apellidosNormalizados,
+        tipo_documento: tipoDocumentoNormalizado,
+        numero_documento: numeroDocumentoNormalizado,
         correo: correoNormalizado,
-        telefono: telefono.trim(),
+        telefono: telefonoNormalizado,
         rol,
         activo: true,
         debe_cambiar_password: true,
@@ -509,9 +576,26 @@ const registrarUsuario = async (req, res) => {
       );
 
       // Limpiamos Auth para evitar usuario huérfano
-      await supabaseAdmin.auth.admin.deleteUser(
+      const {
+        error: eliminacionAuthError,
+      } = await supabaseAdmin.auth.admin.deleteUser(
         userId
       );
+
+      if (eliminacionAuthError) {
+        console.error(
+          'Error eliminando cuenta Auth incompleta:',
+          eliminacionAuthError.message
+        );
+      }
+
+      if (perfilError.code === '23505') {
+        return res.status(409).json({
+          success: false,
+          message:
+            'Ya existe un usuario con este correo o documento.',
+        });
+      }
 
       return res.status(500).json({
         success: false,
@@ -797,6 +881,7 @@ const registrarUsuario = async (req, res) => {
       metadata: {
         usuarioCreadoId: userId,
         rolCreado: rol,
+        resultado: 'exitoso',
         ...(rol === 'coordinador'
           ? {
               ambitosCoordinador:
@@ -811,6 +896,12 @@ const registrarUsuario = async (req, res) => {
       },
     });
 
+    console.log('[RNF-02.6] Tiempo de registro (ms):', {
+      total: Math.round(
+        performance.now() - inicioRegistro
+      ),
+    });
+
     // =====================================
     // 12. Respuesta
     // =====================================
@@ -820,11 +911,11 @@ const registrarUsuario = async (req, res) => {
       message:
         'Usuario registrado con éxito.',
       activationMessage:
-        'El usuario fue creado con una contraseña temporal y deberá cambiarla en su primer inicio de sesión.',
+        'Cuenta creada. Para establecer su contraseña, el usuario debe seleccionar Recuperar contraseña en la pantalla de inicio de sesión y confirmar el código recibido por correo.',
       usuario: {
         id: userId,
-        nombres: nombres.trim(),
-        apellidos: apellidos.trim(),
+        nombres: nombresNormalizados,
+        apellidos: apellidosNormalizados,
         correo: correoNormalizado,
         rol,
         debeCambiarPassword: true,
