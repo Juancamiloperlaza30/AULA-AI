@@ -31,6 +31,25 @@ async function ejecutarRegistro(body, actividadExistente) {
   let llamadaAuditoria = false;
   let llamadaNotificacion = false;
   const supabaseAdmin = {
+    rpc(nombre, parametros) {
+      assert.equal(
+        nombre,
+        'rnf04_guardar_actividad_auditada'
+      );
+      assert.equal(parametros.p_operacion, 'registrar');
+      inserciones.push({
+        tabla: 'actividades_academicas',
+        datos: parametros.p_actividad,
+      });
+      llamadaAuditoria =
+        parametros.p_auditoria.evento ===
+        'ACTIVIDAD_REGISTRADA';
+
+      return Promise.resolve({
+        data: { id: 99 },
+        error: null,
+      });
+    },
     from(tabla) {
       const consulta = {
         select() {

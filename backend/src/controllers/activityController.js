@@ -10,6 +10,33 @@ const notificarActividadPublicada = (...argumentos) =>
   require('../services/activityPublicationService')
     .notificarActividadPublicada(...argumentos);
 
+
+const guardarActividadAuditada = (
+  req, operacion, actividad, detalle
+) => {
+  const evento = operacion === 'registrar'
+    ? 'ACTIVIDAD_REGISTRADA'
+    : 'ACTIVIDAD_MODIFICADA';
+
+  return supabaseAdmin.rpc(
+    'rnf04_guardar_actividad_auditada',
+    {
+      p_operacion: operacion,
+      p_actividad: actividad,
+      p_auditoria: {
+        usuario_id: req.usuario.id,
+        correo: req.usuario.correo || null,
+        evento,
+        descripcion: null,
+        rol: req.usuario.rol,
+        direccion_ip: req.ip || null,
+        dispositivo: req.headers?.['user-agent'] || null,
+        metadata: { detalle },
+      },
+    }
+  );
+};
+
 const UUID_REGEX =
   /^[0-9a-f]{8}-(?:[0-9a-f]{4}-){3}[0-9a-f]{12}$/i;
 
@@ -569,38 +596,36 @@ const registrarActividad =
       const {
         data: actividad,
         error: errorActividad,
-      } = await supabaseAdmin
-        .from(
-          'actividades_academicas'
-        )
-        .insert({
+      } = await guardarActividadAuditada(
+        req,
+        'registrar',
+        {
           materia_grupo_periodo_id:
             materiaGrupoPeriodoIdNormalizado,
-
-          docente_id:
-            docenteId,
-
+          docente_id: docenteId,
           tipo,
-
-          titulo:
-            tituloNormalizado,
-
-          descripcion:
-            descripcionNormalizada,
-
+          titulo: tituloNormalizado,
+          descripcion: descripcionNormalizada,
           fecha_publicacion:
             fechaPublicacionDate.toISOString(),
-
           fecha_entrega:
             fechaEntregaDate.toISOString(),
-
           estado: 'publicada',
-
-          client_request_id:
-            clientRequestId || null,
-        })
-        .select('id')
-        .single();
+          client_request_id: clientRequestId || null,
+        },
+        {
+          tipo,
+          titulo: tituloNormalizado,
+          descripcion: descripcionNormalizada,
+          materiaGrupoPeriodoId:
+            materiaGrupoPeriodoIdNormalizado,
+          fechaPublicacion:
+            fechaPublicacionDate.toISOString(),
+          fechaEntrega:
+            fechaEntregaDate.toISOString(),
+          estado: 'publicada',
+        }
+      );
 
       if (errorActividad) {
         console.error(
@@ -699,40 +724,6 @@ const registrarActividad =
             'No fue posible registrar la actividad.',
         });
       }
-
-      await registrarAuditoria({
-        usuarioId: req.usuario.id,
-        correo: req.usuario.correo,
-        evento:
-          'ACTIVIDAD_REGISTRADA',
-        descripcion:
-          `Se registró la actividad ${actividad.id}.`,
-        rol: req.usuario.rol,
-        direccionIp: req.ip,
-        dispositivo:
-          req.headers['user-agent'] || null,
-        metadata: {
-          accion:
-            'ACTIVIDAD_REGISTRADA',
-          entidad:
-            'actividades_academicas',
-          entidadId:
-            actividad.id,
-          detalle: {
-            tipo,
-            titulo: tituloNormalizado,
-            descripcion: descripcionNormalizada,
-            materiaGrupoPeriodoId:
-              materiaGrupoPeriodoIdNormalizado,
-            fechaPublicacion:
-              fechaPublicacionDate.toISOString(),
-            fechaEntrega:
-              fechaEntregaDate.toISOString(),
-            estado:
-              'publicada',
-          },
-        },
-      });
 
       if (fechaPublicacionDate.getTime() <= Date.now()) {
         notificarActividadPublicada(
@@ -1645,9 +1636,11 @@ const actualizarActividadAdministrativa =
 
       const {
         error: errorActualizacion,
-      } = await supabaseAdmin
-        .from('actividades_academicas')
-        .update({
+      } = await guardarActividadAuditada(
+        req,
+        'actualizar',
+        {
+          id: actividadId,
           tipo,
           titulo: tituloNormalizado,
           descripcion: descripcionNormalizada,
@@ -1656,10 +1649,20 @@ const actualizarActividadAdministrativa =
           fecha_entrega:
             fechaEntregaDate.toISOString(),
           estado,
-          updated_at:
-            new Date().toISOString(),
-        })
-        .eq('id', actividadId);
+        },
+        {
+          despues: {
+            tipo,
+            titulo: tituloNormalizado,
+            descripcion: descripcionNormalizada,
+            fechaPublicacion:
+              fechaPublicacionDate.toISOString(),
+            fechaEntrega:
+              fechaEntregaDate.toISOString(),
+            estado,
+          },
+        }
+      );
 
       if (errorActualizacion) {
         console.error(
@@ -1673,53 +1676,6 @@ const actualizarActividadAdministrativa =
             'No fue posible actualizar la actividad.',
         });
       }
-
-      await registrarAuditoria({
-        usuarioId: req.usuario.id,
-        correo: req.usuario.correo,
-        evento:
-          'ACTIVIDAD_MODIFICADA',
-        descripcion:
-          `Se modificó la actividad ${actividadId}.`,
-        rol: req.usuario.rol,
-        direccionIp: req.ip,
-        dispositivo:
-          req.headers['user-agent'] || null,
-        metadata: {
-          accion:
-            'ACTIVIDAD_MODIFICADA',
-          entidad:
-            'actividades_academicas',
-          entidadId:
-            actividadId,
-          detalle: {
-            antes: {
-              tipo:
-                actividadActual.tipo,
-              titulo:
-                actividadActual.titulo,
-              descripcion:
-                actividadActual.descripcion,
-              fechaPublicacion:
-                actividadActual.fecha_publicacion,
-              fechaEntrega:
-                actividadActual.fecha_entrega,
-              estado:
-                actividadActual.estado,
-            },
-            despues: {
-              tipo,
-              titulo: tituloNormalizado,
-              descripcion: descripcionNormalizada,
-              fechaPublicacion:
-                fechaPublicacionDate.toISOString(),
-              fechaEntrega:
-                fechaEntregaDate.toISOString(),
-              estado,
-            },
-          },
-        },
-      });
 
       return res.status(200).json({
         success: true,
