@@ -91,6 +91,10 @@ const {
 } = require('./jobs/activityReminderJob');
 
 const {
+  iniciarActualizacionPeriodoAcademico,
+} = require('./jobs/academicPeriodRolloverJob');
+
+const {
   supabaseAdmin,
 } = require('./config/supabase');
 
@@ -312,6 +316,7 @@ app.use((req, res) => {
 // ======================================================
 
 iniciarRecordatoriosActividades();
+iniciarActualizacionPeriodoAcademico();
 
 // ======================================================
 // INICIO DEL SERVIDOR

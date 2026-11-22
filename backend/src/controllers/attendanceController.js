@@ -1,6 +1,11 @@
 
 const { supabaseAdmin } = require('../config/supabase');
 
+const {
+  asegurarAsignacionesPeriodoActual,
+  obtenerFechaAcademicaActual,
+} = require('../services/academicPeriodService');
+
 const fail = (res, status, message) =>
   res.status(status).json({
     success: false,
@@ -204,6 +209,11 @@ async function asignacionDocente(
 
 async function listarAsignaciones(req, res) {
   try {
+    await asegurarAsignacionesPeriodoActual();
+
+    const hoy =
+      obtenerFechaAcademicaActual();
+
     const { data, error } = await supabaseAdmin
       .from('materia_docente')
       .select(`
@@ -227,7 +237,9 @@ async function listarAsignaciones(req, res) {
           periodo:periodos_academicos(
             id,
             nombre,
-            activo
+            activo,
+            fecha_inicio,
+            fecha_fin
           )
         )
       `)
@@ -245,6 +257,20 @@ async function listarAsignaciones(req, res) {
           item.estado === 'activa' &&
           item.grupo?.activo &&
           item.periodo?.activo
+      )
+      .map((item) => ({
+        ...item,
+        periodo: {
+          ...item.periodo,
+          esActual:
+            item.periodo.fecha_inicio <= hoy &&
+            item.periodo.fecha_fin >= hoy,
+        },
+      }))
+      .sort(
+        (a, b) =>
+          Number(b.periodo.esActual) -
+          Number(a.periodo.esActual)
       );
 
     return res.json({
