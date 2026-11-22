@@ -1,5 +1,4 @@
 import * as Linking from 'expo-linking';
-import * as Location from 'expo-location';
 import * as Network from 'expo-network';
 import {
   useCallback,
@@ -103,7 +102,19 @@ import {
 import {
   eliminarCacheAcademicaLocal,
 } from './database/localDatabase';
+import {
+  eliminarMateriasOffline,
+} from './src/database/offlineDatabase';
+import {
+  eliminarCacheAcudienteOffline,
+} from './src/database/guardianAcademicOfflineDatabase';
+import {
+  eliminarCacheComunicacionesOffline,
+} from './src/database/communicationsOfflineDatabase';
 import AcademicOfflineScreen from './src/screens/AcademicOfflineScreen';
+import {
+  sincronizarAsistenciasPendientes,
+} from './src/services/attendanceOfflineSync';
 
 export default function App() {
   const [correo, setCorreo] = useState('');
@@ -204,68 +215,101 @@ export default function App() {
 
   const accessToken =
     sesion?.accessToken;
-  const usuarioAutenticado =
-    Boolean(usuario?.id);
-  const debeCambiarPassword =
-    usuario?.debeCambiarPassword;
 
-  // ======================================================
-  // HU-13 | PERMISO AUTOMÁTICO DE UBICACIÓN
-  // ======================================================
+  // =====================================================
+  // HU-14 | SINCRONIZACION AUTOMATICA DE ASISTENCIAS
+  // =====================================================
+
+  const sincronizacionAutomaticaEnCurso = useRef(false);
 
   useEffect(() => {
+    if (
+      !sesionOnlineValidada ||
+      usuario?.rol !== 'docente' ||
+      !usuario?.id ||
+      !accessToken
+    ) {
+      return;
+    }
+
     let activo = true;
 
-    const solicitarPermisoGPS = async () => {
+    const sincronizarAutomaticamente = async () => {
       if (
-        cargandoSesion ||
-        modoOffline ||
-        !usuarioAutenticado ||
-        !accessToken ||
-        debeCambiarPassword === true ||
-        recuperandoPassword ||
-        modoActivacion
+        !activo ||
+        sincronizacionAutomaticaEnCurso.current
       ) {
         return;
       }
 
-      try {
-        const permisoActual =
-          await Location.getForegroundPermissionsAsync();
+      sincronizacionAutomaticaEnCurso.current = true;
 
-        if (!activo) {
-          return;
-        }
+      try {
+        const red = await Network.getNetworkStateAsync();
 
         if (
-          permisoActual.granted ||
-          !permisoActual.canAskAgain
+          !activo ||
+          red.isConnected !== true ||
+          red.isInternetReachable === false
         ) {
           return;
         }
 
-        await Location.requestForegroundPermissionsAsync();
+        const resultado =
+          await sincronizarAsistenciasPendientes({
+            usuarioId: usuario.id,
+            apiUrl: API_URL,
+            accessToken,
+          });
+
+        if (activo && !resultado.ocupada) {
+          console.log(
+            '[HU-14] Sincronizacion automatica:',
+            resultado
+          );
+        }
       } catch (error) {
         console.warn(
-          '[HU-13] No fue posible solicitar el permiso GPS:',
+          '[HU-14] Sincronizacion automatica no disponible:',
           error?.message || error
         );
+      } finally {
+        sincronizacionAutomaticaEnCurso.current = false;
       }
     };
 
-    void solicitarPermisoGPS();
+    // Ejecutar cuando se establece una sesión online.
+    void sincronizarAutomaticamente();
+
+    // Detectar recuperación de conectividad.
+    const suscripcionRed =
+      Network.addNetworkStateListener((estadoRed) => {
+        if (
+          estadoRed.isConnected === true &&
+          estadoRed.isInternetReachable !== false
+        ) {
+          void sincronizarAutomaticamente();
+        }
+      });
+
+    // Verificar al regresar a primer plano.
+    const suscripcionAppState =
+      AppState.addEventListener('change', (estado) => {
+        if (estado === 'active') {
+          void sincronizarAutomaticamente();
+        }
+      });
 
     return () => {
       activo = false;
+      suscripcionRed.remove();
+      suscripcionAppState.remove();
     };
   }, [
-    cargandoSesion,
-    modoOffline,
-    usuarioAutenticado,
-    debeCambiarPassword,
+    sesionOnlineValidada,
+    usuario?.id,
+    usuario?.rol,
     accessToken,
-    recuperandoPassword,
-    modoActivacion,
   ]);
 
   useEffect(() => {
@@ -1110,6 +1154,20 @@ export default function App() {
       return;
     }
 
+    const correoNormalizado = correo.trim();
+    const formatoCorreoValido =
+      /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
+        correoNormalizado
+      );
+
+    if (!formatoCorreoValido) {
+      Alert.alert(
+        'Correo inválido',
+        'El correo electrónico es inválido o incorrecto. Verifique el formato e inténtelo nuevamente.'
+      );
+      return;
+    }
+
     if (!contrasena.trim()) {
       Alert.alert(
         'Campo obligatorio',
@@ -1131,7 +1189,7 @@ export default function App() {
           },
 
           body: JSON.stringify({
-            correo: correo.trim(),
+            correo: correoNormalizado,
             contrasena,
           }),
         }
@@ -1299,12 +1357,25 @@ export default function App() {
 
     setCargando(true);
 
-    const usuarioActual = usuario;
+    const usuarioActual =
+      modoOffline
+        ? usuarioOffline
+        : usuario || usuarioOffline;
+    const requiereLimpiezaAcademica =
+      ['estudiante', 'acudiente'].includes(
+        usuarioActual?.rol
+      ) &&
+      Boolean(usuarioActual?.id);
     let limpiezaCompleta =
-      usuarioActual?.rol !== 'estudiante' ||
-      !usuarioActual?.id;
+      !requiereLimpiezaAcademica;
 
     try {
+      if (usuarioActual?.id) {
+        await eliminarCacheComunicacionesOffline(
+          usuarioActual.id
+        );
+      }
+
       if (
         usuarioActual?.rol === 'estudiante' &&
         usuarioActual?.id
@@ -1315,10 +1386,26 @@ export default function App() {
         await eliminarHistorialEstudianteOffline(
           usuarioActual.id
         );
+        await eliminarMateriasOffline({
+          usuarioId: usuarioActual.id,
+          tipoUsuario: 'estudiante',
+        });
         limpiezaCompleta = true;
 
         console.log(
           'HU-07: caché académica del estudiante eliminada.'
+        );
+      } else if (
+        usuarioActual?.rol === 'acudiente' &&
+        usuarioActual?.id
+      ) {
+        await eliminarCacheAcudienteOffline(
+          usuarioActual.id
+        );
+        limpiezaCompleta = true;
+
+        console.log(
+          'HU-08: caché académica del acudiente eliminada.'
         );
       }
 
@@ -1353,8 +1440,7 @@ export default function App() {
       );
     } finally {
       if (
-        usuarioActual?.rol === 'estudiante' &&
-        usuarioActual?.id &&
+        requiereLimpiezaAcademica &&
         !limpiezaCompleta
       ) {
         Alert.alert(
@@ -1399,6 +1485,7 @@ export default function App() {
       }
 
       setUsuario(null);
+      setUsuarioOffline(null);
       setSesion(null);
       setModoOffline(false);
 
@@ -1574,9 +1661,55 @@ export default function App() {
   // =====================================================
 
   if (modoOffline && usuarioOffline?.id) {
+    if (
+      pantallaActual === 'misComunicadosEstudiante'
+    ) {
+      return (
+        <StudentCommunicationsScreen
+          apiUrl={API_URL}
+          accessToken={null}
+          usuarioId={usuarioOffline.id}
+          onBack={() => setPantallaActual('dashboard')}
+        />
+      );
+    }
+
+    if (pantallaActual === 'ubicacionDispositivo') {
+      return (
+        <LocationScreen
+          onBack={() => setPantallaActual('dashboard')}
+        />
+      );
+    }
+
+    if (usuarioOffline.rol === 'acudiente') {
+      return (
+        <AcudienteDashboard
+          usuario={usuarioOffline}
+          apiUrl={API_URL}
+          accessToken={null}
+          onRefreshSession={
+            renovarSesionAutenticada
+          }
+          onLogout={handleLogout}
+          onMyCommunications={() =>
+            setPantallaActual(
+              'misComunicadosEstudiante'
+            )
+          }
+          onLocation={() =>
+            setPantallaActual(
+              'ubicacionDispositivo'
+            )
+          }
+        />
+      );
+    }
+
     return (
       <AcademicOfflineScreen
         usuario={usuarioOffline}
+        apiUrl={API_URL}
         onBack={() => {
           // Impide que una reconexion pendiente
           // restaure la sesion despues de salir.
@@ -2157,6 +2290,7 @@ export default function App() {
       <StudentCommunicationsScreen
         apiUrl={API_URL}
         accessToken={sesion?.accessToken}
+        usuarioId={usuario?.id || usuarioOffline?.id}
         onBack={() => setPantallaActual('dashboard')}
       />
     );

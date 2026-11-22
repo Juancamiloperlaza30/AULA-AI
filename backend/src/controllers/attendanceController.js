@@ -8,6 +8,13 @@ const fail = (res, status, message) =>
   });
 
 const validId = (v) =>
+  (
+    typeof v === 'number' ||
+    (
+      typeof v === 'string' &&
+      /^\d+$/.test(v)
+    )
+  ) &&
   Number.isSafeInteger(Number(v)) &&
   Number(v) > 0;
 
@@ -28,6 +35,81 @@ const validTime = (t) =>
 
 const validState = (v) =>
   ['presente', 'ausente', 'tarde'].includes(v);
+
+const validStudentId = (v) =>
+  typeof v === 'string' &&
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+    .test(v);
+
+const validarRegistros = (registros) => {
+  if (
+    !Array.isArray(registros) ||
+    !registros.length ||
+    registros.length > 100
+  ) {
+    return null;
+  }
+
+  const estudiantes = new Set();
+  const normalizados = [];
+
+  for (const item of registros) {
+    if (
+      !item ||
+      !validStudentId(item.estudianteId) ||
+      !validState(item.estado) ||
+      (
+        item.observacion != null &&
+        (
+          typeof item.observacion !== 'string' ||
+          item.observacion.length > 1000
+        )
+      )
+    ) {
+      return null;
+    }
+
+    const estudianteId = item.estudianteId.trim();
+    const clave = estudianteId.toLowerCase();
+
+    if (estudiantes.has(clave)) {
+      return null;
+    }
+
+    estudiantes.add(clave);
+    const observacion =
+      item.observacion == null
+        ? null
+        : item.observacion.trim();
+
+    if (observacion && observacion.length > 1000) {
+      return null;
+    }
+
+    normalizados.push({
+      estudianteId,
+      estado: item.estado,
+      observacion: observacion || null,
+    });
+  }
+
+  return normalizados;
+};
+
+const segundosDesdeMedianoche = (hora) => {
+  if (!hora) {
+    return null;
+  }
+
+  const [horas, minutos, segundos = '0'] =
+    hora.split(':');
+
+  return (
+    Number(horas) * 3600 +
+    Number(minutos) * 60 +
+    Number(segundos)
+  );
+};
 
 const dbError = (res, error) => {
   console.error('HU-06:', error?.message || error);
@@ -274,7 +356,8 @@ async function crearSesion(req, res) {
       (
         horaInicio &&
         horaFin &&
-        horaFin <= horaInicio
+        segundosDesdeMedianoche(horaFin) <=
+          segundosDesdeMedianoche(horaInicio)
       )
     ) {
       return fail(
@@ -404,31 +487,15 @@ async function registrarAsistencias(req, res) {
       req.params.sesionId
     );
 
-    const registros = req.body?.registros;
+    const registros = validarRegistros(
+      req.body?.registros
+    );
 
-    if (
-      !validId(sesionId) ||
-      !Array.isArray(registros) ||
-      !registros.length ||
-      registros.length > 100 ||
-      registros.some(
-        (item) =>
-          !item ||
-          typeof item.estudianteId !== 'string' ||
-          !validState(item.estado) ||
-          (
-            item.observacion != null &&
-            (
-              typeof item.observacion !== 'string' ||
-              item.observacion.length > 1000
-            )
-          )
-      )
-    ) {
+    if (!validId(sesionId) || !registros) {
       return fail(
         res,
         400,
-        'Debe enviar una lista válida de asistencias (máximo 100 estudiantes).'
+        'Debe enviar una lista válida, sin estudiantes repetidos y con estados permitidos (máximo 100 estudiantes).'
       );
     }
 
@@ -531,8 +598,7 @@ async function sincronizarAsistenciaOffline(req, res) {
     for (const item of registrosRecibidos) {
       if (
         !item ||
-        typeof item.estudianteId !== 'string' ||
-        !item.estudianteId.trim() ||
+        !validStudentId(item.estudianteId) ||
         !validState(item.estado) ||
         (
           item.observacion != null &&

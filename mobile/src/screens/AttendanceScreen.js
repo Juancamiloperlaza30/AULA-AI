@@ -1213,13 +1213,31 @@ export default function AttendanceScreen({
       })
     );
 
+    const periodo = asignacionSeleccionada?.periodo;
+
+    const fechaInicio = periodo?.fecha_inicio;
+    const fechaFin = periodo?.fecha_fin;
+
     if (
-      fecha < '2026-01-20' ||
-      fecha > '2026-03-27'
+      !periodo?.activo ||
+      !fechaInicio ||
+      !fechaFin ||
+      fechaInicio > fechaFin
+    ) {
+      Alert.alert(
+        'Período académico no disponible',
+        'No se pudo verificar el período académico de esta asignación. Conéctate a Internet, consulta nuevamente la materia y vuelve a intentarlo.'
+      );
+      return;
+    }
+
+    if (
+      fecha < fechaInicio ||
+      fecha > fechaFin
     ) {
       Alert.alert(
         'Fecha fuera del período',
-        'La fecha seleccionada no pertenece al período académico configurado. No se guardó ninguna operación.'
+        'La fecha seleccionada no pertenece al período académico de esta asignación. No se guardó ninguna operación.'
       );
       return;
     }
