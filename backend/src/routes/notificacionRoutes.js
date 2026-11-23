@@ -14,6 +14,9 @@ const express = require('express');
 const {
   verificarToken,
 } = require('../middleware/authMiddleware');
+const {
+  medirConsultaComunicaciones,
+} = require('../middleware/communicationResponseTimeMiddleware');
 
 // ======================================================
 // CONTROLADOR DE NOTIFICACIONES
@@ -45,6 +48,7 @@ const router = express.Router();
 router.get(
   '/',
   verificarToken,
+  medirConsultaComunicaciones('listar_notificaciones'),
   listarMisNotificaciones
 );
 

@@ -422,7 +422,7 @@ const publicarComunicado = async (
     }
 
     // --------------------------------------------------
-    // 10. NOTIFICAR DESTINATARIOS MEDIANTE FCM
+    // 10. PERSISTIR NOTIFICACIONES PARA ENTREGA ASÍNCRONA
     // --------------------------------------------------
 
     try {
@@ -434,22 +434,17 @@ const publicarComunicado = async (
         });
 
       console.log(
-        '[HU-12 PUSH] Publicación procesada:',
+        '[HU-12 PUSH] Notificaciones en cola:',
         {
           comunicadoId,
-          dispositivos:
-            resultadoPush.dispositivos,
-          enviados:
-            resultadoPush.enviados,
-          fallidos:
-            resultadoPush.fallidos,
-          error:
-            resultadoPush.error === true,
+          destinatarios: resultadoPush.destinatarios,
+          notificacionesPreparadas:
+            resultadoPush.notificacionesPreparadas,
         }
       );
     } catch (errorPush) {
       // El comunicado ya fue publicado.
-      // Un fallo de FCM no debe anularlo.
+      // Un fallo de la cola no debe anular la publicación.
       console.error(
         '[HU-12 PUSH] Error posterior a la publicación:',
         errorPush

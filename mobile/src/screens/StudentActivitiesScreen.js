@@ -343,7 +343,7 @@ export default function StudentActivitiesScreen({
       let tieneCopiaLocal = false;
 
       try {
-        if (!usuarioId || !accessToken) {
+        if (!usuarioId) {
           throw new Error(
             'No existe una sesión válida.'
           );
@@ -405,6 +405,12 @@ export default function StudentActivitiesScreen({
         // 2. CONSULTAR EL SERVIDOR
         // -----------------------------------------
 
+        if (!accessToken || !apiUrl) {
+          throw new Error(
+            'No hay una sesión activa para actualizar las actividades.'
+          );
+        }
+
         const data = await consultarJSON({
           url:
             `${apiUrl}/api/activities/` +
@@ -420,11 +426,16 @@ export default function StudentActivitiesScreen({
           return;
         }
 
-        const servidor = Array.isArray(
-          data.actividades
-        )
-          ? data.actividades
-          : [];
+        if (
+          data?.success !== true ||
+          !Array.isArray(data.actividades)
+        ) {
+          throw new Error(
+            'El servidor devolvió una lista de actividades incompleta.'
+          );
+        }
+
+        const servidor = data.actividades;
 
         setActividades(servidor);
         setModoOffline(false);

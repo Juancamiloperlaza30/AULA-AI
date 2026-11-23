@@ -61,6 +61,8 @@ async function obtenerNotificacionInstitucional(
         'titulo',
         'mensaje',
         'comunicado_id',
+        'recurso_tipo',
+        'recurso_id',
         'estado',
       ].join(',')
     )
@@ -79,19 +81,6 @@ async function obtenerNotificacionInstitucional(
     errorNoEncontrada.statusCode = 404;
 
     throw errorNoEncontrada;
-  }
-
-  if (
-    data.tipo !== 'comunicado' ||
-    data.comunicado_id === null
-  ) {
-    const errorTipo = new Error(
-      'La notificación no corresponde a un comunicado institucional.'
-    );
-
-    errorTipo.statusCode = 400;
-
-    throw errorTipo;
   }
 
   return data;

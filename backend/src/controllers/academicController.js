@@ -2,30 +2,10 @@ const {
   supabaseAdmin,
 } = require('../config/supabase');
 
-const obtenerFechaAcademicaActual = () => {
-  const partes =
-    new Intl.DateTimeFormat('en-CA', {
-      timeZone: 'America/Bogota',
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-    }).formatToParts(new Date());
-
-  const fecha = Object.fromEntries(
-    partes
-      .filter((parte) =>
-        ['year', 'month', 'day'].includes(
-          parte.type
-        )
-      )
-      .map((parte) => [
-        parte.type,
-        parte.value,
-      ])
-  );
-
-  return `${fecha.year}-${fecha.month}-${fecha.day}`;
-};
+const {
+  asegurarAsignacionesPeriodoActual,
+  obtenerFechaAcademicaActual,
+} = require('../services/academicPeriodService');
 
 /**
  * Retorna los grados activos.
@@ -286,6 +266,8 @@ const listarPeriodos = async (req, res) => {
 
 const obtenerPeriodoActual = async (req, res) => {
   try {
+    await asegurarAsignacionesPeriodoActual();
+
     const hoy =
       obtenerFechaAcademicaActual();
 

@@ -14,6 +14,7 @@ import {
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
+import * as Network from 'expo-network';
 
 import {
   listarRecomendacionesEstudiante,
@@ -22,6 +23,11 @@ import {
 import {
   listarPlanesEstudiante,
 } from '../services/academicPlanService';
+
+import {
+  obtenerRecursoEstudianteLocal,
+  guardarRecursoEstudianteLocal,
+} from '../../database/localDatabase';
 
 import AcademicRecommendationContent
   from './AcademicRecommendationContent';
@@ -47,6 +53,21 @@ const PRIORIDADES = {
   baja: 'Baja',
   media: 'Media',
   alta: 'Alta',
+};
+
+const COPIA_LOCAL_INICIAL = {
+  recomendaciones: {
+    disponible: false,
+    sincronizadoEn: null,
+    errorLectura: false,
+    respuestaValida: false,
+  },
+  planes: {
+    disponible: false,
+    sincronizadoEn: null,
+    errorLectura: false,
+    respuestaValida: false,
+  },
 };
 
 function fechaLegible(valor) {
@@ -356,30 +377,146 @@ export default function StudentAcademicRecommendations({
   const [errorPlanes, setErrorPlanes] =
     useState('');
 
+  const [copiasLocales, setCopiasLocales] =
+    useState(COPIA_LOCAL_INICIAL);
+
   const [visible, setVisible] =
     useState(true);
   const solicitudRef = useRef(0);
+  const estudianteActualRef = useRef(estudianteId);
+  const cargaEnCursoRef = useRef(null);
 
-  const cargarInformacion = useCallback(async () => {
-    const solicitudId = ++solicitudRef.current;
+  const cargarInformacion = useCallback(() => {
+    if (cargaEnCursoRef.current) {
+      return cargaEnCursoRef.current;
+    }
+
+    const carga = (async () => {
+      const solicitudId = ++solicitudRef.current;
+
+      if (!estudianteId) {
+        setErrorRecomendaciones(
+          'No se encontró el identificador del estudiante.'
+        );
+        setErrorPlanes(
+          'No se encontró el identificador del estudiante.'
+        );
+        setCargando(false);
+        return;
+      }
 
     if (
-      !estudianteId ||
-      (!accessToken && !onRefreshSession)
+      String(estudianteActualRef.current) !==
+      String(estudianteId)
     ) {
-      setErrorRecomendaciones(
-        'No se encontró una sesión válida.'
-      );
-      setErrorPlanes(
-        'No se encontró una sesión válida.'
-      );
-      setCargando(false);
-      return;
+      estudianteActualRef.current = estudianteId;
+      setRecomendaciones([]);
+      setPlanes([]);
+      setCopiasLocales(COPIA_LOCAL_INICIAL);
     }
 
     setCargando(true);
     setErrorRecomendaciones('');
     setErrorPlanes('');
+
+    const resultadosCopiaLocal = await Promise.allSettled([
+      obtenerRecursoEstudianteLocal(
+        estudianteId,
+        'recomendaciones'
+      ),
+      obtenerRecursoEstudianteLocal(
+        estudianteId,
+        'planes_refuerzo'
+      ),
+    ]);
+
+    if (solicitudId !== solicitudRef.current) {
+      return;
+    }
+
+    if (
+      resultadosCopiaLocal[0].status === 'fulfilled' &&
+      resultadosCopiaLocal[0].value
+    ) {
+      setRecomendaciones(
+        resultadosCopiaLocal[0].value.datos
+      );
+    }
+
+    setCopiasLocales((actuales) => ({
+      ...actuales,
+      recomendaciones:
+        resultadosCopiaLocal[0].status === 'fulfilled'
+          ? {
+              disponible: Boolean(
+                resultadosCopiaLocal[0].value
+              ),
+              sincronizadoEn:
+                resultadosCopiaLocal[0].value
+                  ?.sincronizadoEn || null,
+              errorLectura: false,
+              respuestaValida: false,
+            }
+          : {
+              ...actuales.recomendaciones,
+              errorLectura: true,
+            },
+    }));
+
+    if (
+      resultadosCopiaLocal[1].status === 'fulfilled' &&
+      resultadosCopiaLocal[1].value
+    ) {
+      setPlanes(resultadosCopiaLocal[1].value.datos);
+    }
+
+    setCopiasLocales((actuales) => ({
+      ...actuales,
+      planes:
+        resultadosCopiaLocal[1].status === 'fulfilled'
+          ? {
+              disponible: Boolean(
+                resultadosCopiaLocal[1].value
+              ),
+              sincronizadoEn:
+                resultadosCopiaLocal[1].value
+                  ?.sincronizadoEn || null,
+              errorLectura: false,
+              respuestaValida: false,
+            }
+          : {
+              ...actuales.planes,
+              errorLectura: true,
+            },
+    }));
+
+    // HU-14: verificar la conexión real antes de consultar el servidor.
+    let sinConexion = false;
+
+    try {
+      const estadoRed = await Network.getNetworkStateAsync();
+
+      sinConexion =
+        estadoRed.isConnected !== true ||
+        estadoRed.isInternetReachable === false;
+    } catch (errorRed) {
+      console.warn(
+        'HU-14: no se pudo consultar el estado de red:',
+        errorRed?.message
+      );
+      sinConexion = true;
+    }
+
+    if (solicitudId !== solicitudRef.current) {
+      return;
+    }
+
+    if (sinConexion || (!accessToken && !onRefreshSession)) {
+      setErrorRecomendaciones('offline');
+      setErrorPlanes('offline');
+      setCargando(false);
+      return;
+    }
 
     const resultados = await Promise.allSettled([
       listarRecomendacionesEstudiante({
@@ -403,13 +540,66 @@ export default function StudentAcademicRecommendations({
     if (resultados[0].status === 'fulfilled') {
       const datos = resultados[0].value;
 
-      setRecomendaciones(
-        Array.isArray(datos?.recomendaciones)
-          ? datos.recomendaciones
-          : []
-      );
+      if (!Array.isArray(datos?.recomendaciones)) {
+        setCopiasLocales((actuales) => ({
+          ...actuales,
+          recomendaciones: {
+            ...actuales.recomendaciones,
+            respuestaValida: false,
+          },
+        }));
+        setErrorRecomendaciones(
+          'El servidor devolvió recomendaciones en un formato inválido.'
+        );
+      } else {
+        setCopiasLocales((actuales) => ({
+          ...actuales,
+          recomendaciones: {
+            ...actuales.recomendaciones,
+            respuestaValida: true,
+          },
+        }));
+        setRecomendaciones(datos.recomendaciones);
+
+        try {
+          const copiaGuardada =
+            await guardarRecursoEstudianteLocal(
+              estudianteId,
+              'recomendaciones',
+              datos.recomendaciones
+            );
+          setCopiasLocales((actuales) => ({
+            ...actuales,
+            recomendaciones: {
+              disponible: true,
+              sincronizadoEn:
+                copiaGuardada.sincronizadoEn,
+              errorLectura: false,
+              respuestaValida: true,
+            },
+          }));
+        } catch (errorCache) {
+          if (solicitudId !== solicitudRef.current) {
+            return;
+          }
+
+          setErrorRecomendaciones(
+            `Se consultaron las recomendaciones, pero no se pudieron guardar para uso offline: ${errorCache.message}`
+          );
+        }
+
+        if (solicitudId !== solicitudRef.current) {
+          return;
+        }
+      }
     } else {
-      setRecomendaciones([]);
+      setCopiasLocales((actuales) => ({
+        ...actuales,
+        recomendaciones: {
+          ...actuales.recomendaciones,
+          respuestaValida: false,
+        },
+      }));
       setErrorRecomendaciones(
         resultados[0].reason?.message ||
           'No fue posible consultar las recomendaciones.'
@@ -419,18 +609,86 @@ export default function StudentAcademicRecommendations({
     if (resultados[1].status === 'fulfilled') {
       const datos = resultados[1].value;
 
-      setPlanes(
-        Array.isArray(datos) ? datos : []
-      );
+      if (!Array.isArray(datos)) {
+        setCopiasLocales((actuales) => ({
+          ...actuales,
+          planes: {
+            ...actuales.planes,
+            respuestaValida: false,
+          },
+        }));
+        setErrorPlanes(
+          'El servidor devolvió los planes en un formato inválido.'
+        );
+      } else {
+        setCopiasLocales((actuales) => ({
+          ...actuales,
+          planes: {
+            ...actuales.planes,
+            respuestaValida: true,
+          },
+        }));
+        setPlanes(datos);
+
+        try {
+          const copiaGuardada =
+            await guardarRecursoEstudianteLocal(
+              estudianteId,
+              'planes_refuerzo',
+              datos
+            );
+          setCopiasLocales((actuales) => ({
+            ...actuales,
+            planes: {
+              disponible: true,
+              sincronizadoEn:
+                copiaGuardada.sincronizadoEn,
+              errorLectura: false,
+              respuestaValida: true,
+            },
+          }));
+        } catch (errorCache) {
+          if (solicitudId !== solicitudRef.current) {
+            return;
+          }
+
+          setErrorPlanes(
+            `Se consultaron los planes, pero no se pudieron guardar para uso offline: ${errorCache.message}`
+          );
+        }
+
+        if (solicitudId !== solicitudRef.current) {
+          return;
+        }
+      }
     } else {
-      setPlanes([]);
+      setCopiasLocales((actuales) => ({
+        ...actuales,
+        planes: {
+          ...actuales.planes,
+          respuestaValida: false,
+        },
+      }));
       setErrorPlanes(
         resultados[1].reason?.message ||
           'No fue posible consultar los planes.'
       );
     }
 
-    setCargando(false);
+      setCargando(false);
+    })();
+
+    cargaEnCursoRef.current = carga;
+
+    const liberarCarga = () => {
+      if (cargaEnCursoRef.current === carga) {
+        cargaEnCursoRef.current = null;
+      }
+    };
+
+    void carga.then(liberarCarga, liberarCarga);
+
+    return carga;
   }, [
     apiUrl,
     accessToken,
@@ -456,6 +714,45 @@ export default function StudentAcademicRecommendations({
     return () => {
       activo = false;
       solicitudRef.current += 1;
+    };
+  }, [visible, cargarInformacion]);
+
+  // HU-14: actualizar cuando se recupera Internet.
+  const conexionAnteriorRef = useRef(null);
+
+  useEffect(() => {
+    let activo = true;
+
+    const procesarEstadoRed = (estado) => {
+      if (!activo) return;
+
+      const conectado =
+        estado.isConnected === true &&
+        estado.isInternetReachable !== false;
+
+      const anterior = conexionAnteriorRef.current;
+      conexionAnteriorRef.current = conectado;
+
+      if (visible && anterior === false && conectado) {
+        void cargarInformacion();
+      }
+    };
+
+    Network.getNetworkStateAsync()
+      .then(procesarEstadoRed)
+      .catch((error) => {
+        console.warn(
+          'HU-14: no se pudo obtener el estado de red:',
+          error?.message
+        );
+      });
+
+    const suscripcion =
+      Network.addNetworkStateListener(procesarEstadoRed);
+
+    return () => {
+      activo = false;
+      suscripcion.remove();
     };
   }, [visible, cargarInformacion]);
 
@@ -549,16 +846,51 @@ export default function StudentAcademicRecommendations({
                 </Text>
               </View>
 
-              {errorRecomendaciones ? (
-                <Text style={styles.error}>
-                  {errorRecomendaciones}
+              {errorRecomendaciones &&
+                copiasLocales.recomendaciones.disponible && (
+                  <Text style={styles.avisoOffline}>
+                    No se pudo actualizar. Se muestra la última
+                    copia guardada
+                    {copiasLocales.recomendaciones
+                      .sincronizadoEn
+                      ? ` del ${fechaLegible(
+                          copiasLocales.recomendaciones
+                            .sincronizadoEn
+                        )}`
+                      : ''}
+                    .
+                  </Text>
+                )}
+
+              {errorRecomendaciones &&
+                copiasLocales.recomendaciones
+                  .respuestaValida &&
+                !copiasLocales.recomendaciones
+                  .disponible && (
+                  <Text style={styles.avisoOffline}>
+                    La consulta se completó, pero no se pudo
+                    guardar una copia local.
+                  </Text>
+                )}
+
+              {errorRecomendaciones &&
+              !copiasLocales.recomendaciones.disponible &&
+              !copiasLocales.recomendaciones
+                .respuestaValida &&
+              recomendaciones.length === 0 ? (
+                <Text style={styles.secundario}>
+                  {copiasLocales.recomendaciones.errorLectura
+                    ? 'No se pudo revisar la información guardada. Conéctate a Internet e inténtalo nuevamente.'
+                    : 'Aún no hay recomendaciones sincronizadas en este dispositivo. Conéctate a Internet para consultarlas.'}
                 </Text>
               ) : recomendaciones.length === 0 ? (
                 <Text style={styles.secundario}>
-                  El servidor no encontró recomendaciones
-                  asociadas a esta cuenta. Solicita al
-                  Orientador verificar que se hayan
-                  registrado para tu usuario.
+                  {copiasLocales.recomendaciones
+                    .respuestaValida
+                    ? 'No hay recomendaciones registradas en la consulta más reciente.'
+                    : copiasLocales.recomendaciones.disponible
+                    ? 'No hay recomendaciones registradas en la última sincronización.'
+                    : 'No hay recomendaciones registradas.'}
                 </Text>
               ) : (
                 recomendaciones.map((item) => (
@@ -580,16 +912,46 @@ export default function StudentAcademicRecommendations({
                 </Text>
               </View>
 
-              {errorPlanes ? (
-                <Text style={styles.error}>
-                  {errorPlanes}
+              {errorPlanes &&
+                copiasLocales.planes.disponible && (
+                  <Text style={styles.avisoOffline}>
+                    No se pudo actualizar. Se muestra la última
+                    copia guardada
+                    {copiasLocales.planes.sincronizadoEn
+                      ? ` del ${fechaLegible(
+                          copiasLocales.planes
+                            .sincronizadoEn
+                        )}`
+                      : ''}
+                    .
+                  </Text>
+                )}
+
+              {errorPlanes &&
+                copiasLocales.planes.respuestaValida &&
+                !copiasLocales.planes.disponible && (
+                  <Text style={styles.avisoOffline}>
+                    La consulta se completó, pero no se pudo
+                    guardar una copia local.
+                  </Text>
+                )}
+
+              {errorPlanes &&
+              !copiasLocales.planes.disponible &&
+              !copiasLocales.planes.respuestaValida &&
+              planes.length === 0 ? (
+                <Text style={styles.secundario}>
+                  {copiasLocales.planes.errorLectura
+                    ? 'No se pudo revisar la información guardada. Conéctate a Internet e inténtalo nuevamente.'
+                    : 'Aún no hay planes de refuerzo sincronizados en este dispositivo. Conéctate a Internet para consultarlos.'}
                 </Text>
               ) : planes.length === 0 ? (
                 <Text style={styles.secundario}>
-                  El servidor no encontró planes de
-                  acompañamiento asociados a esta cuenta.
-                  Solicita al Orientador verificar el
-                  estudiante seleccionado.
+                  {copiasLocales.planes.respuestaValida
+                    ? 'No hay planes de refuerzo registrados en la consulta más reciente.'
+                    : copiasLocales.planes.disponible
+                    ? 'No hay planes de refuerzo registrados en la última sincronización.'
+                    : 'No hay planes de refuerzo registrados.'}
                 </Text>
               ) : (
                 planes.map((plan) => (
@@ -881,11 +1243,11 @@ const styles = StyleSheet.create({
     gap: 10,
   },
 
-  error: {
-    backgroundColor: '#FFF4F2',
+  avisoOffline: {
+    backgroundColor: '#FFF5DF',
     borderRadius: 12,
     padding: 13,
-    color: '#B91C1C',
+    color: '#8A6500',
     fontSize: 13,
     lineHeight: 20,
     marginBottom: 12,

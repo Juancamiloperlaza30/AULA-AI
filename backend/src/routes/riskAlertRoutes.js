@@ -24,6 +24,9 @@ const {
 const {
   requireAcademicAccess,
 } = require('../middleware/requireAcademicAccess');
+const {
+  medirTiempoRespuestaAlertas,
+} = require('../middleware/academicAlertResponseTimeMiddleware');
 const router = express.Router();
 
 // ======================================================
@@ -42,6 +45,7 @@ router.use(permitirRoles('orientador'));
 
 router.get(
   '/orientador',
+  medirTiempoRespuestaAlertas('listar'),
   listarAlertasOrientador
 );
 
@@ -53,6 +57,7 @@ router.get(
 
 router.get(
   '/orientador/:alertaId',
+  medirTiempoRespuestaAlertas('detalle'),
   obtenerAlertaOrientador
 );
 
@@ -69,6 +74,7 @@ router.post(
 
 router.get(
   '/orientador/:alertaId/seguimientos',
+  medirTiempoRespuestaAlertas('seguimientos'),
   obtenerSeguimientosOrientador
 );
 

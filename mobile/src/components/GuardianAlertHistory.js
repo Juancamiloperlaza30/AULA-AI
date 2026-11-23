@@ -15,6 +15,12 @@ import {
   View,
 } from 'react-native';
 
+import {
+  eliminarCacheEstudianteAcudienteOffline,
+  guardarCacheAcudienteOffline,
+  obtenerCacheAcudienteOffline,
+} from '../database/guardianAcademicOfflineDatabase';
+
 // ======================================================
 // AULA-AI | HU-08 | PASO 47
 // HISTORIAL ACADÉMICO - DISEÑO MEJORADO
@@ -485,9 +491,11 @@ function EventoCard({
 // ======================================================
 
 export default function GuardianAlertHistory({
+  acudienteId,
   apiUrl,
   accessToken,
   estudiante,
+  onAuthorizationDenied,
 }) {
   const estudianteId = estudiante?.id;
 
@@ -517,6 +525,17 @@ export default function GuardianAlertHistory({
 
   const [error, setError] =
     useState('');
+
+  const [avisoOffline, setAvisoOffline] =
+    useState('');
+
+  const [modoOffline, setModoOffline] =
+    useState(false);
+
+  const [
+    ultimaSincronizacion,
+    setUltimaSincronizacion,
+  ] = useState(null);
 
   const abortRef = useRef(null);
   const versionRef = useRef(0);
@@ -565,18 +584,104 @@ export default function GuardianAlertHistory({
         setTotal(0);
         setTieneSiguiente(false);
         setExpandidoId(null);
+        setModoOffline(false);
       }
 
       setError('');
+      setAvisoOffline('');
+
+      let copiaLocal = null;
+      const claveCache =
+        `${filtro}:${nuevaPagina}`;
 
       try {
         if (
-          !base ||
-          !accessToken ||
+          !acudienteId ||
           !estudianteId
         ) {
           throw new Error(
             'No hay una sesión válida para consultar el historial.'
+          );
+        }
+
+        try {
+          const copia =
+            await obtenerCacheAcudienteOffline({
+              acudienteId,
+              estudianteId,
+              recurso: 'historial_alertas',
+              clave: claveCache,
+            });
+
+          if (
+            copia &&
+            copia.contenido?.estudiante?.id ===
+              estudianteId &&
+            Array.isArray(
+              copia.contenido.historial
+            )
+          ) {
+            copiaLocal = copia;
+            setHistorial((anteriores) => {
+              if (!agregar) {
+                return copia.contenido.historial;
+              }
+
+              const ids = new Set(
+                anteriores.map((registro) =>
+                  String(registro.id)
+                )
+              );
+
+              return [
+                ...anteriores,
+                ...copia.contenido.historial.filter(
+                  (registro) =>
+                    !ids.has(
+                      String(registro.id)
+                    )
+                ),
+              ];
+            });
+            setPagina(nuevaPagina);
+            setTotal(
+              Number(
+                copia.contenido.paginacion?.total
+              ) || 0
+            );
+            setTieneSiguiente(
+              copia.contenido.paginacion
+                ?.tieneSiguiente === true
+            );
+            setModoOffline(true);
+            setUltimaSincronizacion(
+              new Date(copia.sincronizadoEn)
+            );
+          }
+        } catch (errorLocal) {
+          console.warn(
+            'HU-08: no se pudo leer la caché local del historial de alertas:',
+            errorLocal.message
+          );
+        }
+
+        if (
+          controller.signal.aborted ||
+          version !== versionRef.current
+        ) {
+          return;
+        }
+
+        if (!base || !accessToken) {
+          if (copiaLocal) {
+            setAvisoOffline(
+              'Modo sin conexión. Se muestra el historial de la última sincronización.'
+            );
+            return;
+          }
+
+          throw new Error(
+            'No hay conexión ni historial sincronizado para este filtro.'
           );
         }
 
@@ -614,22 +719,28 @@ export default function GuardianAlertHistory({
         try {
           datos = await respuesta.json();
         } catch {
-          throw new Error(
+          const error = new Error(
             'El servidor devolvió una respuesta no válida.'
           );
+
+          error.status = respuesta.status;
+          throw error;
         }
 
         if (
           !respuesta.ok ||
           datos?.success !== true
         ) {
-          throw new Error(
+          const error = new Error(
             respuesta.status === 401 ||
             respuesta.status === 403
               ? 'No tienes autorización para consultar este historial.'
               : datos?.message ||
                 'No fue posible consultar el historial.'
           );
+
+          error.status = respuesta.status;
+          throw error;
         }
 
         if (
@@ -679,6 +790,29 @@ export default function GuardianAlertHistory({
         setTieneSiguiente(
           datos.paginacion?.tieneSiguiente === true
         );
+
+        setModoOffline(false);
+        setAvisoOffline('');
+
+        try {
+          const guardado =
+            await guardarCacheAcudienteOffline({
+              acudienteId,
+              estudianteId,
+              recurso: 'historial_alertas',
+              clave: claveCache,
+              contenido: datos,
+            });
+
+          setUltimaSincronizacion(
+            new Date(guardado.sincronizadoEn)
+          );
+        } catch (errorCache) {
+          console.warn(
+            'HU-08: no se pudo guardar el historial para consulta offline:',
+            errorCache.message
+          );
+        }
       } catch (err) {
         if (
           controller.signal.aborted ||
@@ -688,10 +822,43 @@ export default function GuardianAlertHistory({
           return;
         }
 
-        setError(
-          err?.message ||
-          'Ocurrió un error al consultar el historial.'
-        );
+        if (
+          err?.status === 401 ||
+          err?.status === 403
+        ) {
+          setHistorial([]);
+          setTotal(0);
+          setTieneSiguiente(false);
+          setModoOffline(false);
+          setUltimaSincronizacion(null);
+          setError(err.message);
+
+          try {
+            await eliminarCacheEstudianteAcudienteOffline({
+              acudienteId,
+              estudianteId,
+            });
+          } catch (errorCache) {
+            console.warn(
+              'HU-08: no se pudo limpiar la caché del historial tras rechazo de autorización:',
+              errorCache.message
+            );
+          }
+
+          onAuthorizationDenied?.(
+            estudianteId
+          );
+        } else if (copiaLocal) {
+          setModoOffline(true);
+          setAvisoOffline(
+            'No fue posible actualizar el historial. Se conserva la última copia sincronizada.'
+          );
+        } else {
+          setError(
+            err?.message ||
+            'Ocurrió un error al consultar el historial.'
+          );
+        }
       } finally {
         if (
           version === versionRef.current
@@ -702,9 +869,11 @@ export default function GuardianAlertHistory({
       }
     },
     [
+      acudienteId,
       base,
       accessToken,
       estudianteId,
+      onAuthorizationDenied,
       filtro,
       cancelarConsulta,
     ]
@@ -738,6 +907,21 @@ export default function GuardianAlertHistory({
 
   return (
     <View style={styles.contenedor}>
+      {modoOffline && (
+        <Text style={styles.estadoOffline}>
+          Modo sin conexión · Última sincronización:{' '}
+          {ultimaSincronizacion?.toLocaleString(
+            'es-CO'
+          ) || 'fecha no disponible'}
+        </Text>
+      )}
+
+      {!!avisoOffline && (
+        <Text style={styles.estadoOffline}>
+          {avisoOffline}
+        </Text>
+      )}
+
       <View style={styles.encabezado}>
         <View style={styles.encabezadoTextos}>
           <Text style={styles.titulo}>

@@ -26,10 +26,16 @@ import StudentAcademicRecommendations
   from '../components/StudentAcademicRecommendations';
 
 import {
+  guardarActividadesLocales,
+  guardarCalificacionesPeriodoLocales,
+  guardarMateriasLocales,
   obtenerMateriasLocales,
   obtenerActividadesLocales,
   obtenerCalificacionesLocales,
 } from '../../database/localDatabase';
+import {
+  precargarComunicadosEstudiante,
+} from '../services/studentCommunicationsPreloadService';
 
 // ================================================
 // AULA-AI | HU-07
@@ -69,6 +75,18 @@ const obtenerPromedioSimple = (notas) => {
       0
     ) / valores.length
   );
+};
+
+const formatearActualizacion = (fecha) => {
+  if (!fecha) return 'No disponible';
+
+  const valor = new Date(fecha);
+
+  if (Number.isNaN(valor.getTime())) {
+    return 'No disponible';
+  }
+
+  return valor.toLocaleString('es-CO');
 };
 
 // Solicitud con límite de tiempo y cancelación.
@@ -203,6 +221,11 @@ export default function EstudianteDashboard({
   const [origen, setOrigen] =
     useState(null);
 
+  const [
+    ultimaSincronizacion,
+    setUltimaSincronizacion,
+  ] = useState(null);
+
   const [cargandoResumen, setCargandoResumen] =
     useState(true);
 
@@ -213,7 +236,12 @@ export default function EstudianteDashboard({
     async (signal) => {
       const usuarioId = usuario?.id;
 
-      if (!usuarioId || !accessToken) {
+      setResumen(RESUMEN_INICIAL);
+      setOrigen(null);
+      setUltimaSincronizacion(null);
+      setAviso('');
+
+      if (!usuarioId) {
         setCargandoResumen(false);
         return;
       }
@@ -253,6 +281,31 @@ export default function EstudianteDashboard({
           resultados[2].status === 'fulfilled'
             ? resultados[2].value
             : [];
+
+        const fechasSincronizacion = [
+          ...materias,
+          ...actividades,
+          ...notas,
+        ]
+          .map((item) => item.sincronizado_en)
+          .filter(Boolean)
+          .filter((fecha) =>
+            Number.isFinite(
+              new Date(fecha).getTime()
+            )
+          );
+
+        if (fechasSincronizacion.length) {
+          setUltimaSincronizacion(
+            fechasSincronizacion.reduce(
+              (ultima, fecha) =>
+                new Date(fecha).getTime() >
+                new Date(ultima).getTime()
+                  ? fecha
+                  : ultima
+            )
+          );
+        }
 
         const hayMaterias =
           Array.isArray(materias) &&
@@ -353,6 +406,17 @@ export default function EstudianteDashboard({
         );
       }
 
+      if (!accessToken || !apiUrl) {
+        setOrigen(hayCopia ? 'sqlite' : null);
+        setAviso(
+          hayCopia
+            ? 'Sin conexión o sesión disponible. Se muestra el resumen guardado localmente.'
+            : 'No hay conexión ni una copia local del resumen académico.'
+        );
+        setCargandoResumen(false);
+        return;
+      }
+
       // ========================================
       // PASO 2: ACTUALIZAR DESDE EL BACKEND
       // ========================================
@@ -382,18 +446,59 @@ export default function EstudianteDashboard({
 
         if (signal.aborted) return;
 
+        const resultadosApi = [
+          materiasResult,
+          actividadesResult,
+          periodoResult,
+        ];
+        const errorAutorizacion =
+          resultadosApi.find(
+            (resultado) =>
+              resultado.status === 'rejected' &&
+              (
+                resultado.reason?.status === 401 ||
+                resultado.reason?.status === 403
+              )
+          );
+
+        if (errorAutorizacion) {
+          setResumen(RESUMEN_INICIAL);
+          setOrigen(null);
+          setUltimaSincronizacion(null);
+          setAviso(
+            'Tu sesión no es válida o no tienes permiso. Vuelve a iniciar sesión.'
+          );
+          return;
+        }
+
         const materiasData =
-          materiasResult.status === 'fulfilled'
+          materiasResult.status === 'fulfilled' &&
+          materiasResult.value?.success === true &&
+          Array.isArray(
+            materiasResult.value.materias
+          ) &&
+          materiasResult.value.resumenAcademico &&
+          typeof materiasResult.value.resumenAcademico ===
+            'object'
             ? materiasResult.value
             : null;
 
         const actividadesData =
-          actividadesResult.status === 'fulfilled'
+          actividadesResult.status === 'fulfilled' &&
+          actividadesResult.value?.success === true &&
+          Array.isArray(
+            actividadesResult.value.actividades
+          )
             ? actividadesResult.value
             : null;
 
         const periodoData =
-          periodoResult.status === 'fulfilled'
+          periodoResult.status === 'fulfilled' &&
+          periodoResult.value?.success === true &&
+          Object.prototype.hasOwnProperty.call(
+            periodoResult.value,
+            'periodo'
+          )
             ? periodoResult.value
             : null;
 
@@ -414,6 +519,42 @@ export default function EstudianteDashboard({
         let nuevoResumen = {
           ...resumenLocal,
         };
+        let datosCompletos = Boolean(
+          materiasData &&
+          actividadesData &&
+          periodoData
+        );
+        let persistenciaCompleta = true;
+
+        if (materiasData) {
+          try {
+            await guardarMateriasLocales(
+              usuarioId,
+              materiasData.materias
+            );
+          } catch (errorCache) {
+            persistenciaCompleta = false;
+            console.warn(
+              'HU-14: no se pudo precargar materias del estudiante:',
+              errorCache.message
+            );
+          }
+        }
+
+        if (actividadesData) {
+          try {
+            await guardarActividadesLocales(
+              usuarioId,
+              actividadesData.actividades
+            );
+          } catch (errorCache) {
+            persistenciaCompleta = false;
+            console.warn(
+              'HU-14: no se pudieron precargar actividades del estudiante:',
+              errorCache.message
+            );
+          }
+        }
 
         if (materiasData?.resumenAcademico) {
           const academico =
@@ -473,7 +614,6 @@ export default function EstudianteDashboard({
         }
 
         setResumen(nuevoResumen);
-        setOrigen('servidor');
 
         // Recuperar el promedio oficial únicamente
         // cuando exista un periodo actual válido.
@@ -487,6 +627,34 @@ export default function EstudianteDashboard({
               );
 
             if (signal.aborted) return;
+
+            if (
+              notasData?.success !== true ||
+              !Array.isArray(
+                notasData.calificaciones
+              ) ||
+              !Array.isArray(
+                notasData.promediosPeriodos
+              )
+            ) {
+              throw new Error(
+                'El servidor devolvió un resumen de calificaciones incompleto.'
+              );
+            }
+
+            try {
+              await guardarCalificacionesPeriodoLocales(
+                usuarioId,
+                periodoActual.id,
+                notasData.calificaciones
+              );
+            } catch (errorCache) {
+              persistenciaCompleta = false;
+              console.warn(
+                'HU-14: no se pudieron precargar calificaciones del período:',
+                errorCache.message
+              );
+            }
 
             // Respetamos el valor devuelto
             // por el backend. No inventamos nota.
@@ -505,6 +673,20 @@ export default function EstudianteDashboard({
               promedioEstimado: false,
             }));
           } catch (errorPromedio) {
+            if (
+              errorPromedio.status === 401 ||
+              errorPromedio.status === 403
+            ) {
+              setResumen(RESUMEN_INICIAL);
+              setOrigen(null);
+              setUltimaSincronizacion(null);
+              setAviso(
+                'Tu sesión no es válida o no tienes permiso. Vuelve a iniciar sesión.'
+              );
+              return;
+            }
+
+            datosCompletos = false;
             // Si no existe promedio oficial,
             // conservamos los datos locales,
             // identificados como estimados.
@@ -513,6 +695,31 @@ export default function EstudianteDashboard({
               errorPromedio.message
             );
           }
+        } else {
+          nuevoResumen = {
+            ...nuevoResumen,
+            promedio: null,
+            promedioEstimado: false,
+          };
+          setResumen(nuevoResumen);
+        }
+
+        setOrigen(
+          datosCompletos ? 'servidor' : 'parcial'
+        );
+        setAviso(
+          datosCompletos
+            ? persistenciaCompleta
+              ? ''
+              : 'Los datos se consultaron, pero parte de la copia offline no pudo actualizarse.'
+            : hayCopia
+              ? 'La consulta fue parcial. Los datos no actualizados pueden provenir de la última copia local.'
+              : 'No se pudieron actualizar todos los componentes del resumen académico.'
+        );
+        if (persistenciaCompleta && datosOnline) {
+          setUltimaSincronizacion(
+            new Date().toISOString()
+          );
         }
       } catch (_error) {
         if (!signal.aborted) {
@@ -551,6 +758,25 @@ export default function EstudianteDashboard({
       controller.abort();
     };
   }, [cargarResumen]);
+
+  useEffect(() => {
+    const usuarioId = usuario?.id;
+
+    if (!usuarioId || !accessToken || !apiUrl) {
+      return;
+    }
+
+    precargarComunicadosEstudiante({
+      usuarioId,
+      apiUrl,
+      accessToken,
+    }).catch((error) => {
+      console.warn(
+        'HU-14: no se pudieron precargar comunicados:',
+        error?.message || error
+      );
+    });
+  }, [usuario?.id, apiUrl, accessToken]);
 
   const promedioTexto =
     resumen.promedio !== null &&
@@ -662,6 +888,8 @@ export default function EstudianteDashboard({
               backgroundColor:
                 origen === 'servidor'
                   ? '#21845B'
+                  : origen === 'parcial'
+                    ? '#C18A29'
                   : origen === 'sqlite'
                     ? '#C18A29'
                     : '#A0AAB6',
@@ -672,10 +900,21 @@ export default function EstudianteDashboard({
         <Text style={styles.estadoTexto}>
           {origen === 'servidor'
             ? 'Resumen consultado con el servidor'
+            : origen === 'parcial'
+              ? 'Resumen parcial · puede contener datos no actualizados'
             : origen === 'sqlite'
               ? 'Resumen local · puede estar desactualizado'
               : 'Resumen académico no disponible'}
         </Text>
+
+        {ultimaSincronizacion && (
+          <Text style={styles.estadoTexto}>
+            Última copia local:{' '}
+            {formatearActualizacion(
+              ultimaSincronizacion
+            )}
+          </Text>
+        )}
 
         {cargandoResumen && (
           <ActivityIndicator

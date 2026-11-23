@@ -9,11 +9,69 @@ const {
   supabaseAdmin,
 } = require('../config/supabase');
 
+const TAMANO_PAGINA = 500;
+const TAMANO_LOTE = 200;
+
 const responderError = (res, codigo, mensaje) => {
   return res.status(codigo).json({
     success: false,
     message: mensaje,
   });
+};
+
+const consultarTodasLasPaginas = async (
+  crearConsulta
+) => {
+  const registros = [];
+  let inicio = 0;
+
+  while (true) {
+    const {
+      data,
+      error,
+    } = await crearConsulta().range(
+      inicio,
+      inicio + TAMANO_PAGINA - 1
+    );
+
+    if (error) {
+      throw error;
+    }
+
+    const pagina = data || [];
+    registros.push(...pagina);
+
+    if (pagina.length < TAMANO_PAGINA) {
+      return registros;
+    }
+
+    inicio += TAMANO_PAGINA;
+  }
+};
+
+const consultarPorLotes = async (
+  ids,
+  crearConsulta
+) => {
+  const resultados = [];
+
+  for (
+    let inicio = 0;
+    inicio < ids.length;
+    inicio += TAMANO_LOTE
+  ) {
+    const lote = ids.slice(
+      inicio,
+      inicio + TAMANO_LOTE
+    );
+    const pagina = await consultarTodasLasPaginas(
+      () => crearConsulta(lote)
+    );
+
+    resultados.push(...pagina);
+  }
+
+  return resultados;
 };
 
 const consultarMiHistorial = async (req, res) => {
@@ -74,38 +132,34 @@ const consultarMiHistorial = async (req, res) => {
 
     // 2. Consultar las asignaciones que
     // corresponden a su grado y grupo.
-    let consultaAsignaciones = supabaseAdmin
-      .from('materia_grupo_periodo')
-      .select(`
-        id,
-        periodo_id,
-        materia:materias (
-          id,
-          nombre
-        )
-      `)
-      .eq('grado_id', estudiante.grado_id)
-      .eq('grupo_id', estudiante.grupo_id);
+    const asignaciones =
+      await consultarTodasLasPaginas(() => {
+        let consulta = supabaseAdmin
+          .from('materia_grupo_periodo')
+          .select(`
+            id,
+            periodo_id,
+            materia:materias (
+              id,
+              nombre
+            )
+          `)
+          .eq('grado_id', estudiante.grado_id)
+          .eq('grupo_id', estudiante.grupo_id)
+          .order('id', { ascending: true });
 
-    if (periodoId !== null) {
-      consultaAsignaciones =
-        consultaAsignaciones.eq(
-          'periodo_id',
-          periodoId
-        );
-    }
+        if (periodoId !== null) {
+          consulta = consulta.eq(
+            'periodo_id',
+            periodoId
+          );
+        }
 
-    const {
-      data: asignaciones,
-      error: errorAsignaciones,
-    } = await consultaAsignaciones;
-
-    if (errorAsignaciones) {
-      throw errorAsignaciones;
-    }
+        return consulta;
+      });
 
     const asignacionesPorId = new Map(
-      (asignaciones || []).map((item) => [
+      asignaciones.map((item) => [
         Number(item.id),
         item,
       ])
@@ -120,32 +174,21 @@ const consultarMiHistorial = async (req, res) => {
     // 3. Consultar exclusivamente las
     // asistencias del usuario autenticado.
     if (asignacionIds.length > 0) {
-      const {
-        data,
-        error,
-      } = await supabaseAdmin
-        .from('asistencias')
-        .select(`
-          id,
-          estado,
-          observacion,
-          sesion_clase_id,
-          materia_grupo_periodo_id
-        `)
-        .eq('estudiante_id', estudianteId)
-        .in(
-          'materia_grupo_periodo_id',
-          asignacionIds
-        )
-        .order('id', {
-          ascending: false,
-        });
-
-      if (error) {
-        throw error;
-      }
-
-      asistencias = data || [];
+      asistencias = await consultarPorLotes(
+        asignacionIds,
+        (lote) => supabaseAdmin
+          .from('asistencias')
+          .select(`
+            id,
+            estado,
+            observacion,
+            sesion_clase_id,
+            materia_grupo_periodo_id
+          `)
+          .eq('estudiante_id', estudianteId)
+          .in('materia_grupo_periodo_id', lote)
+          .order('id', { ascending: false })
+      );
     }
 
     // 4. Obtener las fechas de las sesiones
@@ -161,24 +204,21 @@ const consultarMiHistorial = async (req, res) => {
     const sesionesPorId = new Map();
 
     if (sesionIds.length > 0) {
-      const {
-        data: sesiones,
-        error: errorSesiones,
-      } = await supabaseAdmin
-        .from('sesiones_clase')
-        .select(`
-          id,
-          materia_grupo_periodo_id,
-          fecha,
-          numero_sesion
-        `)
-        .in('id', sesionIds);
+      const sesiones = await consultarPorLotes(
+        sesionIds,
+        (lote) => supabaseAdmin
+          .from('sesiones_clase')
+          .select(`
+            id,
+            materia_grupo_periodo_id,
+            fecha,
+            numero_sesion
+          `)
+          .in('id', lote)
+          .order('id', { ascending: true })
+      );
 
-      if (errorSesiones) {
-        throw errorSesiones;
-      }
-
-      for (const sesion of sesiones || []) {
+      for (const sesion of sesiones) {
         sesionesPorId.set(
           Number(sesion.id),
           sesion

@@ -53,22 +53,37 @@ const obtenerIndicadoresAsistencia = async ({
   }
 
   // 2. Consultar registros de asistencia.
-  const {
-    data: asistencias,
-    error: errorAsistencias,
-  } = await supabaseAdmin
-    .from('asistencias')
-    .select('id, fecha, estado')
-    .eq('estudiante_id', estudianteId)
-    .order('fecha', { ascending: true });
+  const registros = [];
+  const tamanoPagina = 500;
 
-  if (errorAsistencias) {
-    throw new Error(
-      `Error consultando asistencias: ${errorAsistencias.message}`
-    );
+  for (
+    let inicio = 0;
+    ;
+    inicio += tamanoPagina
+  ) {
+    const {
+      data,
+      error,
+    } = await supabaseAdmin
+      .from('asistencias')
+      .select('id, fecha, estado')
+      .eq('estudiante_id', estudianteId)
+      .order('fecha', { ascending: true })
+      .order('id', { ascending: true })
+      .range(inicio, inicio + tamanoPagina - 1);
+
+    if (error) {
+      throw new Error(
+        `Error consultando asistencias: ${error.message}`
+      );
+    }
+
+    registros.push(...(data || []));
+
+    if (!data || data.length < tamanoPagina) {
+      break;
+    }
   }
-
-  const registros = asistencias || [];
 
   // 3. Inicializar contadores.
   const resumen = {

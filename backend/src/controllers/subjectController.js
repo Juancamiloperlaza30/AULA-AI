@@ -59,6 +59,44 @@ const normalizarIdsUuid = (valores) => {
   return valores;
 };
 
+const TAMANO_PAGINA_MATERIAS = 500;
+
+const consultarTodasLasPaginas = async (
+  crearConsulta
+) => {
+  const registros = [];
+  let inicio = 0;
+
+  while (true) {
+    const {
+      data,
+      error,
+    } = await crearConsulta().range(
+      inicio,
+      inicio + TAMANO_PAGINA_MATERIAS - 1
+    );
+
+    if (error) {
+      return {
+        data: null,
+        error,
+      };
+    }
+
+    const pagina = data || [];
+    registros.push(...pagina);
+
+    if (pagina.length < TAMANO_PAGINA_MATERIAS) {
+      return {
+        data: registros,
+        error: null,
+      };
+    }
+
+    inicio += TAMANO_PAGINA_MATERIAS;
+  }
+};
+
 const verificarAmbitoCoordinador = async ({
   usuario,
   gradoId,
@@ -1001,57 +1039,54 @@ const listarMateriasEstudiante = async (req, res) => {
     //    de su grado y grupo
     // =====================================
 
-    let consulta = supabaseAdmin
-      .from('materia_grupo_periodo')
-      .select(`
-        id,
-        periodo_id,
-        estado,
-        materia:materias (
-          id,
-          nombre
-        ),
-        grado:grados (
-          id,
-          nombre
-        ),
-        grupo:grupos (
-          id,
-          nombre
-        ),
-        periodo:periodos_academicos (
-          id,
-          nombre
-        ),
-        docentes:materia_docente (
-          docente:usuarios (
-            id,
-            nombres,
-            apellidos
-          )
-        )
-      `)
-      .eq(
-        'grado_id',
-        estudiante.grado_id
-      )
-      .eq(
-        'grupo_id',
-        estudiante.grupo_id
-      )
-      .eq('estado', 'activa');
-
-    if (periodoId) {
-      consulta = consulta.eq(
-        'periodo_id',
-        periodoId
-      );
-    }
-
     const {
       data,
       error,
-    } = await consulta;
+    } = await consultarTodasLasPaginas(() => {
+      let consulta = supabaseAdmin
+        .from('materia_grupo_periodo')
+        .select(`
+          id,
+          periodo_id,
+          estado,
+          materia:materias (
+            id,
+            nombre
+          ),
+          grado:grados (
+            id,
+            nombre
+          ),
+          grupo:grupos (
+            id,
+            nombre
+          ),
+          periodo:periodos_academicos (
+            id,
+            nombre
+          ),
+          docentes:materia_docente (
+            docente:usuarios (
+              id,
+              nombres,
+              apellidos
+            )
+          )
+        `)
+        .eq('grado_id', estudiante.grado_id)
+        .eq('grupo_id', estudiante.grupo_id)
+        .eq('estado', 'activa')
+        .order('id', { ascending: true });
+
+      if (periodoId) {
+        consulta = consulta.eq(
+          'periodo_id',
+          periodoId
+        );
+      }
+
+      return consulta;
+    });
 
     if (error) {
       console.error(

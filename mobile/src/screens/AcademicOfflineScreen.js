@@ -9,6 +9,7 @@ import {
   Alert,
   FlatList,
   SafeAreaView,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -18,11 +19,19 @@ import {
 import {
   consultarResumenAcademicoOffline,
 } from '../services/academicOfflineService';
+import AcademicRecommendationContent
+  from '../components/AcademicRecommendationContent';
+import StudentCommunicationsScreen
+  from './StudentCommunicationsScreen';
+import LocationScreen from './LocationScreen';
 
 const SECCIONES = [
   { id: 'materias', titulo: 'Materias' },
   { id: 'actividades', titulo: 'Actividades' },
   { id: 'calificaciones', titulo: 'Calificaciones' },
+  { id: 'planesRefuerzo', titulo: 'Planes' },
+  { id: 'recomendaciones', titulo: 'Recomendaciones' },
+  { id: 'perfil', titulo: 'Perfil' },
 ];
 
 const formatearFecha = (fecha) => {
@@ -39,11 +48,16 @@ const formatearFecha = (fecha) => {
 
 export default function AcademicOfflineScreen({
   usuario,
+  apiUrl,
   onBack,
 }) {
   const [cargando, setCargando] = useState(true);
   const [resumen, setResumen] = useState(null);
   const [seccion, setSeccion] = useState('materias');
+  const [mostrarComunicados, setMostrarComunicados] =
+    useState(false);
+  const [mostrarUbicacion, setMostrarUbicacion] =
+    useState(false);
   const usuarioId = usuario?.id;
 
   const cargarInformacion = useCallback(async () => {
@@ -91,7 +105,39 @@ export default function AcademicOfflineScreen({
     };
   }, [cargarInformacion]);
 
-  const registros = resumen?.[seccion] || [];
+  const perfil = {
+    nombres: usuario?.nombres || '',
+    apellidos: usuario?.apellidos || '',
+    correo: usuario?.correo || usuario?.email || '',
+    rol: usuario?.rol || '',
+  };
+  const perfilDisponible = Object.values(perfil)
+    .some((valor) => Boolean(String(valor).trim()));
+
+  const registros = seccion === 'perfil'
+    ? perfilDisponible
+      ? [perfil]
+      : []
+    : resumen?.[seccion] || [];
+
+  if (mostrarComunicados) {
+    return (
+      <StudentCommunicationsScreen
+        apiUrl={apiUrl}
+        accessToken={null}
+        usuarioId={usuarioId}
+        onBack={() => setMostrarComunicados(false)}
+      />
+    );
+  }
+
+  if (mostrarUbicacion) {
+    return (
+      <LocationScreen
+        onBack={() => setMostrarUbicacion(false)}
+      />
+    );
+  }
 
   const renderizarRegistro = ({ item }) => {
     let titulo = '';
@@ -103,6 +149,9 @@ export default function AcademicOfflineScreen({
         item.grado,
         item.grupo,
         item.periodo,
+        item.docentes
+          ? `Docente: ${item.docentes}`
+          : null,
       ].filter(Boolean).join(' - ');
     }
 
@@ -111,6 +160,12 @@ export default function AcademicOfflineScreen({
       detalle = [
         item.materia,
         item.estado,
+        item.entrega_estado
+          ? `Entrega: ${item.entrega_estado}`
+          : null,
+        item.calificacion_valor != null
+          ? `Nota: ${item.calificacion_valor}`
+          : null,
         item.fecha_entrega
           ? `Entrega: ${formatearFecha(item.fecha_entrega)}`
           : null,
@@ -128,6 +183,56 @@ export default function AcademicOfflineScreen({
       ].filter(Boolean).join('\n');
     }
 
+    if (seccion === 'planesRefuerzo') {
+      titulo = `Plan de acompañamiento #${item.id}`;
+      detalle = [
+        item.objetivo,
+        item.estado
+          ? `Estado: ${item.estado}`
+          : null,
+        item.prioridad
+          ? `Prioridad: ${item.prioridad}`
+          : null,
+        item.fecha_seguimiento
+          ? `Seguimiento: ${formatearFecha(item.fecha_seguimiento)}`
+          : null,
+        ...(Array.isArray(item.acciones)
+          ? item.acciones.map((accion) =>
+              typeof accion === 'string'
+                ? accion
+                : accion?.descripcion ||
+                  accion?.titulo ||
+                  accion?.nombre
+            )
+          : []),
+        item.observaciones_orientador,
+      ].filter(Boolean).join('\n');
+    }
+
+    if (seccion === 'recomendaciones') {
+      titulo =
+        `Recomendacion academica #${item.id}`;
+      detalle = [
+        item.origen
+          ? `Origen: ${item.origen}`
+          : null,
+        item.created_at
+          ? `Generada: ${formatearFecha(item.created_at)}`
+          : null,
+      ].filter(Boolean).join('\n');
+    }
+
+    if (seccion === 'perfil') {
+      titulo = [
+        item.nombres,
+        item.apellidos,
+      ].filter(Boolean).join(' ') || 'Perfil del estudiante';
+      detalle = [
+        item.correo ? `Correo: ${item.correo}` : null,
+        item.rol ? `Rol: ${item.rol}` : null,
+      ].filter(Boolean).join('\n');
+    }
+
     return (
       <View style={styles.registro}>
         <Text style={styles.registroTitulo}>
@@ -139,6 +244,32 @@ export default function AcademicOfflineScreen({
             {detalle}
           </Text>
         ) : null}
+
+        {seccion === 'recomendaciones' && (
+          <AcademicRecommendationContent
+            contenido={item.contenido}
+            indicadores={item.indicadores}
+            origen={item.origen}
+          />
+        )}
+
+        {seccion === 'planesRefuerzo' &&
+          Array.isArray(item.indicadores_progreso) &&
+          item.indicadores_progreso.length > 0 && (
+            <Text style={styles.registroDetalle}>
+              Indicadores:{' '}
+              {item.indicadores_progreso
+                .map((indicador) =>
+                  typeof indicador === 'string'
+                    ? indicador
+                    : indicador?.descripcion ||
+                      indicador?.indicador ||
+                      indicador?.titulo
+                )
+                .filter(Boolean)
+                .join(', ')}
+            </Text>
+          )}
       </View>
     );
   };
@@ -163,7 +294,12 @@ export default function AcademicOfflineScreen({
         </Text>
       </View>
 
-      <View style={styles.pestanas}>
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        style={styles.pestanas}
+        contentContainerStyle={styles.pestanasContenido}
+      >
         {SECCIONES.map((opcion) => (
           <TouchableOpacity
             key={opcion.id}
@@ -185,7 +321,34 @@ export default function AcademicOfflineScreen({
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
+
+      <Text style={styles.fecha}>
+        Actualizacion:{' '}
+        {seccion === 'perfil'
+          ? 'fecha no disponible'
+          : formatearFecha(
+              resumen?.fechasActualizacion?.[seccion]
+            )}
+      </Text>
+
+      <TouchableOpacity
+        style={styles.comunicados}
+        onPress={() => setMostrarComunicados(true)}
+      >
+        <Text style={styles.botonTexto}>
+          Consultar comunicados sincronizados
+        </Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity
+        style={styles.comunicados}
+        onPress={() => setMostrarUbicacion(true)}
+      >
+        <Text style={styles.botonTexto}>
+          Consultar ubicación del dispositivo
+        </Text>
+      </TouchableOpacity>
 
       {cargando ? (
         <ActivityIndicator
@@ -202,10 +365,18 @@ export default function AcademicOfflineScreen({
           renderItem={renderizarRegistro}
           contentContainerStyle={styles.lista}
           ListEmptyComponent={
-            <Text style={styles.vacio}>
-              No hay informacion almacenada
-              para esta seccion.
-            </Text>
+            <View>
+              {resumen?.errores?.[seccion] ? (
+                <Text style={styles.error}>
+                  {resumen.errores[seccion]}
+                </Text>
+              ) : null}
+              <Text style={styles.vacio}>
+                {resumen?.disponibilidad?.[seccion] === false
+                  ? 'Esta informacion aun no se ha sincronizado en este dispositivo.'
+                  : 'No hay informacion registrada para esta seccion.'}
+              </Text>
+            </View>
           }
         />
       )}
@@ -263,12 +434,15 @@ const styles = StyleSheet.create({
     color: '#64748B',
   },
   pestanas: {
-    flexDirection: 'row',
     padding: 8,
     backgroundColor: '#FFFFFF',
   },
+  pestanasContenido: {
+    flexDirection: 'row',
+  },
   pestana: {
-    flex: 1,
+    minWidth: 104,
+    marginHorizontal: 2,
     paddingVertical: 12,
     alignItems: 'center',
     borderRadius: 8,
@@ -283,6 +457,14 @@ const styles = StyleSheet.create({
   },
   pestanaTextoActivo: {
     color: '#FFFFFF',
+  },
+  comunicados: {
+    marginHorizontal: 16,
+    marginTop: 12,
+    backgroundColor: '#1F4E79',
+    borderRadius: 10,
+    padding: 14,
+    alignItems: 'center',
   },
   lista: {
     padding: 16,
@@ -310,6 +492,11 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 48,
     color: '#64748B',
+  },
+  error: {
+    textAlign: 'center',
+    marginTop: 32,
+    color: '#A52A22',
   },
   cargando: {
     marginTop: 40,

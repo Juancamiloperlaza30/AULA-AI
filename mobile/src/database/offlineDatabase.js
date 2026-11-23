@@ -202,3 +202,27 @@ export const obtenerMateriasOffline = async ({
     estado: fila.estado,
   }));
 };
+
+export const eliminarMateriasOffline = async ({
+  usuarioId,
+  tipoUsuario,
+}) => {
+  if (!usuarioId || !tipoUsuario) {
+    throw new Error(
+      'Se requiere el usuario y su tipo para eliminar materias offline.'
+    );
+  }
+
+  const db = await iniciarBaseOffline();
+  const resultado = await db.runAsync(
+    `DELETE FROM materias_offline
+    WHERE usuario_id = ?
+      AND tipo_usuario = ?`,
+    [String(usuarioId), tipoUsuario]
+  );
+
+  return {
+    success: true,
+    eliminados: resultado.changes ?? 0,
+  };
+};

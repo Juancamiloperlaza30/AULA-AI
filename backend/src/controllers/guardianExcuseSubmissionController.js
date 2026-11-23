@@ -1,5 +1,7 @@
 'use strict';
 
+const { performance } = require('node:perf_hooks');
+
 // =====================================================
 // AULA-AI | HU-09 | PASO 52.23
 // ENVIO DE EXCUSAS CON SOPORTE PRIVADO
@@ -7,10 +9,7 @@
 // REQUIERE:
 // - verificarToken y permitirRoles en guardianRoutes
 // - recibirSoporteExcusa antes del controlador
-// - RPC hu09_crear_excusa_con_soporte
-//
-// NO habilitar la ruta POST hasta completar las
-// verificaciones del siguiente paso.
+// - migracion RNF-09 que define el RPC seguro y restricciones
 // =====================================================
 
 const {
@@ -307,6 +306,8 @@ async function crearExcusaAcudiente(req, res) {
     }
 
     if (anterior?.excusa) {
+      res.locals.excusaId = anterior.excusa.id;
+
       return res.status(200).json({
         success: true,
         yaRegistrada: true,
@@ -365,18 +366,27 @@ async function crearExcusaAcudiente(req, res) {
     }
 
     // 7. Cargar soporte en Storage privado.
-    soporteSubido = await guardarSoporteExcusa({
-      acudienteId,
-      estudianteId,
-      soporte: req.soporteValidado,
-    });
+    const inicioCargaSoporte = performance.now();
+
+    try {
+      soporteSubido = await guardarSoporteExcusa({
+        acudienteId,
+        estudianteId,
+        soporte: req.soporteValidado,
+      });
+    } finally {
+      req.rnf09TransferenciaSoporteMs =
+        (req.rnf09TransferenciaSoporteMs || 0) +
+        performance.now() -
+        inicioCargaSoporte;
+    }
 
     // 8. Registrar en una unica transaccion PostgreSQL.
     // El RPC repite las validaciones de vinculacion,
     // inasistencia, duplicados y estado inicial.
     const { data: registros, error: errorRPC } =
       await supabaseAdmin.rpc(
-        'hu09_crear_excusa_con_soporte',
+        'hu09_crear_excusa_con_soporte_rnf09',
         {
           p_acudiente_id: acudienteId,
           p_estudiante_id: estudianteId,
@@ -422,6 +432,8 @@ async function crearExcusaAcudiente(req, res) {
         'RPC_SIN_CONFIRMACION_COMPLETA'
       );
     }
+
+    res.locals.excusaId = registro.excusa_id;
 
     if (registro.ya_registrada === true) {
       // Se cargo un archivo nuevo innecesario por
@@ -491,6 +503,9 @@ async function crearExcusaAcudiente(req, res) {
         }
 
         if (confirmacion?.excusa) {
+          res.locals.excusaId =
+            confirmacion.excusa.id;
+
           // La solicitud ya existe; no afirmar un fallo.
           // El nuevo archivo puede ser sobrante.
           if (

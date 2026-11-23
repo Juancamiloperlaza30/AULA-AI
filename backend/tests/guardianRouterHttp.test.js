@@ -17,6 +17,18 @@ const rutaAccess = require.resolve(
   '../src/middleware/requireAcademicAccess'
 );
 
+const rutaGuardianAudit = require.resolve(
+  '../src/middleware/guardianAuditMiddleware'
+);
+
+const rutaGuardianResponseTime = require.resolve(
+  '../src/middleware/guardianResponseTimeMiddleware'
+);
+
+const rutaExcuseResponseTime = require.resolve(
+  '../src/middleware/excuseResponseTimeMiddleware'
+);
+
 const rutaUpload = require.resolve(
   '../src/middleware/excuseUploadMiddleware'
 );
@@ -133,6 +145,38 @@ try {
       };
     }
 
+    if (resolved === rutaGuardianAudit) {
+      return {
+        auditarConsultaAcudiente: (
+          req,
+          res,
+          next
+        ) => next(),
+        auditarEnvioExcusa: (
+          req,
+          res,
+          next
+        ) => next(),
+      };
+    }
+
+    if (resolved === rutaGuardianResponseTime) {
+      return {
+        medirTiempoRespuestaAcudiente: () =>
+          (req, res, next) => next(),
+      };
+    }
+
+    if (resolved === rutaExcuseResponseTime) {
+      return {
+        medirTiempoRespuestaExcusa: (
+          req,
+          res,
+          next
+        ) => next(),
+      };
+    }
+
     if (resolved === rutaUpload) {
       return {
         recibirSoporteExcusa: (req, res, next) => next(),
@@ -154,11 +198,14 @@ try {
   delete require.cache[rutaRouter];
 }
 
-async function solicitar(usuario) {
+async function solicitar(usuario, opciones = {}) {
   usuarioSimulado = usuario;
   autenticaciones = 0;
   ejecucionesControlador = 0;
 
+  const metodo = opciones.metodo || 'GET';
+  const ruta = opciones.ruta ||
+    '/api/guardian/mis-estudiantes';
   const app = express();
 
   app.use('/api/guardian', router);
@@ -176,7 +223,8 @@ async function solicitar(usuario) {
     const puerto = servidor.address().port;
 
     const respuesta = await fetch(
-      `http://127.0.0.1:${puerto}/api/guardian/mis-estudiantes`
+      `http://127.0.0.1:${puerto}${ruta}`,
+      { method: metodo }
     );
 
     return {
@@ -263,4 +311,42 @@ test('Indicador de password ausente responde 403', async () => {
     'PASSWORD_CHANGE_REQUIRED'
   );
   assert.equal(resultado.ejecucionesControlador, 0);
+});
+
+test('El envío de excusas exige autenticación antes de procesar archivos', async () => {
+  const ruta =
+    '/api/guardian/estudiantes/' +
+    '00000000-0000-4000-8000-000000000001/excusas';
+
+  const sinSesion = await solicitar(null, {
+    metodo: 'POST',
+    ruta,
+  });
+
+  assert.equal(sinSesion.status, 401);
+  assert.equal(sinSesion.ejecucionesControlador, 0);
+
+  const rolNoPermitido = await solicitar({
+    id: '00000000-0000-4000-8000-000000000003',
+    rol: 'estudiante',
+    debe_cambiar_password: false,
+  }, {
+    metodo: 'POST',
+    ruta,
+  });
+
+  assert.equal(rolNoPermitido.status, 403);
+  assert.equal(rolNoPermitido.ejecucionesControlador, 0);
+
+  const acudienteAutorizado = await solicitar({
+    id: '00000000-0000-4000-8000-000000000002',
+    rol: 'acudiente',
+    debe_cambiar_password: false,
+  }, {
+    metodo: 'POST',
+    ruta,
+  });
+
+  assert.equal(acudienteAutorizado.status, 200);
+  assert.equal(acudienteAutorizado.ejecucionesControlador, 1);
 });

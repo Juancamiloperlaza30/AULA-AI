@@ -27,6 +27,37 @@ const obtenerRelacion = (valor) => {
   return valor || null;
 };
 
+const consultarTodasLasPaginas = async (
+  crearConsulta
+) => {
+  const registros = [];
+  let inicio = 0;
+  const tamanoPagina = 500;
+
+  while (true) {
+    const {
+      data,
+      error,
+    } = await crearConsulta().range(
+      inicio,
+      inicio + tamanoPagina - 1
+    );
+
+    if (error) {
+      throw error;
+    }
+
+    const pagina = data || [];
+    registros.push(...pagina);
+
+    if (pagina.length < tamanoPagina) {
+      return registros;
+    }
+
+    inicio += tamanoPagina;
+  }
+};
+
 // ======================================================
 // GET /api/guardian/estudiantes/:estudianteId/calificaciones
 // ======================================================
@@ -261,12 +292,10 @@ const listarCalificacionesAcudiente = async (
     // 6. CONSULTAR CALIFICACIONES REGISTRADAS
     // ==================================================
 
-    const {
-      data: calificaciones,
-      error: errorCalificaciones,
-    } = await supabaseAdmin
-      .from('calificaciones')
-      .select(`
+    const calificaciones = await consultarTodasLasPaginas(
+      () => supabaseAdmin
+        .from('calificaciones')
+        .select(`
         id,
         valor,
         retroalimentacion,
@@ -297,25 +326,12 @@ const listarCalificacionesAcudiente = async (
             )
           )
         )
-      `)
-      .eq('estudiante_id', estudianteId)
-      .eq('estado', 'registrada')
-      .order('created_at', {
-        ascending: false,
-      });
-
-    if (errorCalificaciones) {
-      console.error(
-        'HU-08: error consultando notas:',
-        errorCalificaciones.message
-      );
-
-      return res.status(500).json({
-        success: false,
-        message:
-          'No fue posible consultar las calificaciones del estudiante.',
-      });
-    }
+        `)
+        .eq('estudiante_id', estudianteId)
+        .eq('estado', 'registrada')
+        .order('created_at', { ascending: false })
+        .order('id', { ascending: false })
+    );
 
     const listaCalificaciones =
       calificaciones || [];

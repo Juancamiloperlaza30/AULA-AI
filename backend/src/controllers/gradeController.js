@@ -6,6 +6,146 @@ const {
   registrarAuditoria,
 } = require('../services/auditService');
 
+const UUID_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+const normalizarIdPositivo = (valor) => {
+  if (
+    typeof valor !== 'number' &&
+    (
+      typeof valor !== 'string' ||
+      !/^[1-9]\d*$/.test(valor)
+    )
+  ) {
+    return null;
+  }
+
+  const numero = Number(valor);
+
+  return Number.isSafeInteger(numero) && numero > 0
+    ? numero
+    : null;
+};
+
+const normalizarValorCalificacion = (valor) => {
+  if (
+    (
+      typeof valor !== 'number' &&
+      typeof valor !== 'string'
+    ) ||
+    valor === null ||
+    valor === undefined ||
+    (
+      typeof valor === 'string' &&
+      valor.trim() === ''
+    )
+  ) {
+    return null;
+  }
+
+  const texto = typeof valor === 'string'
+    ? valor.trim().replace(',', '.')
+    : valor;
+  const numero = Number(texto);
+
+  return Number.isFinite(numero) &&
+    numero >= 0 &&
+    numero <= 5
+    ? numero
+    : null;
+};
+
+const normalizarRetroalimentacion = (valor) => {
+  if (valor === null || valor === undefined) {
+    return {
+      valida: true,
+      valor: null,
+    };
+  }
+
+  if (typeof valor !== 'string') {
+    return {
+      valida: false,
+      valor: null,
+    };
+  }
+
+  return {
+    valida: true,
+    valor: valor.trim() || null,
+  };
+};
+
+const TAMANO_PAGINA_CALIFICACIONES = 500;
+
+const consultarTodasLasPaginas = async (
+  crearConsulta
+) => {
+  const registros = [];
+  let inicio = 0;
+
+  while (true) {
+    const {
+      data,
+      error,
+    } = await crearConsulta().range(
+      inicio,
+      inicio + TAMANO_PAGINA_CALIFICACIONES - 1
+    );
+
+    if (error) {
+      return {
+        data: null,
+        error,
+      };
+    }
+
+    const pagina = data || [];
+    registros.push(...pagina);
+
+    if (pagina.length < TAMANO_PAGINA_CALIFICACIONES) {
+      return {
+        data: registros,
+        error: null,
+      };
+    }
+
+    inicio += TAMANO_PAGINA_CALIFICACIONES;
+  }
+};
+
+const consultarPorLotes = async (
+  ids,
+  crearConsulta
+) => {
+  const registros = [];
+
+  for (
+    let inicio = 0;
+    inicio < ids.length;
+    inicio += TAMANO_PAGINA_CALIFICACIONES
+  ) {
+    const lote = ids.slice(
+      inicio,
+      inicio + TAMANO_PAGINA_CALIFICACIONES
+    );
+    const resultado = await consultarTodasLasPaginas(
+      () => crearConsulta(lote)
+    );
+
+    if (resultado.error) {
+      return resultado;
+    }
+
+    registros.push(...resultado.data);
+  }
+
+  return {
+    data: registros,
+    error: null,
+  };
+};
+
 const listarActividadesCalificablesDocente =
   async (req, res) => {
     try {
@@ -16,15 +156,17 @@ const listarActividadesCalificablesDocente =
       const {
         data: asignacionesDocente,
         error: errorAsignaciones,
-      } = await supabaseAdmin
-        .from('materia_docente')
-        .select(`
+      } = await consultarTodasLasPaginas(
+        () => supabaseAdmin
+          .from('materia_docente')
+          .select(`
           materia_grupo_periodo_id
-        `)
-        .eq(
-          'docente_id',
-          docenteId
-        );
+          `)
+          .eq('docente_id', docenteId)
+          .order('materia_grupo_periodo_id', {
+            ascending: true,
+          })
+      );
 
       if (errorAsignaciones) {
         console.error(
@@ -59,11 +201,11 @@ const listarActividadesCalificablesDocente =
       const {
         data: actividades,
         error: errorActividades,
-      } = await supabaseAdmin
-        .from(
-          'actividades_academicas'
-        )
-        .select(`
+      } = await consultarPorLotes(
+        idsAsignaciones,
+        (lote) => supabaseAdmin
+          .from('actividades_academicas')
+          .select(`
           id,
           tipo,
           titulo,
@@ -89,25 +231,13 @@ const listarActividadesCalificablesDocente =
               nombre
             )
           )
-        `)
-        .eq(
-          'docente_id',
-          docenteId
-        )
-        .in(
-          'materia_grupo_periodo_id',
-          idsAsignaciones
-        )
-        .eq(
-          'estado',
-          'publicada'
-        )
-        .order(
-          'fecha_entrega',
-          {
-            ascending: true,
-          }
-        );
+          `)
+          .eq('docente_id', docenteId)
+          .in('materia_grupo_periodo_id', lote)
+          .eq('estado', 'publicada')
+          .order('fecha_entrega', { ascending: true })
+          .order('id', { ascending: true })
+      );
 
       if (errorActividades) {
         console.error(
@@ -227,9 +357,10 @@ const listarEstudiantesActividadDocente =
       const {
         data: estudiantes,
         error: errorEstudiantes,
-      } = await supabaseAdmin
-        .from('estudiantes')
-        .select(`
+      } = await consultarTodasLasPaginas(
+        () => supabaseAdmin
+          .from('estudiantes')
+          .select(`
           usuario_id,
           usuario:usuarios (
             id,
@@ -237,15 +368,11 @@ const listarEstudiantesActividadDocente =
             apellidos,
             correo
           )
-        `)
-        .eq(
-          'grado_id',
-          relacion.grado_id
-        )
-        .eq(
-          'grupo_id',
-          relacion.grupo_id
-        );
+          `)
+          .eq('grado_id', relacion.grado_id)
+          .eq('grupo_id', relacion.grupo_id)
+          .order('usuario_id', { ascending: true })
+      );
 
       if (errorEstudiantes) {
         console.error(
@@ -273,9 +400,11 @@ const listarEstudiantesActividadDocente =
         const {
           data: notas,
           error: errorNotas,
-        } = await supabaseAdmin
-          .from('calificaciones')
-          .select(`
+        } = await consultarPorLotes(
+          estudianteIds,
+          (lote) => supabaseAdmin
+            .from('calificaciones')
+            .select(`
             id,
             estudiante_id,
             valor,
@@ -283,25 +412,13 @@ const listarEstudiantesActividadDocente =
             estado,
             created_at,
             updated_at
-          `)
-          .eq(
-            'actividad_id',
-            actividadId
-          )
-          .eq(
-            'estado',
-            'registrada'
-          )
-          .in(
-            'estudiante_id',
-            estudianteIds
-          )
-          .order(
-            'updated_at',
-            {
-              ascending: false,
-            }
-          );
+            `)
+            .eq('actividad_id', actividadId)
+            .eq('estado', 'registrada')
+            .in('estudiante_id', lote)
+            .order('updated_at', { ascending: false })
+            .order('id', { ascending: false })
+        );
 
         if (errorNotas) {
           console.error(
@@ -421,9 +538,11 @@ const registrarCalificacionesMasivas =
         req.usuario.id;
 
       const {
-        actividadId,
+        actividadId: actividadIdEntrada,
         calificaciones,
-      } = req.body;
+      } = req.body || {};
+      const actividadId =
+        normalizarIdPositivo(actividadIdEntrada);
 
       if (
         !actividadId ||
@@ -500,27 +619,43 @@ const registrarCalificacionesMasivas =
         });
       }
 
-      // 2. Validar cada calificación
-      for (
-        const item of calificaciones
-      ) {
+      // 2. Validar todas las calificaciones antes de guardar el lote.
+      const calificacionesValidadas = [];
+      const estudianteIdsUnicos = new Set();
+
+      for (const item of calificaciones) {
+        const estudianteId = item?.estudianteId;
         const valor =
-          Number(item.valor);
+          normalizarValorCalificacion(item?.valor);
+        const retroalimentacion =
+          normalizarRetroalimentacion(
+            item?.retroalimentacion
+          );
 
         if (
-          !item.estudianteId ||
-          !Number.isFinite(valor) ||
-          valor < 0 ||
-          valor > 5
+          typeof estudianteId !== 'string' ||
+          !UUID_REGEX.test(estudianteId) ||
+          valor === null ||
+          !retroalimentacion.valida
         ) {
           return res.status(400).json({
             success: false,
             message:
-              valor < 0
-                ? 'No se permiten calificaciones negativas. La nota debe estar entre 0.00 y 5.00.'
-                : 'Existe una calificación inválida. La nota debe estar entre 0.00 y 5.00.',
+              valor === null
+                ? 'La nota debe ser un valor numérico entre 0.00 y 5.00.'
+                : 'El estudiante o la retroalimentación no son válidos.',
           });
         }
+
+        if (estudianteIdsUnicos.has(estudianteId)) {
+          return res.status(400).json({
+            success: false,
+            message:
+              'No se permiten calificaciones duplicadas para el mismo estudiante.',
+          });
+        }
+
+        estudianteIdsUnicos.add(estudianteId);
 
         const {
           data: estudiante,
@@ -534,14 +669,24 @@ const registrarCalificacionesMasivas =
           `)
           .eq(
             'usuario_id',
-            item.estudianteId
+            estudianteId
           )
           .maybeSingle();
 
-        if (
-          errorEstudiante ||
-          !estudiante
-        ) {
+        if (errorEstudiante) {
+          console.error(
+            'Error validando estudiante para calificación:',
+            errorEstudiante.message
+          );
+
+          return res.status(500).json({
+            success: false,
+            message:
+              'No fue posible validar uno de los estudiantes.',
+          });
+        }
+
+        if (!estudiante) {
           return res.status(400).json({
             success: false,
             message:
@@ -561,252 +706,82 @@ const registrarCalificacionesMasivas =
               'Uno de los estudiantes no pertenece al grupo de la actividad.',
           });
         }
+
+        calificacionesValidadas.push({
+          estudianteId,
+          valor,
+          retroalimentacion:
+            retroalimentacion.valor,
+        });
       }
 
-      // 3. Separar calificaciones nuevas de las ya registradas.
-      const estudianteIds =
-        calificaciones.map(
-          (item) =>
-            item.estudianteId
-        );
-
+      // Un único RPC mantiene las altas, actualizaciones,
+      // historial y alertas en la misma transacción.
       const {
-        data: calificacionesExistentes,
-        error: errorExistentes,
-      } = await supabaseAdmin
-        .from('calificaciones')
-        .select(`
-          id,
-          estudiante_id,
-          valor,
-          retroalimentacion,
-          estado
-        `)
-        .eq(
-          'actividad_id',
-          actividadId
-        )
-        .eq(
-          'estado',
-          'registrada'
-        )
-        .in(
-          'estudiante_id',
-          estudianteIds
+        data,
+        error: errorGuardado,
+      } = await supabaseAdmin.rpc(
+        'guardar_calificaciones_masivas_rnf05',
+        {
+          p_actividad_id: actividadId,
+          p_docente_id: docenteId,
+          p_calificaciones:
+            calificacionesValidadas,
+        }
+      );
+
+      if (errorGuardado) {
+        console.error(
+          'Error guardando lote de calificaciones:',
+          errorGuardado.message
         );
 
-      if (errorExistentes) {
+        if (
+          errorGuardado.code === '23505' ||
+          errorGuardado.code === 'P0001'
+        ) {
+          return res.status(409).json({
+            success: false,
+            message:
+              'La actividad, el estudiante o la calificación cambiaron. Actualice e inténtelo de nuevo.',
+          });
+        }
+
+        return res.status(500).json({
+          success: false,
+          message:
+            'No fue posible guardar las calificaciones.',
+        });
+      }
+
+      const resultados = Array.isArray(data)
+        ? data
+        : [];
+
+      if (resultados.length !== calificacionesValidadas.length) {
         console.error(
-          'Error consultando calificaciones existentes:',
-          errorExistentes.message
+          'El procedimiento de calificaciones devolvió un resultado incompleto.'
         );
 
         return res.status(500).json({
           success: false,
           message:
-            'No fue posible consultar las calificaciones existentes.',
+            'No fue posible confirmar todas las calificaciones.',
         });
       }
 
-      const existentesPorEstudiante =
-        new Map(
-          (calificacionesExistentes || [])
-            .map(
-              (calificacion) => [
-                String(
-                  calificacion.estudiante_id
-                ),
-                calificacion,
-              ]
-            )
-        );
-
-      const calificacionesNuevas = [];
-      const calificacionesActualizadas = [];
-
-      for (const item of calificaciones) {
-        const calificacionExistente =
-          existentesPorEstudiante.get(
-            String(
-              item.estudianteId
-            )
-          );
-
-        if (!calificacionExistente) {
-          calificacionesNuevas.push(item);
-          continue;
-        }
-
-        const valorNuevo =
-          Number(item.valor);
-
-        const retroalimentacionNueva =
-          item.retroalimentacion?.trim() ||
-          null;
-
-        if (
-          Number(calificacionExistente.valor) ===
-            valorNuevo &&
-          (
-            calificacionExistente
-              .retroalimentacion || null
-          ) ===
-            retroalimentacionNueva
-        ) {
-          calificacionesActualizadas.push(
-            calificacionExistente
-          );
-
-          continue;
-        }
-
-        const {
-          data: calificacionActualizada,
-          error: errorActualizacion,
-        } = await supabaseAdmin
-          .from('calificaciones')
-          .update({
-            valor:
-              valorNuevo,
-            retroalimentacion:
-              retroalimentacionNueva,
-            updated_at:
-              new Date().toISOString(),
-          })
-          .eq(
-            'id',
-            calificacionExistente.id
-          )
-          .select(`
-            id,
-            estudiante_id,
-            valor,
-            retroalimentacion,
-            estado,
-            created_at,
-            updated_at
-          `)
-          .maybeSingle();
-
-        if (errorActualizacion) {
-          console.error(
-            'Error actualizando calificación del docente:',
-            errorActualizacion.message
-          );
-
-          return res.status(500).json({
-            success: false,
-            message:
-              'No fue posible actualizar una calificación existente.',
-          });
-        }
-
-        if (!calificacionActualizada) {
-          return res.status(409).json({
-            success: false,
-            message:
-              'La calificación cambió o dejó de estar disponible. Actualice la actividad e inténtelo de nuevo.',
-          });
-        }
-
-        calificacionesActualizadas.push(
-          calificacionActualizada
-        );
-
-        const {
-          error: errorHistorial,
-        } = await supabaseAdmin
-          .from(
-            'calificaciones_historial'
-          )
-          .insert({
-            calificacion_id:
-              calificacionExistente.id,
-            usuario_id:
-              docenteId,
-            valor_anterior:
-              calificacionExistente.valor,
-            valor_nuevo:
-              valorNuevo,
-            retroalimentacion_anterior:
-              calificacionExistente
-                .retroalimentacion,
-            retroalimentacion_nueva:
-              retroalimentacionNueva,
-            motivo:
-              'Calificación actualizada por el docente.',
-            rol_usuario:
-              'docente',
-          });
-
-        if (errorHistorial) {
-          console.error(
-            'Error registrando historial de calificación:',
-            errorHistorial.message
-          );
-        }
-      }
-
-      // Las calificaciones nuevas conservan el registro transaccional existente.
-      let calificacionesRegistradas = [];
-
-      if (calificacionesNuevas.length > 0) {
-        const {
-          data,
-          error: errorRegistro,
-        } = await supabaseAdmin.rpc(
-          'registrar_calificaciones_masivas',
-          {
-            p_actividad_id:
-              actividadId,
-            p_docente_id:
-              docenteId,
-            p_calificaciones:
-              calificacionesNuevas,
-          }
-        );
-
-        if (errorRegistro) {
-          console.error(
-            'Error registrando calificaciones:',
-            errorRegistro.message
-          );
-
-          if (
-            errorRegistro.code ===
-            '23505'
-          ) {
-            return res.status(409).json({
-              success: false,
-              message:
-                'La calificación ya existe o fue registrada por otro proceso. Actualice la actividad e inténtelo de nuevo.',
-            });
-          }
-
-          return res.status(500).json({
-            success: false,
-            message:
-              'No fue posible registrar las calificaciones.',
-          });
-        }
-
-        calificacionesRegistradas =
-          data || [];
-      }
+      const seRegistraronNuevas =
+        resultados.some((item) => item.esNueva === true);
 
       return res.status(
-        calificacionesNuevas.length > 0
-          ? 201
-          : 200
+        seRegistraronNuevas ? 201 : 200
       ).json({
         success: true,
         message:
           'Calificaciones guardadas correctamente.',
-        calificaciones:
-          [
-            ...calificacionesActualizadas,
-            ...calificacionesRegistradas,
-          ],
+        calificaciones: resultados.map(
+          ({ esNueva, ...calificacion }) => calificacion
+        ),
       });
     } catch (error) {
       console.error(
@@ -981,9 +956,10 @@ const listarCalificacionesEstudiante =
       const {
         data: calificaciones,
         error: errorCalificaciones,
-      } = await supabaseAdmin
-        .from('calificaciones')
-        .select(`
+      } = await consultarTodasLasPaginas(
+        () => supabaseAdmin
+          .from('calificaciones')
+          .select(`
           id,
           valor,
           retroalimentacion,
@@ -1016,21 +992,12 @@ const listarCalificacionesEstudiante =
               )
             )
           )
-        `)
-        .eq(
-          'estudiante_id',
-          usuarioId
-        )
-        .eq(
-          'estado',
-          'registrada'
-        )
-        .order(
-          'created_at',
-          {
-            ascending: false,
-          }
-        );
+          `)
+          .eq('estudiante_id', usuarioId)
+          .eq('estado', 'registrada')
+          .order('created_at', { ascending: false })
+          .order('id', { ascending: false })
+      );
 
       if (errorCalificaciones) {
         console.error(
@@ -1411,34 +1378,37 @@ const actualizarCalificacionAdministrativa =
         req.usuario.rol;
 
       const calificacionId =
-        Number(req.params.calificacionId);
+        normalizarIdPositivo(
+          req.params.calificacionId
+        );
 
       const {
         valor,
         retroalimentacion,
         motivo,
-      } = req.body;
-
-      if (!calificacionId) {
-        return res.status(400).json({
-          success: false,
-          message:
-            'La calificación no es válida.',
-        });
-      }
+      } = req.body || {};
 
       const valorNumerico =
-        Number(valor);
+        normalizarValorCalificacion(valor);
+      const retroalimentacionNormalizada =
+        normalizarRetroalimentacion(
+          retroalimentacion
+        );
 
       if (
-        Number.isNaN(valorNumerico) ||
-        valorNumerico < 0 ||
-        valorNumerico > 5
+        !calificacionId ||
+        valorNumerico === null ||
+        !retroalimentacionNormalizada.valida ||
+        (
+          motivo !== null &&
+          motivo !== undefined &&
+          typeof motivo !== 'string'
+        )
       ) {
         return res.status(400).json({
           success: false,
           message:
-            'La nota debe estar entre 0.00 y 5.00.',
+            'La calificación, la retroalimentación o el motivo no son válidos.',
         });
       }
 
@@ -1573,132 +1543,116 @@ const actualizarCalificacionAdministrativa =
         }
       }
 
+      const retroalimentacionNueva =
+        retroalimentacionNormalizada.valor;
+      const huboCambio =
+        Number(calificacionActual.valor) !==
+          valorNumerico ||
+        (calificacionActual.retroalimentacion || null) !==
+          retroalimentacionNueva;
+
       const {
         error: errorActualizacion,
-      } = await supabaseAdmin
-        .from('calificaciones')
-        .update({
-          valor:
-            valorNumerico,
-
-          retroalimentacion:
-            retroalimentacion?.trim() ||
-            null,
-
-          updated_at:
-            new Date().toISOString(),
-        })
-        .eq(
-          'id',
-          calificacionId
-        );
+      } = await supabaseAdmin.rpc(
+        'actualizar_calificacion_auditada_rnf05',
+        {
+          p_calificacion_id: calificacionId,
+          p_usuario_id: usuarioId,
+          p_rol: rol,
+          p_valor: valorNumerico,
+          p_retroalimentacion:
+            retroalimentacionNueva,
+          p_motivo:
+            typeof motivo === 'string'
+              ? motivo.trim() || null
+              : null,
+        }
+      );
 
       if (errorActualizacion) {
         console.error(
-          'Error actualizando calificación:',
+          'Error actualizando calificación e historial:',
           errorActualizacion.message
         );
 
-        return res.status(500).json({
+        return res.status(
+          errorActualizacion.code === 'P0001'
+            ? 409
+            : 500
+        ).json({
           success: false,
           message:
-            'No fue posible actualizar la calificación.',
+            errorActualizacion.code === 'P0001'
+              ? 'La calificación o el ámbito autorizado cambiaron. Actualice e inténtelo de nuevo.'
+              : 'No fue posible actualizar la calificación y guardar su historial.',
         });
       }
 
-      const {
-        error: errorHistorial,
-      } = await supabaseAdmin
-        .from(
-          'calificaciones_historial'
-        )
-        .insert({
-          calificacion_id:
-            calificacionId,
+      if (huboCambio) {
+        try {
+          const auditoriaRegistrada =
+            await registrarAuditoria({
+              usuarioId,
+              correo:
+                req.usuario.correo,
 
-          usuario_id:
-            usuarioId,
+              evento:
+                'CALIFICACION_MODIFICADA',
 
-          valor_anterior:
-            calificacionActual.valor,
+              descripcion:
+                `Se modificó la calificación ${calificacionId}.`,
 
-          valor_nuevo:
-            valorNumerico,
+              rol,
 
-          retroalimentacion_anterior:
-            calificacionActual
-              .retroalimentacion,
+              direccionIp:
+                req.ip,
 
-          retroalimentacion_nueva:
-            retroalimentacion?.trim() ||
-            null,
+              dispositivo:
+                req.headers['user-agent'] ||
+                null,
 
-          motivo:
-            motivo?.trim() ||
-            null,
+              metadata: {
+                accion:
+                  'CALIFICACION_MODIFICADA',
 
-          rol_usuario:
-            rol,
-        });
+                entidad:
+                  'calificaciones',
 
-      if (errorHistorial) {
-        console.error(
-          'Error registrando historial de calificación:',
-          errorHistorial.message
-        );
+                entidadId:
+                  calificacionId,
+
+                detalle: {
+                  valorAnterior:
+                    calificacionActual.valor,
+
+                  valorNuevo:
+                    valorNumerico,
+
+                  retroalimentacionAnterior:
+                    calificacionActual
+                      .retroalimentacion,
+
+                  retroalimentacionNueva,
+
+                  motivo:
+                    typeof motivo === 'string'
+                      ? motivo.trim() || null
+                      : null,
+                },
+              },
+            });
+          if (auditoriaRegistrada !== true) {
+            console.error(
+              'No se pudo persistir la auditoría secundaria de la calificación.'
+            );
+          }
+        } catch (errorAuditoria) {
+          console.error(
+            'Error registrando auditoría secundaria de calificación:',
+            errorAuditoria.message
+          );
+        }
       }
-
-      await registrarAuditoria({
-        usuarioId,
-        correo:
-          req.usuario.correo,
-
-        evento:
-          'CALIFICACION_MODIFICADA',
-
-        descripcion:
-          `Se modificó la calificación ${calificacionId}.`,
-
-        rol,
-
-        direccionIp:
-          req.ip,
-
-        dispositivo:
-          req.headers['user-agent'] ||
-          null,
-
-        metadata: {
-          accion:
-            'CALIFICACION_MODIFICADA',
-
-          entidad:
-            'calificaciones',
-
-          entidadId:
-            calificacionId,
-
-          detalle: {
-            valorAnterior:
-              calificacionActual.valor,
-
-            valorNuevo:
-              valorNumerico,
-
-            retroalimentacionAnterior:
-              calificacionActual
-                .retroalimentacion,
-
-            retroalimentacionNueva:
-              retroalimentacion?.trim() ||
-              null,
-
-            motivo:
-              motivo?.trim() ||
-              null,
-          },
-        },
-      });
 
       return res.status(200).json({
         success: true,

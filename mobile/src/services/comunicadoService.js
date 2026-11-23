@@ -71,10 +71,12 @@ const realizarSolicitud = async ({
     const resultado = await respuesta.json();
 
     if (!respuesta.ok || resultado?.success === false) {
-      throw new Error(
+      const error = new Error(
         resultado?.message ||
           'No fue posible completar la solicitud.'
       );
+      error.status = respuesta.status;
+      throw error;
     }
 
     return resultado;

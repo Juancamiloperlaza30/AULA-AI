@@ -157,9 +157,9 @@ export default function StudentAttendanceScreen({
       }
 
       try {
-        if (!usuarioId || !accessToken || !apiUrl) {
+        if (!usuarioId) {
           throw new Error(
-            'No hay una sesión válida para consultar la asistencia.'
+            'No hay un estudiante válido para consultar la asistencia.'
           );
         }
 
@@ -193,6 +193,19 @@ export default function StudentAttendanceScreen({
         }
 
         if (controller.signal.aborted) return;
+
+        if (!accessToken || !apiUrl) {
+          if (copiaLocal) {
+            setAviso(
+              'No hay conexión o sesión disponible. Se muestra la última copia guardada en SQLite.'
+            );
+            return;
+          }
+
+          throw new Error(
+            'No hay conexión ni una copia local disponible. Conéctate a internet para descargar tus asistencias.'
+          );
+        }
 
         // Una petición remota nunca debe esperar
         // indefinidamente cuando no hay conexión.

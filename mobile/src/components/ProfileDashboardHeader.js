@@ -26,6 +26,7 @@ import {
 } from 'expo-file-system';
 
 import {
+  actualizarPerfilEstudianteSesion,
   obtenerSesion,
 } from '../services/sessionService';
 
@@ -340,6 +341,23 @@ export default function ProfileDashboardHeader({
 
         setOrigen('servidor');
         setAviso('');
+
+        if (
+          String(perfilRemoto.rol || '').toLowerCase() ===
+          'estudiante'
+        ) {
+          const resultadoLocal =
+            await actualizarPerfilEstudianteSesion({
+              accessToken,
+              perfil: perfilRemoto,
+            });
+
+          if (!resultadoLocal.actualizada) {
+            setAviso(
+              'El perfil se consultó en línea, pero no se pudo actualizar su copia local.'
+            );
+          }
+        }
       } catch (error) {
         if (signal?.aborted) return;
 

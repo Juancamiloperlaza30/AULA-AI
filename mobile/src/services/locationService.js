@@ -1,16 +1,16 @@
 import * as Location from 'expo-location';
 
-const TIEMPO_MAXIMO_MS = 8000;
+const TIEMPO_MAXIMO_MS = 5000;
 
 export const MENSAJES_UBICACION = {
   PERMISO_DENEGADO:
-    'No se concedió permiso para acceder a la ubicación. Esta función no estará disponible, pero puedes seguir utilizando AULA-AI.',
+    'No se concedió permiso para acceder a la ubicación. Puedes habilitarlo desde los ajustes del dispositivo. Esta función no estará disponible, pero puedes seguir utilizando AULA-AI.',
 
   GPS_DESACTIVADO:
-    'La ubicación del dispositivo está desactivada. Actívala para continuar.',
+    'La ubicación del dispositivo está desactivada. Esta función no estará disponible, pero puedes seguir utilizando las demás funciones de AULA-AI.',
 
   TIEMPO_AGOTADO:
-    'No fue posible obtener la ubicación dentro de los 8 segundos permitidos. Inténtalo nuevamente.',
+    'No fue posible obtener la ubicación dentro de los 5 segundos permitidos. Comprueba la señal e inténtalo nuevamente.',
 
   ERROR_GENERAL:
     'No fue posible obtener la ubicación del dispositivo. Inténtalo nuevamente.',
@@ -88,12 +88,27 @@ export const obtenerUbicacionActual = async ({
 
     verificarCancelacion(signal);
 
+    if (
+      !permiso.granted &&
+      solicitarPermiso &&
+      permiso.canAskAgain === false
+    ) {
+      throw crearError(
+        'PERMISO_DENEGADO',
+        MENSAJES_UBICACION.PERMISO_DENEGADO
+      );
+    }
+
     if (!permiso.granted && solicitarPermiso) {
       permiso =
         await Location.requestForegroundPermissionsAsync();
     }
   } catch (error) {
-    if (error?.codigo === 'CANCELADO') {
+    if (
+      ['CANCELADO', 'PERMISO_DENEGADO'].includes(
+        error?.codigo
+      )
+    ) {
       throw error;
     }
 
@@ -229,7 +244,7 @@ export const obtenerUbicacionActual = async ({
         const nuevaSuscripcion =
           await Location.watchPositionAsync(
             {
-              accuracy: Location.Accuracy.Balanced,
+              accuracy: Location.Accuracy.High,
               timeInterval: 1000,
               distanceInterval: 0,
             },

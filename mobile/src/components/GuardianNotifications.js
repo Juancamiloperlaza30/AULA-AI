@@ -14,6 +14,12 @@ import {
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
+import * as Network from 'expo-network';
+import {
+  actualizarNotificacionOffline,
+  guardarNotificacionesOffline,
+  obtenerNotificacionesOffline,
+} from '../database/communicationsOfflineDatabase';
 
 const LIMITE_PAGINA = 20;
 
@@ -189,6 +195,7 @@ async function solicitar({
 export default function GuardianNotifications({
   apiUrl,
   accessToken,
+  usuarioId,
   onRefreshSession,
   onOpenCommunications,
   onOpenAlerts,
@@ -202,6 +209,9 @@ export default function GuardianNotifications({
   const [totalPaginas, setTotalPaginas] = useState(1);
   const [lecturaEnCurso, setLecturaEnCurso] = useState(null);
   const [accionPendiente, setAccionPendiente] = useState('');
+  const [modoCacheLocal, setModoCacheLocal] = useState(false);
+  const [ultimaSincronizacion, setUltimaSincronizacion] =
+    useState(null);
   const solicitudRef = useRef(0);
   const abortRef = useRef(null);
 
@@ -254,6 +264,20 @@ export default function GuardianNotifications({
           return;
         }
 
+        try {
+          const sincronizadoEn =
+            await guardarNotificacionesOffline({
+              usuarioId,
+              notificaciones: recibidas,
+            });
+          setUltimaSincronizacion(sincronizadoEn);
+        } catch (errorCache) {
+          console.warn(
+            'No fue posible guardar notificaciones para consulta offline.',
+            errorCache?.message || errorCache
+          );
+        }
+        setModoCacheLocal(false);
         setNotificaciones((anteriores) => {
           if (!agregar) {
             return recibidas;
@@ -283,10 +307,49 @@ export default function GuardianNotifications({
           return;
         }
 
-        setError(
-          errorConsulta.message ||
-            'No fue posible consultar las notificaciones.'
-        );
+        if (!errorConsulta?.status || errorConsulta.status >= 500) {
+          let cache;
+          try {
+            cache = await obtenerNotificacionesOffline(usuarioId);
+          } catch {
+            setError(
+              `${errorConsulta.message || 'No fue posible consultar las notificaciones.'} No se pudo leer la copia local.`
+            );
+            return;
+          }
+          if (cache.registros.length > 0) {
+            const inicio = (nuevaPagina - 1) * LIMITE_PAGINA;
+            const paginaOffline = cache.registros.slice(
+              inicio,
+              inicio + LIMITE_PAGINA
+            );
+            setNotificaciones((anteriores) =>
+              agregar
+                ? [...anteriores, ...paginaOffline]
+                : paginaOffline
+            );
+            setPagina(nuevaPagina);
+            setTotalPaginas(
+              Math.max(
+                1,
+                Math.ceil(cache.registros.length / LIMITE_PAGINA)
+              )
+            );
+            setUltimaSincronizacion(cache.sincronizadoEn);
+            setModoCacheLocal(true);
+            setError('');
+          } else {
+            setError(
+              errorConsulta.message ||
+                'No fue posible consultar las notificaciones.'
+            );
+          }
+        } else {
+          setError(
+            errorConsulta.message ||
+              'No fue posible consultar las notificaciones.'
+          );
+        }
       } finally {
         if (solicitudId === solicitudRef.current) {
           setCargando(false);
@@ -295,7 +358,7 @@ export default function GuardianNotifications({
         }
       }
     },
-    [accessToken, apiUrl, onRefreshSession]
+    [accessToken, apiUrl, onRefreshSession, usuarioId]
   );
 
   useEffect(() => {
@@ -312,6 +375,21 @@ export default function GuardianNotifications({
       solicitudRef.current += 1;
       abortRef.current?.abort();
     };
+  }, [cargarNotificaciones]);
+
+  useEffect(() => {
+    let conectado = null;
+    const suscripcion = Network.addNetworkStateListener(
+      (estado) => {
+        const conectadoAhora = estado.isConnected === true;
+        if (conectado === false && conectadoAhora) {
+          void cargarNotificaciones({ refrescar: true });
+        }
+        conectado = conectadoAhora;
+      }
+    );
+
+    return () => suscripcion.remove();
   }, [cargarNotificaciones]);
 
   const marcarComoLeida = async (notificacion) => {
@@ -344,6 +422,26 @@ export default function GuardianNotifications({
             : item
         )
       );
+      const actualizada = notificaciones.find(
+        (item) => String(item.id) === String(notificacion.id)
+      );
+      if (actualizada) {
+        try {
+          await actualizarNotificacionOffline({
+            usuarioId,
+            notificacion: {
+              ...actualizada,
+              ...(resultado.data || {}),
+              leida: true,
+            },
+          });
+        } catch (errorCache) {
+          console.warn(
+            'No fue posible actualizar la lectura local de la notificación.',
+            errorCache?.message || errorCache
+          );
+        }
+      }
     } catch (errorLectura) {
       setError(
         errorLectura.message ||
@@ -382,7 +480,13 @@ export default function GuardianNotifications({
     setAccionPendiente(String(notificacion.id));
 
     try {
-      await marcarComoLeida(notificacion);
+      if (!modoCacheLocal) {
+        await marcarComoLeida(notificacion);
+      } else {
+        setError(
+          'Sin conexión: la lectura no se sincronizó con el servidor.'
+        );
+      }
       if (abrirComunicado) {
         onOpenCommunications();
       } else {
@@ -417,6 +521,23 @@ export default function GuardianNotifications({
           </Text>
         </View>
       </View>
+
+      {modoCacheLocal && (
+        <View style={styles.offlineNotice}>
+          <Ionicons
+            name="cloud-offline-outline"
+            size={18}
+            color={COLORS.amber}
+          />
+          <Text style={styles.offlineNoticeText}>
+            Mostrando notificaciones sincronizadas
+            {ultimaSincronizacion
+              ? ` el ${new Date(ultimaSincronizacion).toLocaleString('es-CO')}`
+              : ' previamente'}
+            . Se actualizarán al recuperar conexión.
+          </Text>
+        </View>
+      )}
 
       {!cargando && !error && (
         <View style={styles.summary}>
@@ -674,6 +795,23 @@ const styles = StyleSheet.create({
   },
   headerCopy: {
     flex: 1,
+  },
+  offlineNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.amberPale,
+    borderColor: '#E8D19B',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 11,
+    marginBottom: 12,
+    gap: 8,
+  },
+  offlineNoticeText: {
+    color: COLORS.text,
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 18,
   },
   eyebrow: {
     color: COLORS.cyan,

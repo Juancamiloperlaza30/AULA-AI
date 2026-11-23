@@ -7,6 +7,9 @@ const {
   registrarAuditoria,
 } = require('../services/auditService');
 
+const REGEX_CORREO =
+  /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+
 /**
  * Inicio de sesión de AULA-AI.
  *
@@ -26,22 +29,33 @@ const login = async (req, res) => {
     // 1. Validaciones iniciales
     // -----------------------------
 
-    if (!correo || !correo.trim()) {
+    if (typeof correo !== 'string' || !correo.trim()) {
       return res.status(400).json({
         success: false,
         message: 'El correo es obligatorio.',
       });
     }
 
-    if (!contrasena || !contrasena.trim()) {
+    const correoNormalizado =
+      correo.trim().toLowerCase();
+
+    if (!REGEX_CORREO.test(correoNormalizado)) {
+      return res.status(400).json({
+        success: false,
+        message:
+          'El correo electrónico es inválido o incorrecto.',
+      });
+    }
+
+    if (
+      typeof contrasena !== 'string' ||
+      !contrasena.trim()
+    ) {
       return res.status(400).json({
         success: false,
         message: 'La contraseña es obligatoria.',
       });
     }
-
-    const correoNormalizado =
-      correo.trim().toLowerCase();
 
     // -----------------------------
     // 2. Supabase Authentication

@@ -91,6 +91,22 @@ const {
 } = require('./jobs/activityReminderJob');
 
 const {
+  iniciarColaAlertasCalificaciones,
+} = require('./jobs/gradeAlertJob');
+
+const {
+  iniciarColaAlertasAsistencia,
+} = require('./jobs/attendanceAlertJob');
+
+const {
+  iniciarColaAlertasActividades,
+} = require('./jobs/activityRiskAlertJob');
+
+const {
+  iniciarColaNotificaciones,
+} = require('./jobs/notificacionDeliveryJob');
+
+const {
   iniciarActualizacionPeriodoAcademico,
 } = require('./jobs/academicPeriodRolloverJob');
 
@@ -312,13 +328,6 @@ app.use((req, res) => {
 });
 
 // ======================================================
-// TAREAS PROGRAMADAS EXISTENTES
-// ======================================================
-
-iniciarRecordatoriosActividades();
-iniciarActualizacionPeriodoAcademico();
-
-// ======================================================
 // INICIO DEL SERVIDOR
 // ======================================================
 
@@ -330,18 +339,30 @@ const server = app.listen(
       `Servidor AULA-AI ejecutándose en http://localhost:${PORT}`
     );
 
-    console.log(
-      'Servidor escuchando:',
-      server.listening
-    );
+    iniciarRecordatoriosActividades();
+    iniciarColaAlertasCalificaciones();
+    iniciarColaAlertasAsistencia();
+    iniciarColaAlertasActividades();
+    iniciarColaNotificaciones();
+    iniciarActualizacionPeriodoAcademico();
   }
 );
 
 server.on('error', (error) => {
-  console.error(
-    'ERROR DEL SERVIDOR:',
-    error
-  );
+  if (error.code === 'EADDRINUSE') {
+    console.error(
+      `[AULA-AI] El puerto ${PORT} ya está ocupado. Detén el proceso que lo usa o inicia el backend con otro valor de PORT.`
+    );
+    process.exit(1);
+    return;
+  } else {
+    console.error(
+      'ERROR DEL SERVIDOR:',
+      error
+    );
+  }
+
+  process.exitCode = 1;
 });
 
 process.on('beforeExit', (code) => {

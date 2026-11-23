@@ -113,6 +113,8 @@ async function consultarNotificacionAsociada(
         'titulo',
         'mensaje',
         'comunicado_id',
+        'recurso_tipo',
+        'recurso_id',
         'estado',
       ].join(',')
     )
@@ -134,11 +136,11 @@ async function consultarNotificacionAsociada(
   }
 
   if (
-    notificacion.tipo !== 'comunicado' ||
-    notificacion.comunicado_id === null
+    typeof notificacion.tipo !== 'string' ||
+    !notificacion.tipo.trim()
   ) {
     const errorTipo = new Error(
-      'La notificación no corresponde a un comunicado institucional.'
+      'La notificación no tiene un tipo válido.'
     );
 
     errorTipo.statusCode = 400;
@@ -282,6 +284,8 @@ async function prepararDatosEnvioInstitucional({
     notificacionId: notificacion.id,
 
     comunicadoId: notificacion.comunicado_id,
+    recursoTipo: notificacion.recurso_tipo,
+    recursoId: notificacion.recurso_id,
 
     usuarioId: notificacion.usuario_id,
 
@@ -300,13 +304,23 @@ async function prepararDatosEnvioInstitucional({
     intentos: envio.intentos,
 
     data: {
-      tipo: 'comunicado',
-      comunicadoId: String(
-        notificacion.comunicado_id
-      ),
+      tipo: notificacion.tipo,
       notificacionId: String(
         notificacion.id
       ),
+      ...(notificacion.comunicado_id !== null
+        ? {
+            comunicadoId: String(
+              notificacion.comunicado_id
+            ),
+          }
+        : {}),
+      ...(notificacion.recurso_tipo
+        ? { recursoTipo: notificacion.recurso_tipo }
+        : {}),
+      ...(notificacion.recurso_id !== null
+        ? { recursoId: String(notificacion.recurso_id) }
+        : {}),
     },
   };
 }
@@ -319,6 +333,14 @@ async function prepararDatosEnvioInstitucional({
 const {
   enviarNotificacionPush,
 } = require('./pushService');
+
+const MAX_INTENTOS_AUTOMATICOS = 5;
+const ERRORES_REINTENTABLES = new Set([
+  'messaging/server-unavailable',
+  'messaging/internal-error',
+  'messaging/quota-exceeded',
+  'app/network-error',
+]);
 
 // ======================================================
 // RESERVAR ENVIO
@@ -496,7 +518,8 @@ async function procesarEnvioInstitucional({
     ]);
 
     const rechazoConfirmado =
-      erroresDefinitivos.has(codigoFirebase);
+      erroresDefinitivos.has(codigoFirebase) ||
+      ERRORES_REINTENTABLES.has(codigoFirebase);
 
     if (!rechazoConfirmado) {
       // El resultado puede ser incierto.
@@ -529,6 +552,71 @@ async function procesarEnvioInstitucional({
       throw new Error(
         'Firebase rechazó el envío, pero Supabase no confirmó el registro del error.'
       );
+    }
+
+    if (
+      ERRORES_REINTENTABLES.has(codigoFirebase) &&
+      Number(reserva.intentos) < MAX_INTENTOS_AUTOMATICOS
+    ) {
+      const minutos = Math.min(
+        60,
+        2 ** Math.max(0, Number(reserva.intentos) - 1)
+      );
+      const proximoIntento = new Date(
+        Date.now() + minutos * 60 * 1000
+      ).toISOString();
+      const { data: envioReagendado, error: errorReagenda } =
+        await supabaseAdmin
+          .from('notificaciones_envios')
+          .update({
+            estado: 'pendiente',
+            proximo_intento_at: proximoIntento,
+            ultimo_error: codigoFirebase,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', datos.envioId)
+          .eq('estado', 'error')
+          .select('id')
+          .maybeSingle();
+
+      if (errorReagenda) {
+        throw errorReagenda;
+      }
+
+      if (!envioReagendado) {
+        throw new Error(
+          'El error de Firebase fue registrado, pero no se pudo reagendar el envío.'
+        );
+      }
+
+      return {
+        envioId: datos.envioId,
+        procesado: true,
+        aceptadoPorFirebase: false,
+        estado: 'pendiente',
+        proximoIntento,
+        reintentoAutomatico: true,
+        codigoFirebase,
+      };
+    }
+
+    if (
+      erroresDefinitivos.has(codigoFirebase) &&
+      dispositivoActual.id
+    ) {
+      const { error: errorDesactivacion } =
+        await supabaseAdmin
+          .from('dispositivos_push')
+          .update({
+            activo: false,
+            updated_at: new Date().toISOString(),
+          })
+          .eq('id', dispositivoActual.id)
+          .eq('activo', true);
+
+      if (errorDesactivacion) {
+        throw errorDesactivacion;
+      }
     }
 
     return {

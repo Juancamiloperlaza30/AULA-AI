@@ -1,6 +1,7 @@
 import React, {
   useCallback,
   useEffect,
+  useRef,
   useState,
 } from 'react';
 
@@ -30,30 +31,90 @@ export default function AttendanceSyncButton({
   onSincronizacionCompleta,
 }) {
   const [pendientes, setPendientes] =
-    useState(0);
+    useState(null);
 
   const [sincronizando, setSincronizando] =
     useState(false);
 
+  const [estadoConsulta, setEstadoConsulta] =
+    useState('cargando');
+
+  const consultaId = useRef(0);
+
   const consultarPendientes = useCallback(
     async () => {
-      if (!usuarioId) {
-        setPendientes(0);
+      const idConsulta = ++consultaId.current;
+      const usuarioConsulta = usuarioId;
+
+      setEstadoConsulta('cargando');
+
+      if (!usuarioConsulta) {
+        setPendientes(null);
+        setEstadoConsulta('error');
+
+        if (__DEV__) {
+          console.warn(
+            '[HU-14] No se consultó la cola de asistencia:',
+            {
+              docenteIdUltimos4: 'ausente',
+              error: 'Identificador de docente ausente.',
+            }
+          );
+        }
+
         return;
       }
 
       try {
         const total =
           await contarAsistenciasPendientes(
-            usuarioId
+            usuarioConsulta
           );
 
+        if (idConsulta !== consultaId.current) {
+          return;
+        }
+
+        if (
+          !Number.isSafeInteger(total) ||
+          total < 0
+        ) {
+          throw new Error(
+            'SQLite devolvió un conteo inválido.'
+          );
+        }
+
         setPendientes(total);
+        setEstadoConsulta('listo');
+
+        if (__DEV__) {
+          console.info(
+            '[HU-14] Conteo local de asistencia:',
+            {
+              docenteIdUltimos4:
+                String(usuarioConsulta).slice(-4),
+              pendientes: total,
+            }
+          );
+        }
       } catch (error) {
-        console.log(
-          'HU-06: error consultando pendientes:',
-          error.message
-        );
+        if (idConsulta !== consultaId.current) {
+          return;
+        }
+
+        setPendientes(null);
+        setEstadoConsulta('error');
+
+        if (__DEV__) {
+          console.warn(
+            '[HU-14] Error leyendo la cola de asistencia:',
+            {
+              docenteIdUltimos4:
+                String(usuarioConsulta).slice(-4),
+              error: error?.message || 'Error desconocido.',
+            }
+          );
+        }
       }
     },
     [usuarioId]
@@ -61,11 +122,12 @@ export default function AttendanceSyncButton({
 
   useEffect(() => {
     const temporizador = setTimeout(() => {
-      consultarPendientes();
+      void consultarPendientes();
     }, 0);
 
     return () => {
       clearTimeout(temporizador);
+      consultaId.current += 1;
     };
   }, [consultarPendientes]);
 
@@ -156,11 +218,45 @@ export default function AttendanceSyncButton({
           Sincronización de asistencia
         </Text>
 
-        <Text style={styles.descripcion}>
-          {pendientes === 0
-            ? 'No hay operaciones pendientes.'
-            : `${pendientes} operación(es) sin confirmar en Supabase.`}
-        </Text>
+        {estadoConsulta === 'cargando' ? (
+          <View style={styles.estadoConsulta}>
+            <ActivityIndicator
+              size="small"
+              color="#1F4E79"
+            />
+            <Text style={styles.descripcion}>
+              Cargando operaciones pendientes...
+            </Text>
+          </View>
+        ) : estadoConsulta === 'error' ? (
+          <Text style={styles.descripcion}>
+            No fue posible consultar las operaciones pendientes.
+          </Text>
+        ) : pendientes === 0 ? (
+          <Text style={styles.descripcion}>
+            No hay operaciones pendientes.
+          </Text>
+        ) : (
+          <Text style={styles.descripcion}>
+            {pendientes} operación(es) sin confirmar en Supabase.
+          </Text>
+        )}
+
+        <TouchableOpacity
+          accessibilityRole="button"
+          onPress={consultarPendientes}
+          disabled={
+            estadoConsulta === 'cargando' ||
+            !usuarioId
+          }
+          style={styles.consultarBoton}
+        >
+          <Text style={styles.consultarTexto}>
+            {estadoConsulta === 'cargando'
+              ? 'Consultando...'
+              : 'Actualizar contador'}
+          </Text>
+        </TouchableOpacity>
       </View>
 
       <TouchableOpacity
@@ -213,6 +309,24 @@ const styles = StyleSheet.create({
     color: '#607D8B',
     marginTop: 5,
     lineHeight: 19,
+  },
+
+  estadoConsulta: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+
+  consultarBoton: {
+    alignSelf: 'flex-start',
+    marginTop: 8,
+    paddingVertical: 4,
+  },
+
+  consultarTexto: {
+    color: '#1F4E79',
+    fontSize: 12,
+    fontWeight: '700',
   },
 
   boton: {

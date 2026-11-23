@@ -25,12 +25,21 @@ import {
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
+import * as Network from 'expo-network';
 
 import {
   consultarMisComunicados,
   consultarDetalleComunicado,
   marcarComunicadoComoLeido,
 } from '../services/comunicadoService';
+import {
+  actualizarComunicadoOffline,
+  guardarComunicadosOffline,
+  obtenerComunicadosOffline,
+} from '../database/communicationsOfflineDatabase';
+import {
+  precargarComunicadosEstudiante,
+} from '../services/studentCommunicationsPreloadService';
 
 // ======================================================
 // CONFIGURACIÓN
@@ -84,6 +93,25 @@ const obtenerMensajeError = (error) => {
     'Ocurrió un error inesperado. Inténtalo nuevamente.'
   );
 };
+
+function AvisoOffline({ fecha }) {
+  return (
+    <View style={styles.offlineNotice}>
+      <Ionicons
+        name="cloud-offline-outline"
+        size={18}
+        color={COLORS.amber}
+      />
+      <Text style={styles.offlineNoticeText}>
+        Mostrando datos sincronizados
+        {fecha
+          ? ` el ${new Date(fecha).toLocaleString('es-CO')}`
+          : ' previamente'}
+        . Se actualizarán al recuperar conexión.
+      </Text>
+    </View>
+  );
+}
 
 // ======================================================
 // COMPONENTE: ENCABEZADO
@@ -201,6 +229,7 @@ function EstadoLectura({ leido }) {
 export default function StudentCommunicationsScreen({
   apiUrl,
   accessToken,
+  usuarioId,
   onBack,
 }) {
   // ====================================================
@@ -236,6 +265,14 @@ export default function StudentCommunicationsScreen({
 
   const [errorConsulta, setErrorConsulta] =
     useState('');
+  const [modoCacheLocal, setModoCacheLocal] =
+    useState(false);
+  const [ultimaSincronizacion, setUltimaSincronizacion] =
+    useState(null);
+  const [
+    comunicadosPrecargados,
+    setComunicadosPrecargados,
+  ] = useState(null);
   const solicitudComunicadosRef = useRef(0);
 
   // ====================================================
@@ -262,6 +299,78 @@ export default function StudentCommunicationsScreen({
       setErrorConsulta('');
 
       try {
+        if (agregar && Array.isArray(comunicadosPrecargados)) {
+          const inicio = (pagina - 1) * LIMITE_PAGINA;
+          const siguientes = comunicadosPrecargados.slice(
+            inicio,
+            inicio + LIMITE_PAGINA
+          );
+
+          setComunicados((anteriores) => {
+            const mapa = new Map(
+              anteriores.map((item) => [
+                String(item.id),
+                item,
+              ])
+            );
+
+            siguientes.forEach((item) => {
+              mapa.set(String(item.id), item);
+            });
+
+            return Array.from(mapa.values());
+          });
+          setPaginaActual(pagina);
+          setModoCacheLocal(false);
+          return;
+        }
+
+        if (!agregar && !refrescar && pagina === 1) {
+          let precargado = null;
+
+          try {
+            precargado =
+              await precargarComunicadosEstudiante({
+                usuarioId,
+                apiUrl,
+                accessToken,
+              });
+          } catch (errorPrecarga) {
+            console.warn(
+              'No se pudo completar la precarga de comunicados; se consultará la primera página.',
+              errorPrecarga?.message || errorPrecarga
+            );
+          }
+
+          if (
+            solicitudId !==
+            solicitudComunicadosRef.current
+          ) {
+            return;
+          }
+
+          if (precargado) {
+            setComunicadosPrecargados(
+              precargado.comunicados
+            );
+            setComunicados(
+              precargado.comunicados.slice(
+                0,
+                LIMITE_PAGINA
+              )
+            );
+            setPaginaActual(1);
+            setTotalPaginas(
+              Math.max(1, precargado.totalPaginas)
+            );
+            setModoCacheLocal(false);
+            setUltimaSincronizacion(
+              precargado.sincronizadoEn
+            );
+            return;
+          }
+        }
+
         const resultado =
           await consultarMisComunicados({
             apiUrl,
@@ -278,6 +387,25 @@ export default function StudentCommunicationsScreen({
 
         const nuevosComunicados =
           resultado.comunicados;
+        let sincronizadoEn = null;
+        try {
+          sincronizadoEn = await guardarComunicadosOffline({
+            usuarioId,
+            comunicados: nuevosComunicados,
+          });
+        } catch (errorCache) {
+          console.warn(
+            'No fue posible guardar comunicados para consulta offline.',
+            errorCache?.message || errorCache
+          );
+        }
+        setModoCacheLocal(false);
+        if (!agregar) {
+          setComunicadosPrecargados(null);
+        }
+        if (sincronizadoEn) {
+          setUltimaSincronizacion(sincronizadoEn);
+        }
 
         if (agregar) {
           setComunicados((anteriores) => {
@@ -311,9 +439,44 @@ export default function StudentCommunicationsScreen({
         if (
           solicitudId === solicitudComunicadosRef.current
         ) {
-          setErrorConsulta(
-            obtenerMensajeError(error)
-          );
+          if (!error?.status || error.status >= 500) {
+            let cache;
+            try {
+              cache = await obtenerComunicadosOffline(usuarioId);
+            } catch {
+              setErrorConsulta(
+                `${obtenerMensajeError(error)} No se pudo leer la copia local.`
+              );
+              return;
+            }
+            if (cache.disponible) {
+              const inicio = (pagina - 1) * LIMITE_PAGINA;
+              const paginaOffline = cache.registros.slice(
+                inicio,
+                inicio + LIMITE_PAGINA
+              );
+              setComunicados((anteriores) =>
+                agregar
+                  ? [...anteriores, ...paginaOffline]
+                  : paginaOffline
+              );
+              setPaginaActual(pagina);
+              setTotalPaginas(
+                Math.max(
+                  1,
+                  Math.ceil(cache.registros.length / LIMITE_PAGINA)
+                )
+              );
+              setComunicadosPrecargados(null);
+              setModoCacheLocal(true);
+              setUltimaSincronizacion(cache.sincronizadoEn);
+              setErrorConsulta('');
+            } else {
+              setErrorConsulta(obtenerMensajeError(error));
+            }
+          } else {
+            setErrorConsulta(obtenerMensajeError(error));
+          }
         }
       } finally {
         if (
@@ -325,7 +488,12 @@ export default function StudentCommunicationsScreen({
         }
       }
     },
-    [apiUrl, accessToken]
+    [
+      apiUrl,
+      accessToken,
+      usuarioId,
+      comunicadosPrecargados,
+    ]
   );
 
   // ====================================================
@@ -343,6 +511,21 @@ export default function StudentCommunicationsScreen({
       clearTimeout(temporizador);
       solicitudComunicadosRef.current += 1;
     };
+  }, [cargarComunicados]);
+
+  useEffect(() => {
+    let conectado = null;
+    const suscripcion = Network.addNetworkStateListener(
+      (estado) => {
+        const conectadoAhora = estado.isConnected === true;
+        if (conectado === false && conectadoAhora) {
+          void cargarComunicados({ pagina: 1, refrescar: true });
+        }
+        conectado = conectadoAhora;
+      }
+    );
+
+    return () => suscripcion.remove();
   }, [cargarComunicados]);
 
   // ====================================================
@@ -397,10 +580,21 @@ export default function StudentCommunicationsScreen({
 
       setComunicadoSeleccionado(detalle);
     } catch (error) {
-      Alert.alert(
-        'No fue posible abrir el comunicado',
-        obtenerMensajeError(error)
+      const comunicadoEnCache = comunicados.find(
+        (item) => String(item.id) === String(comunicadoId)
       );
+      if (
+        (!error?.status || error.status >= 500) &&
+        comunicadoEnCache
+      ) {
+        setModoCacheLocal(true);
+        setComunicadoSeleccionado(comunicadoEnCache);
+      } else {
+        Alert.alert(
+          'No fue posible abrir el comunicado',
+          obtenerMensajeError(error)
+        );
+      }
     } finally {
       setCargandoDetalle(false);
     }
@@ -438,6 +632,22 @@ export default function StudentCommunicationsScreen({
 
       const comunicadoId =
         comunicadoSeleccionado.id;
+      const actualizado = {
+        ...comunicadoSeleccionado,
+        leido: true,
+        fechaLectura: resultado.fechaLectura || null,
+      };
+      try {
+        await actualizarComunicadoOffline({
+          usuarioId,
+          comunicado: actualizado,
+        });
+      } catch (errorCache) {
+        console.warn(
+          'No fue posible actualizar la lectura local del comunicado.',
+          errorCache?.message || errorCache
+        );
+      }
 
       setComunicadoSeleccionado((anterior) => {
         if (!anterior) {
@@ -528,6 +738,9 @@ export default function StudentCommunicationsScreen({
           onBack={regresarALista}
           disabled={registrandoLectura}
         />
+        {modoCacheLocal && (
+          <AvisoOffline fecha={ultimaSincronizacion} />
+        )}
 
         <View style={styles.detailCard}>
           <View style={styles.detailTop}>
@@ -707,6 +920,9 @@ export default function StudentCommunicationsScreen({
       {/* ENCABEZADO */}
 
       <HeaderComunicados onBack={onBack} />
+      {modoCacheLocal && (
+        <AvisoOffline fecha={ultimaSincronizacion} />
+      )}
 
       {/* RESUMEN */}
 
@@ -1176,6 +1392,25 @@ const styles = StyleSheet.create({
     color: '#D6E4F2',
     fontSize: 13,
     lineHeight: 21,
+  },
+
+  offlineNotice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: COLORS.amberLight,
+    borderColor: '#E8D19B',
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 11,
+    marginBottom: 14,
+    gap: 8,
+  },
+
+  offlineNoticeText: {
+    color: COLORS.text,
+    flex: 1,
+    fontSize: 12,
+    lineHeight: 18,
   },
 
   // RESUMEN

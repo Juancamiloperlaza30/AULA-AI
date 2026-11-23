@@ -21,6 +21,31 @@ const primero = (valor) =>
 const texto = (valor) =>
   valor == null ? '' : String(valor);
 
+const registrarSincronizacion = async (
+  database,
+  usuarioId,
+  recurso,
+  alcance = ''
+) => {
+  await database.runAsync(
+    `
+      INSERT OR REPLACE INTO estudiante_cache_estado (
+        usuario_id,
+        recurso,
+        alcance,
+        sincronizado_en
+      )
+      VALUES (?, ?, ?, ?)
+    `,
+    [
+      usuarioId,
+      recurso,
+      String(alcance),
+      new Date().toISOString(),
+    ]
+  );
+};
+
 const ejecutarMigracion = async (
   database,
   tabla,
@@ -110,6 +135,22 @@ export const iniciarBaseLocal = async () => {
         updated_at TEXT,
         sincronizado_en TEXT,
         PRIMARY KEY (id, usuario_id)
+      );
+
+      CREATE TABLE IF NOT EXISTS estudiante_cache_estado (
+        usuario_id TEXT NOT NULL,
+        recurso TEXT NOT NULL,
+        alcance TEXT NOT NULL DEFAULT '',
+        sincronizado_en TEXT NOT NULL,
+        PRIMARY KEY (usuario_id, recurso, alcance)
+      );
+
+      CREATE TABLE IF NOT EXISTS estudiante_recursos_locales (
+        usuario_id TEXT NOT NULL,
+        recurso TEXT NOT NULL,
+        datos_json TEXT NOT NULL,
+        sincronizado_en TEXT NOT NULL,
+        PRIMARY KEY (usuario_id, recurso)
       );
     `);
 
@@ -219,6 +260,15 @@ export const guardarMateriasLocales = async (
           `,
           [usuarioId]
         );
+
+        await database.runAsync(
+          `
+            DELETE FROM estudiante_cache_estado
+            WHERE usuario_id = ?
+              AND recurso = 'materias'
+          `,
+          [usuarioId]
+        );
       }
 
       const ahora = new Date().toISOString();
@@ -308,6 +358,13 @@ export const guardarMateriasLocales = async (
           ]
         );
       }
+
+      await registrarSincronizacion(
+        database,
+        usuarioId,
+        'materias',
+        periodoId == null ? '' : periodoId
+      );
     }
   );
 };
@@ -465,6 +522,21 @@ export const guardarActividadesLocales = async (
           ]
         );
       }
+
+      await database.runAsync(
+        `
+          DELETE FROM estudiante_cache_estado
+          WHERE usuario_id = ?
+            AND recurso = 'actividades'
+        `,
+        [usuarioId]
+      );
+
+      await registrarSincronizacion(
+        database,
+        usuarioId,
+        'actividades'
+      );
     }
   );
 };
@@ -503,7 +575,8 @@ export const obtenerActividadesLocales = async (
 export const guardarCalificacionesLocales =
   async (
     usuarioId,
-    calificaciones = []
+    calificaciones = [],
+    periodoAlcanceId = null
   ) => {
     const database =
       await iniciarBaseLocal();
@@ -522,13 +595,24 @@ export const guardarCalificacionesLocales =
 
     await database.withTransactionAsync(
       async () => {
-        await database.runAsync(
-          `
-            DELETE FROM calificaciones_locales
-            WHERE usuario_id = ?
-          `,
-          [usuarioId]
-        );
+        if (periodoAlcanceId == null) {
+          await database.runAsync(
+            `
+              DELETE FROM calificaciones_locales
+              WHERE usuario_id = ?
+            `,
+            [usuarioId]
+          );
+        } else {
+          await database.runAsync(
+            `
+              DELETE FROM calificaciones_locales
+              WHERE usuario_id = ?
+                AND periodo_id = ?
+            `,
+              [usuarioId, periodoAlcanceId]
+          );
+        }
 
         const ahora =
           new Date().toISOString();
@@ -558,10 +642,10 @@ export const guardarCalificacionesLocales =
             asignacion?.periodo
           );
 
-          const periodoId =
+          const idPeriodoCalificacion =
             asignacion?.periodo_id ??
             periodo?.id ??
-            null;
+            periodoAlcanceId;
 
           const anioTexto = String(
             periodo?.anio ??
@@ -624,13 +708,48 @@ export const guardarCalificacionesLocales =
               materia?.id ??
                 asignacion?.materia_id ??
                 null,
-              periodoId,
+              idPeriodoCalificacion,
               texto(periodo?.nombre),
               anio,
             ]
           );
         }
+
+        if (periodoAlcanceId == null) {
+          await database.runAsync(
+            `
+              DELETE FROM estudiante_cache_estado
+              WHERE usuario_id = ?
+                AND recurso = 'calificaciones'
+            `,
+            [usuarioId]
+          );
+        }
+
+        await registrarSincronizacion(
+          database,
+          usuarioId,
+          'calificaciones',
+          periodoAlcanceId == null
+            ? ''
+            : periodoAlcanceId
+        );
       }
+    );
+  };
+
+export const guardarCalificacionesPeriodoLocales =
+  async (usuarioId, periodoId, calificaciones = []) => {
+    if (periodoId == null) {
+      throw new Error(
+        'Se requiere el identificador del periodo.'
+      );
+    }
+
+    return guardarCalificacionesLocales(
+      usuarioId,
+      calificaciones,
+      periodoId
     );
   };
 
@@ -657,6 +776,118 @@ export const obtenerCalificacionesLocales =
       `,
       [usuarioId]
     );
+  };
+
+export const obtenerEstadosCacheAcademicaLocales =
+  async (usuarioId) => {
+    const database =
+      await iniciarBaseLocal();
+
+    if (!usuarioId) return [];
+
+    return database.getAllAsync(
+      `
+        SELECT recurso, alcance, sincronizado_en
+        FROM estudiante_cache_estado
+        WHERE usuario_id = ?
+        ORDER BY sincronizado_en DESC
+      `,
+      [usuarioId]
+    );
+  };
+
+export const guardarRecursoEstudianteLocal =
+  async (usuarioId, recurso, datos) => {
+    const recursosPermitidos = new Set([
+      'planes_refuerzo',
+      'recomendaciones',
+    ]);
+
+    if (!usuarioId) {
+      throw new Error(
+        'Se requiere el identificador del usuario.'
+      );
+    }
+
+    if (!recursosPermitidos.has(recurso)) {
+      throw new Error(
+        'El recurso académico no está permitido.'
+      );
+    }
+
+    if (!Array.isArray(datos)) {
+      throw new Error(
+        'La respuesta académica local no es válida.'
+      );
+    }
+
+    const database =
+      await iniciarBaseLocal();
+    const sincronizadoEn =
+      new Date().toISOString();
+
+    await database.runAsync(
+      `
+        INSERT OR REPLACE INTO estudiante_recursos_locales (
+          usuario_id,
+          recurso,
+          datos_json,
+          sincronizado_en
+        )
+        VALUES (?, ?, ?, ?)
+      `,
+      [
+        String(usuarioId),
+        recurso,
+        JSON.stringify(datos),
+        sincronizadoEn,
+      ]
+    );
+
+    return { sincronizadoEn };
+  };
+
+export const obtenerRecursoEstudianteLocal =
+  async (usuarioId, recurso) => {
+    const recursosPermitidos = new Set([
+      'planes_refuerzo',
+      'recomendaciones',
+    ]);
+
+    if (!usuarioId) return null;
+
+    if (!recursosPermitidos.has(recurso)) {
+      throw new Error(
+        'El recurso académico no está permitido.'
+      );
+    }
+
+    const database =
+      await iniciarBaseLocal();
+    const registro = await database.getFirstAsync(
+      `
+        SELECT datos_json, sincronizado_en
+        FROM estudiante_recursos_locales
+        WHERE usuario_id = ?
+          AND recurso = ?
+      `,
+      [String(usuarioId), recurso]
+    );
+
+    if (!registro) return null;
+
+    const datos = JSON.parse(registro.datos_json);
+
+    if (!Array.isArray(datos)) {
+      throw new Error(
+        'La copia académica local tiene un formato inválido.'
+      );
+    }
+
+    return {
+      datos,
+      sincronizadoEn: registro.sincronizado_en,
+    };
   };
 
 // ==================================================

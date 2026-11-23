@@ -16,6 +16,11 @@ import {
 } from 'react-native';
 
 import GuardianAlertHistory from './GuardianAlertHistory';
+import {
+  eliminarCacheEstudianteAcudienteOffline,
+  guardarCacheAcudienteOffline,
+  obtenerCacheAcudienteOffline,
+} from '../database/guardianAcademicOfflineDatabase';
 
 // =====================================================
 // AULA-AI | HU-08 | PASO 43
@@ -529,9 +534,11 @@ function AlertaCard({
 // =====================================================
 
 export default function GuardianAcademicAlerts({
+  acudienteId,
   apiUrl,
   accessToken,
   estudiante,
+  onAuthorizationDenied,
   notas = null,
   mostrarRendimiento = true,
 }) {
@@ -565,6 +572,19 @@ export default function GuardianAcademicAlerts({
 
   const [error, setError] =
     useState('');
+
+  const [avisoOffline, setAvisoOffline] =
+    useState('');
+
+  const [
+    modoOffline,
+    setModoOffline,
+  ] = useState(false);
+
+  const [
+    ultimaSincronizacion,
+    setUltimaSincronizacion,
+  ] = useState(null);
 
   const abortRef = useRef(null);
   const versionRef = useRef(0);
@@ -764,18 +784,104 @@ export default function GuardianAcademicAlerts({
         setPagina(1);
         setTotal(0);
         setTieneSiguiente(false);
+        setModoOffline(false);
       }
 
       setError('');
+      setAvisoOffline('');
+
+      let copiaLocal = null;
+      const claveCache =
+        `${filtro}:${nuevaPagina}`;
 
       try {
         if (
-          !estudianteId ||
-          !base ||
-          !accessToken
+          !acudienteId ||
+          !estudianteId
         ) {
           throw new Error(
             'No hay datos suficientes para consultar las alertas.'
+          );
+        }
+
+        try {
+          const copia =
+            await obtenerCacheAcudienteOffline({
+              acudienteId,
+              estudianteId,
+              recurso: 'alertas',
+              clave: claveCache,
+            });
+
+          if (
+            copia &&
+            copia.contenido?.estudiante?.id ===
+              estudianteId &&
+            Array.isArray(
+              copia.contenido.alertas
+            )
+          ) {
+            copiaLocal = copia;
+            setAlertas((anteriores) => {
+              if (!agregar) {
+                return copia.contenido.alertas;
+              }
+
+              const existentes = new Set(
+                anteriores.map((alerta) =>
+                  String(alerta.id)
+                )
+              );
+
+              return [
+                ...anteriores,
+                ...copia.contenido.alertas.filter(
+                  (alerta) =>
+                    !existentes.has(
+                      String(alerta.id)
+                    )
+                ),
+              ];
+            });
+            setPagina(nuevaPagina);
+            setTotal(
+              Number(
+                copia.contenido.paginacion?.total
+              ) || 0
+            );
+            setTieneSiguiente(
+              copia.contenido.paginacion
+                ?.tieneSiguiente === true
+            );
+            setModoOffline(true);
+            setUltimaSincronizacion(
+              new Date(copia.sincronizadoEn)
+            );
+          }
+        } catch (errorLocal) {
+          console.warn(
+            'HU-08: no se pudo leer la caché local de alertas:',
+            errorLocal.message
+          );
+        }
+
+        if (
+          controller.signal.aborted ||
+          version !== versionRef.current
+        ) {
+          return;
+        }
+
+        if (!base || !accessToken) {
+          if (copiaLocal) {
+            setAvisoOffline(
+              'Modo sin conexión. Se muestran las alertas de la última sincronización.'
+            );
+            return;
+          }
+
+          throw new Error(
+            'No hay conexión ni alertas sincronizadas para este filtro.'
           );
         }
 
@@ -816,22 +922,28 @@ export default function GuardianAcademicAlerts({
         try {
           datos = await respuesta.json();
         } catch {
-          throw new Error(
+          const error = new Error(
             'El servidor devolvió una respuesta no válida.'
           );
+
+          error.status = respuesta.status;
+          throw error;
         }
 
         if (
           !respuesta.ok ||
           datos?.success !== true
         ) {
-          throw new Error(
+          const error = new Error(
             respuesta.status === 401 ||
             respuesta.status === 403
               ? 'No tienes autorización para consultar estas alertas.'
               : datos?.message ||
                 'No fue posible consultar las alertas.'
           );
+
+          error.status = respuesta.status;
+          throw error;
         }
 
         if (
@@ -888,6 +1000,28 @@ export default function GuardianAcademicAlerts({
           datos.paginacion
             ?.tieneSiguiente === true
         );
+        setModoOffline(false);
+        setAvisoOffline('');
+
+        try {
+          const guardado =
+            await guardarCacheAcudienteOffline({
+              acudienteId,
+              estudianteId,
+              recurso: 'alertas',
+              clave: claveCache,
+              contenido: datos,
+            });
+
+          setUltimaSincronizacion(
+            new Date(guardado.sincronizadoEn)
+          );
+        } catch (errorCache) {
+          console.warn(
+            'HU-08: no se pudieron guardar las alertas para consulta offline:',
+            errorCache.message
+          );
+        }
       } catch (err) {
         if (
           controller.signal.aborted ||
@@ -898,10 +1032,43 @@ export default function GuardianAcademicAlerts({
           return;
         }
 
-        setError(
-          err?.message ||
-            'Ocurrió un error al consultar las alertas.'
-        );
+        if (
+          err?.status === 401 ||
+          err?.status === 403
+        ) {
+          setAlertas([]);
+          setTotal(0);
+          setTieneSiguiente(false);
+          setModoOffline(false);
+          setUltimaSincronizacion(null);
+          setError(err.message);
+
+          try {
+            await eliminarCacheEstudianteAcudienteOffline({
+              acudienteId,
+              estudianteId,
+            });
+          } catch (errorCache) {
+            console.warn(
+              'HU-08: no se pudo limpiar la caché de alertas tras rechazo de autorización:',
+              errorCache.message
+            );
+          }
+
+          onAuthorizationDenied?.(
+            estudianteId
+          );
+        } else if (copiaLocal) {
+          setModoOffline(true);
+          setAvisoOffline(
+            'No fue posible actualizar las alertas. Se conserva la última copia sincronizada.'
+          );
+        } else {
+          setError(
+            err?.message ||
+              'Ocurrió un error al consultar las alertas.'
+          );
+        }
       } finally {
         if (
           !controller.signal.aborted &&
@@ -914,7 +1081,9 @@ export default function GuardianAcademicAlerts({
       }
     },
     [
+      acudienteId,
       estudianteId,
+      onAuthorizationDenied,
       base,
       accessToken,
       filtro,
@@ -1112,6 +1281,21 @@ export default function GuardianAcademicAlerts({
           requieren seguimiento
           y acompañamiento.
         </Text>
+
+        {modoOffline && (
+          <Text style={styles.aviso}>
+            Modo sin conexión · Última sincronización:{' '}
+            {ultimaSincronizacion?.toLocaleString(
+              'es-CO'
+            ) || 'fecha no disponible'}
+          </Text>
+        )}
+
+        {!!avisoOffline && (
+          <Text style={styles.aviso}>
+            {avisoOffline}
+          </Text>
+        )}
       </View>
 
       <View style={styles.filtros}>
@@ -1269,9 +1453,13 @@ export default function GuardianAcademicAlerts({
           ============================================ */}
 
       <GuardianAlertHistory
+        acudienteId={acudienteId}
         apiUrl={apiUrl}
         accessToken={accessToken}
         estudiante={estudiante}
+        onAuthorizationDenied={
+          onAuthorizationDenied
+        }
       />
     </View>
   );

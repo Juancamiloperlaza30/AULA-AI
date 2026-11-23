@@ -27,6 +27,10 @@ const {
   supabaseAdmin,
 } = require('../config/supabase');
 
+const {
+  registrarNotificaciones,
+} = require('./notificacionRegistroService');
+
 // ======================================================
 // CONFIGURACIÓN ACADÉMICA INICIAL
 // ======================================================
@@ -513,10 +517,16 @@ async function guardarAlerta(alerta) {
   );
 
   if (existente) {
-    return actualizarAlerta(
+    const operacion = await actualizarAlerta(
       existente,
       nueva
     );
+
+    if (operacion.requiereNotificacion) {
+      notificarAlertaEnSegundoPlano(operacion.alerta);
+    }
+
+    return operacion;
   }
 
   // No insertar una alerta resuelta
@@ -548,21 +558,146 @@ async function guardarAlerta(alerta) {
       );
 
       if (concurrente) {
-        return actualizarAlerta(
+        const operacion = await actualizarAlerta(
           concurrente,
           nueva
         );
+
+        if (operacion.requiereNotificacion) {
+          notificarAlertaEnSegundoPlano(operacion.alerta);
+        }
+
+        return operacion;
       }
     }
 
     throw error;
   }
 
-  return {
+  const operacion = {
     accion: 'creada',
     alerta: data,
     requiereNotificacion: true,
   };
+
+  notificarAlertaEnSegundoPlano(data);
+  return operacion;
+}
+
+async function notificarUsuariosAutorizados(alerta) {
+  const { data: estudiante, error: errorEstudiante } =
+    await supabaseAdmin
+      .from('estudiantes')
+      .select('usuario_id,grado_id,grupo_id')
+      .eq('usuario_id', alerta.estudiante_id)
+      .maybeSingle();
+
+  if (errorEstudiante) {
+    throw errorEstudiante;
+  }
+
+  if (!estudiante) {
+    return;
+  }
+
+  const consultas = [
+    supabaseAdmin
+      .from('acudiente_estudiante')
+      .select('acudiente_id')
+      .eq('estudiante_id', alerta.estudiante_id)
+      .eq('activo', true)
+      .eq('verificado', true),
+  ];
+
+  if (estudiante.grado_id && estudiante.grupo_id) {
+    consultas.push(
+      supabaseAdmin
+      .from('orientador_ambito')
+      .select('orientador_id')
+      .eq('grado_id', estudiante.grado_id)
+      .eq('grupo_id', estudiante.grupo_id)
+        .eq('activo', true)
+    );
+  }
+
+  const [vinculaciones, ambitos = { data: [], error: null }] =
+    await Promise.all(consultas);
+
+  if (vinculaciones.error) {
+    throw vinculaciones.error;
+  }
+
+  if (ambitos.error) {
+    throw ambitos.error;
+  }
+
+  const idsCandidatos = [
+    estudiante.usuario_id,
+    ...(vinculaciones.data || []).map(
+      (vinculacion) => vinculacion.acudiente_id
+    ),
+    ...(ambitos.data || []).map(
+      (ambito) => ambito.orientador_id
+    ),
+  ].filter(Boolean);
+
+  const idsUnicos = [...new Set(idsCandidatos)];
+
+  if (idsUnicos.length === 0) {
+    return;
+  }
+
+  const { data: usuarios, error: errorUsuarios } =
+    await supabaseAdmin
+      .from('usuarios')
+      .select('id,rol')
+      .in('id', idsUnicos)
+      .eq('activo', true);
+
+  if (errorUsuarios) {
+    throw errorUsuarios;
+  }
+
+  const destinatariosAutorizados = (usuarios || [])
+    .filter((usuario) =>
+      ['estudiante', 'acudiente', 'orientador'].includes(
+        usuario.rol
+      )
+    )
+    .map((usuario) => usuario.id);
+
+  if (destinatariosAutorizados.length === 0) {
+    return;
+  }
+
+  await registrarNotificaciones({
+    destinatarios: destinatariosAutorizados,
+    tipo: 'alerta_riesgo_academico',
+    titulo: 'Actualización de seguimiento académico',
+    mensaje:
+      'Hay una actualización disponible en el seguimiento académico. Ingresa a AULA-AI para consultarla.',
+    recursoTipo: 'alerta_academica',
+    recursoId: alerta.id,
+    eventoClave:
+      `alerta:${alerta.id}:` +
+      `${alerta.estado || 'actualizada'}:` +
+      `${alerta.nivel || 'sin-nivel'}:` +
+      `${alerta.updated_at || Date.now()}`,
+  });
+}
+
+function notificarAlertaEnSegundoPlano(alerta) {
+  void notificarUsuariosAutorizados(alerta).catch(
+    (error) => {
+      console.error(
+        '[RNF-10.14] No fue posible enviar notificaciones de riesgo:',
+        {
+          alertaId: alerta?.id,
+          mensaje: error.message,
+        }
+      );
+    }
+  );
 }
 
 // ======================================================
@@ -1002,6 +1137,71 @@ async function registrarActividadIncumplida({
   });
 }
 
+async function resolverActividadIncumplida({
+  estudianteId,
+  actividadId,
+  periodoId = null,
+  motivo,
+}) {
+  validarUuid(estudianteId, 'estudianteId');
+
+  const idActividad = validarIdPositivo(
+    actividadId,
+    'actividadId'
+  );
+  const motivosPermitidos = [
+    'actividad_no_vigente',
+    'actividad_no_vigente_o_incompleta',
+    'estudiante_fuera_del_grupo',
+    'entrega_registrada',
+  ];
+
+  if (!motivosPermitidos.includes(motivo)) {
+    throw new Error('El motivo de resolución no es válido.');
+  }
+
+  const clave = `actividad:${idActividad}`;
+  const anterior = await buscarAlerta(estudianteId, clave);
+
+  if (!anterior || anterior.estado === ESTADOS.RESUELTA) {
+    return {
+      accion: anterior ? 'sin_cambios' : 'sin_alerta_previa',
+      alerta: anterior || null,
+      requiereNotificacion: false,
+    };
+  }
+
+  const descripciones = {
+    actividad_no_vigente:
+      'La actividad ya no se encuentra vigente. La alerta se resolvió automáticamente.',
+    actividad_no_vigente_o_incompleta:
+      'La actividad ya no cumple las condiciones para generar una alerta. La alerta se resolvió automáticamente.',
+    estudiante_fuera_del_grupo:
+      'El estudiante ya no pertenece al grupo asociado con la actividad. La alerta se resolvió automáticamente.',
+    entrega_registrada:
+      'Se registró una entrega para esta actividad. La alerta de actividad pendiente se resolvió.',
+  };
+
+  return guardarAlerta({
+    estudianteId,
+    clave,
+    tipo: anterior.tipo,
+    nivel: anterior.nivel,
+    titulo: anterior.titulo,
+    descripcion: descripciones[motivo],
+    estado: ESTADOS.RESUELTA,
+    origenTipo: 'actividad',
+    origenId: idActividad,
+    periodoId: periodoId ?? anterior.periodo_id,
+    fechaEvento: anterior.fecha_evento,
+    detalles: {
+      ...(anterior.detalles || {}),
+      motivoResolucion: motivo,
+      fechaResolucion: new Date().toISOString(),
+    },
+  });
+}
+
 // ======================================================
 // EXPORTACIONES
 // ======================================================
@@ -1017,4 +1217,5 @@ module.exports = {
   evaluarRendimientoMateria,
   evaluarRegistroAsistencia,
   registrarActividadIncumplida,
+  resolverActividadIncumplida,
 };

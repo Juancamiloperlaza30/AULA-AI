@@ -41,6 +41,57 @@ export const guardarSesion = async (sesion) => {
   }
 };
 
+export const actualizarPerfilEstudianteSesion =
+  async ({ accessToken, perfil }) => {
+    const datos = await obtenerSesion();
+    const usuarioGuardado = datos?.usuario;
+    const usuarioId = usuarioGuardado?.id;
+
+    if (
+      !datos?.session ||
+      !accessToken ||
+      datos.session.accessToken !== accessToken ||
+      usuarioId == null ||
+      perfil?.id == null ||
+      String(usuarioId) !== String(perfil.id) ||
+      String(usuarioGuardado.rol || '')
+        .trim()
+        .toLowerCase() !== 'estudiante' ||
+      String(perfil.rol || '')
+        .trim()
+        .toLowerCase() !== 'estudiante'
+    ) {
+      return {
+        actualizada: false,
+        omitida: true,
+      };
+    }
+
+    const usuarioActualizado = {
+      ...usuarioGuardado,
+    };
+
+    ['nombres', 'apellidos', 'correo'].forEach(
+      (campo) => {
+        const valor = perfil[campo];
+
+        if (typeof valor === 'string') {
+          usuarioActualizado[campo] = valor;
+        }
+      }
+    );
+
+    const guardada = await guardarSesion({
+      ...datos,
+      usuario: usuarioActualizado,
+    });
+
+    return {
+      actualizada: guardada,
+      omitida: false,
+    };
+  };
+
 /**
  * Recupera la sesión guardada.
  */

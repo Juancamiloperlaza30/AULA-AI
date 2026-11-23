@@ -12,12 +12,8 @@
 // - Procesa correcciones administrativas.
 // - Evita convertir errores de alertas en
 //   errores de guardado de calificaciones.
-// - No envía notificaciones push todavía.
-//
-// IMPORTANTE:
-// La ejecución tras la respuesta HTTP es una
-// integración inicial. No sustituye una cola
-// persistente de eventos con reintentos.
+// - Reutiliza una cola persistente con reintentos.
+// - No envía notificaciones push directamente.
 // ======================================================
 
 const {
@@ -25,8 +21,8 @@ const {
 } = require('../config/supabase');
 
 const {
-  procesarAlertasDeActividad,
-} = require('../services/gradeAlertIntegrationService');
+  procesarAlertasEncoladas,
+} = require('../services/gradeAlertQueueService');
 
 const UUID_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -67,7 +63,7 @@ async function procesarEvento({
 }) {
   try {
     const resultado =
-      await procesarAlertasDeActividad({
+      await procesarAlertasEncoladas({
         actividadId,
         estudiantesIds,
       });
@@ -77,8 +73,8 @@ async function procesarEvento({
       {
         contexto,
         actividadId,
-        procesados: resultado.procesados,
-        exitosos: resultado.exitosos,
+        procesados:
+          resultado.procesados,
         fallidos: resultado.fallidos,
       }
     );
@@ -145,9 +141,8 @@ function alertasTrasRegistroDocente(
       return;
     }
 
-    // Se inicia sin bloquear la respuesta HTTP.
-    // La siguiente fase incorporará una cola
-    // persistente para garantizar reintentos.
+    // La cola persistente permite reintentar
+    // este trabajo si el proceso falla.
     void procesarEvento({
       actividadId,
       estudiantesIds,

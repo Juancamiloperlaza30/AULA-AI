@@ -220,7 +220,7 @@ export default function MySubjectsScreen({
       let periodosGuardados = [];
 
       try {
-        if (usuarioId && accessToken) {
+        if (usuarioId) {
           periodosGuardados =
             await obtenerPeriodosLocales(
               usuarioId
@@ -262,7 +262,7 @@ export default function MySubjectsScreen({
       try {
         if (!accessToken || !apiUrl) {
           throw new Error(
-            'No hay una sesión válida.'
+            'No hay una sesión activa para actualizar los periodos.'
           );
         }
 
@@ -272,15 +272,22 @@ export default function MySubjectsScreen({
         );
 
         if (
+          data?.success !== true ||
+          !Array.isArray(data.periodos)
+        ) {
+          throw new Error(
+            'El servidor devolvió periodos académicos incompletos.'
+          );
+        }
+
+        if (
           solicitudId !==
           solicitudPeriodosId.current
         ) {
           return;
         }
 
-        const lista = Array.isArray(data.periodos)
-          ? data.periodos
-          : [];
+        const lista = data.periodos;
 
         setPeriodos(lista);
         setOrigenPeriodos('servidor');
@@ -387,7 +394,7 @@ export default function MySubjectsScreen({
       let copiaLocalDisponible = false;
 
       try {
-        if (!usuarioId || !accessToken) {
+        if (!usuarioId) {
           throw new Error(
             'No hay una sesión válida.'
           );
@@ -446,10 +453,25 @@ export default function MySubjectsScreen({
           ? `${apiUrl}${endpoint}?periodoId=${periodoSeleccionado}`
           : `${apiUrl}${endpoint}`;
 
+        if (!accessToken || !apiUrl) {
+          throw new Error(
+            'No hay una sesión activa para actualizar las materias.'
+          );
+        }
+
         const data = await consultarAPI(
           urlConsulta,
           accessToken
         );
+
+        if (
+          data?.success !== true ||
+          !Array.isArray(data.materias)
+        ) {
+          throw new Error(
+            'El servidor devolvió materias incompletas.'
+          );
+        }
 
         if (
           solicitudId !==
@@ -458,10 +480,7 @@ export default function MySubjectsScreen({
           return;
         }
 
-        const materiasServidor =
-          Array.isArray(data.materias)
-            ? data.materias
-            : [];
+        const materiasServidor = data.materias;
 
         setMaterias(materiasServidor);
         setModoOffline(false);

@@ -37,6 +37,10 @@ const {
   permitirRoles,
 } = require('../middleware/authMiddleware');
 
+const {
+  medirTiempoRespuestaCalificaciones,
+} = require('../middleware/gradeResponseTimeMiddleware');
+
 // ======================================================
 // CONTROLADOR DE CALIFICACIONES
 // ======================================================
@@ -64,6 +68,9 @@ const {
 
 router.get(
   '/docente/actividades',
+  medirTiempoRespuestaCalificaciones(
+    'listar_actividades_docente'
+  ),
   verificarToken,
   permitirRoles('docente'),
   listarActividadesCalificablesDocente
@@ -75,6 +82,9 @@ router.get(
 
 router.get(
   '/docente/actividades/:actividadId/estudiantes',
+  medirTiempoRespuestaCalificaciones(
+    'listar_estudiantes_actividad'
+  ),
   verificarToken,
   permitirRoles('docente'),
   listarEstudiantesActividadDocente
@@ -99,6 +109,9 @@ router.get(
 
 router.post(
   '/docente/calificaciones',
+  medirTiempoRespuestaCalificaciones(
+    'guardar_calificaciones_docente'
+  ),
   verificarToken,
   permitirRoles('docente'),
   alertasTrasRegistroDocente,
@@ -118,6 +131,9 @@ router.post(
 
 router.put(
   '/administrativas/:calificacionId',
+  medirTiempoRespuestaCalificaciones(
+    'actualizar_calificacion'
+  ),
   verificarToken,
   permitirRoles(
     'administrador',
@@ -135,6 +151,9 @@ router.put(
 
 router.get(
   '/estudiante/mis-calificaciones',
+  medirTiempoRespuestaCalificaciones(
+    'consultar_calificaciones_estudiante'
+  ),
   verificarToken,
   permitirRoles('estudiante'),
   listarCalificacionesEstudiante

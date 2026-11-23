@@ -51,6 +51,98 @@ const CAMPOS_USUARIO = `
 `;
 
 const LIMITE_PAGINA = 50;
+const TAMANO_CONSULTA_ESTUDIANTES = 500;
+
+async function consultarEstudiantesDeAmbitos(ambitos) {
+  const idsSegurosParaFiltro = ambitos.every(
+    ({ grado_id, grupo_id }) =>
+      /^[A-Za-z0-9_-]+$/.test(String(grado_id)) &&
+      /^[A-Za-z0-9_-]+$/.test(String(grupo_id))
+  );
+
+  if (!idsSegurosParaFiltro) {
+    const grados = [
+      ...new Set(ambitos.map((ambito) => ambito.grado_id)),
+    ];
+    const { data, error } = await supabaseAdmin
+      .from('estudiantes')
+      .select(CAMPOS_ESTUDIANTE)
+      .in('grado_id', grados);
+
+    if (error) {
+      throw error;
+    }
+
+    const clavesAutorizadas = new Set(
+      ambitos.map(
+        ({ grado_id, grupo_id }) =>
+          `${grado_id}:${grupo_id}`
+      )
+    );
+
+    return (data || []).filter((estudiante) =>
+      clavesAutorizadas.has(
+        `${estudiante.grado_id}:${estudiante.grupo_id}`
+      )
+    );
+  }
+
+  const estudiantes = [];
+  const TAMANO_AMBITOS = 25;
+
+  for (
+    let inicioAmbitos = 0;
+    inicioAmbitos < ambitos.length;
+    inicioAmbitos += TAMANO_AMBITOS
+  ) {
+    const loteAmbitos = ambitos.slice(
+      inicioAmbitos,
+      inicioAmbitos + TAMANO_AMBITOS
+    );
+    const filtro = loteAmbitos
+      .map(
+        ({ grado_id, grupo_id }) =>
+          `and(grado_id.eq.${grado_id},grupo_id.eq.${grupo_id})`
+      )
+      .join(',');
+
+    for (
+      let inicio = 0;
+      ;
+      inicio += TAMANO_CONSULTA_ESTUDIANTES
+    ) {
+      const { data, error } = await supabaseAdmin
+        .from('estudiantes')
+        .select(CAMPOS_ESTUDIANTE)
+        .or(filtro)
+        .order('usuario_id', { ascending: true })
+        .range(
+          inicio,
+          inicio + TAMANO_CONSULTA_ESTUDIANTES - 1
+        );
+
+      if (error) {
+        throw error;
+      }
+
+      const pagina = data || [];
+      estudiantes.push(...pagina);
+
+      if (pagina.length < TAMANO_CONSULTA_ESTUDIANTES) {
+        break;
+      }
+    }
+  }
+
+  const porUsuario = new Map(
+    estudiantes.map((estudiante) => [
+      estudiante.usuario_id,
+      estudiante,
+    ])
+  );
+
+  return [...porUsuario.values()];
+}
 
 // ======================================================
 // VALIDACIÓN DE SESIÓN DEL ORIENTADOR
@@ -155,38 +247,8 @@ const listarAlertasOrientador = async (req, res) => {
     // Se consulta por grado y se filtra también
     // por grupo. Nunca se autoriza solo por grado.
 
-    const grados = [
-      ...new Set(
-        ambitos.map((ambito) => ambito.grado_id)
-      ),
-    ];
-
-    const {
-      data: estudiantes,
-      error: errorEstudiantes,
-    } = await supabaseAdmin
-      .from('estudiantes')
-      .select(CAMPOS_ESTUDIANTE)
-      .in('grado_id', grados);
-
-    if (errorEstudiantes) {
-      throw errorEstudiantes;
-    }
-
-    const clavesAutorizadas = new Set(
-      ambitos.map(
-        (ambito) =>
-          `${ambito.grado_id}:${ambito.grupo_id}`
-      )
-    );
-
-    const estudiantesAutorizados = (
-      estudiantes || []
-    ).filter((estudiante) =>
-      clavesAutorizadas.has(
-        `${estudiante.grado_id}:${estudiante.grupo_id}`
-      )
-    );
+    const estudiantesAutorizados =
+      await consultarEstudiantesDeAmbitos(ambitos);
 
     const estudianteIds = [
       ...new Set(

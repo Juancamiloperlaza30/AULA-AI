@@ -17,6 +17,31 @@
 const express = require('express');
 
 const {
+  medirTiempoRespuestaActividad,
+} = require('../middleware/activityResponseTimeMiddleware');
+
+const {
+  medirTiempoRespuestaCalificaciones,
+} = require('../middleware/gradeResponseTimeMiddleware');
+
+const {
+  medirTiempoRespuestaAsistencia,
+} = require('../middleware/attendanceResponseTimeMiddleware');
+
+const {
+  auditarConsultaAcudiente,
+  auditarEnvioExcusa,
+} = require('../middleware/guardianAuditMiddleware');
+
+const {
+  medirTiempoRespuestaAcudiente,
+} = require('../middleware/guardianResponseTimeMiddleware');
+
+const {
+  medirTiempoRespuestaExcusa,
+} = require('../middleware/excuseResponseTimeMiddleware');
+
+const {
   requireAcademicAccess,
 } = require('../middleware/requireAcademicAccess');
 const router = express.Router();
@@ -116,6 +141,10 @@ router.use(
 
 router.get(
   '/mis-estudiantes',
+  auditarConsultaAcudiente,
+  medirTiempoRespuestaAcudiente(
+    'listar_estudiantes_acudiente'
+  ),
   listarMisEstudiantes
 );
 
@@ -130,6 +159,10 @@ router.get(
 
 router.get(
   '/estudiantes/:estudianteId/calificaciones',
+  auditarConsultaAcudiente,
+  medirTiempoRespuestaCalificaciones(
+    'consultar_calificaciones_acudiente'
+  ),
   listarCalificacionesAcudiente
 );
 
@@ -141,6 +174,8 @@ router.get(
 
 router.get(
   '/estudiantes/:estudianteId/actividades',
+  auditarConsultaAcudiente,
+  medirTiempoRespuestaActividad('listar_actividades_acudiente'),
   listarActividadesAcudiente
 );
 
@@ -155,6 +190,8 @@ router.get(
 
 router.get(
   '/estudiantes/:estudianteId/asistencia',
+  auditarConsultaAcudiente,
+  medirTiempoRespuestaAsistencia('historial-acudiente'),
   consultarAsistenciaAcudiente
 );
 
@@ -188,6 +225,10 @@ router.get(
 
 router.get(
   '/estudiantes/:estudianteId/alertas/historial',
+  auditarConsultaAcudiente,
+  medirTiempoRespuestaAcudiente(
+    'historial_alertas_acudiente'
+  ),
   listarHistorialAlertasAcudiente
 );
 
@@ -220,6 +261,10 @@ router.get(
 
 router.get(
   '/estudiantes/:estudianteId/alertas',
+  auditarConsultaAcudiente,
+  medirTiempoRespuestaAcudiente(
+    'alertas_acudiente'
+  ),
   listarAlertasAcudiente
 );
 
@@ -238,6 +283,7 @@ router.get(
 
 router.get(
   '/estudiantes/:estudianteId/excusas/inasistencias',
+  auditarConsultaAcudiente,
   listarInasistenciasParaExcusas
 );
 
@@ -257,6 +303,8 @@ router.get(
 router.post(
   '/estudiantes/:estudianteId/excusas',
   recibirSoporteExcusa,
+  medirTiempoRespuestaExcusa,
+  auditarEnvioExcusa,
   crearExcusaAcudiente
 );
 
@@ -266,6 +314,7 @@ router.post(
 
 router.get(
   '/estudiantes/:estudianteId/excusas',
+  auditarConsultaAcudiente,
   listarExcusasAcudiente
 );
 
@@ -275,6 +324,7 @@ router.get(
 
 router.get(
   '/estudiantes/:estudianteId/excusas/:excusaId/soportes/:soporteId/descargar',
+  auditarConsultaAcudiente,
   descargarSoporteExcusa
 );
 

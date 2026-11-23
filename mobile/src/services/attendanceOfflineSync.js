@@ -4,6 +4,8 @@ import * as Crypto from 'expo-crypto';
 import {
   iniciarAsistenciaOffline,
   obtenerColaAsistencia,
+  obtenerGrupoAsistenciaOffline,
+  guardarAsistenciaOffline,
   marcarAsistenciaSincronizando,
   marcarAsistenciaSincronizada,
   marcarErrorAsistenciaOffline,
@@ -186,6 +188,135 @@ const enviarOperacion = async ({
   }
 };
 
+const actualizarCacheSesionConfirmada = async ({
+  apiUrl,
+  accessToken,
+  usuarioId,
+  operacion,
+  sesionId,
+}) => {
+  const controlador = new AbortController();
+  const temporizador = setTimeout(() => {
+    controlador.abort();
+  }, 15000);
+
+  try {
+    const respuesta = await fetch(
+      `${String(apiUrl).replace(/\/+$/, '')}/api/attendance/sesiones/${sesionId}`,
+      {
+        method: 'GET',
+        signal: controlador.signal,
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+      }
+    );
+
+    const texto = await respuesta.text();
+    let datos = {};
+
+    try {
+      datos = texto ? JSON.parse(texto) : {};
+    } catch {
+      throw new Error(
+        'El backend devolvió una respuesta inválida al consultar la sesión sincronizada.'
+      );
+    }
+
+    if (
+      !respuesta.ok ||
+      datos.success !== true ||
+      Number(datos.sesion?.id) !== Number(sesionId) ||
+      Number(datos.sesion?.materia_grupo_periodo_id) !==
+        Number(operacion.asignacionId) ||
+      String(datos.sesion?.fecha) !== String(operacion.fecha) ||
+      Number(datos.sesion?.numero_sesion) !==
+        Number(operacion.numeroSesion) ||
+      String(datos.sesion?.docente_id) !== String(usuarioId) ||
+      !Array.isArray(datos.asistencias)
+    ) {
+      throw new Error(
+        'La respuesta del servidor no contiene la sesión completa que se sincronizó.'
+      );
+    }
+
+    const idsAsistencia = new Set();
+    for (const asistencia of datos.asistencias) {
+      const estudianteId = String(
+        asistencia?.estudiante_id || ''
+      ).trim();
+
+      if (
+        !estudianteId ||
+        !['presente', 'ausente', 'tarde'].includes(
+          asistencia.estado
+        ) ||
+        idsAsistencia.has(estudianteId.toLowerCase())
+      ) {
+        throw new Error(
+          'La sesión recibida contiene asistencias incompletas o duplicadas.'
+        );
+      }
+
+      idsAsistencia.add(estudianteId.toLowerCase());
+    }
+
+    const idsOperacion = operacion.registros.map(
+      (registro) =>
+        String(registro.estudianteId).trim().toLowerCase()
+    );
+
+    if (
+      !idsOperacion.every((id) => idsAsistencia.has(id))
+    ) {
+      throw new Error(
+        'La sesión recibida no contiene todos los registros confirmados.'
+      );
+    }
+
+    const grupo = await obtenerGrupoAsistenciaOffline({
+      usuarioId,
+      asignacionId: operacion.asignacionId,
+    });
+
+    if (
+      !grupo ||
+      !Array.isArray(grupo.estudiantes) ||
+      grupo.estudiantes.length === 0
+    ) {
+      throw new Error(
+        'No se encontró el grupo local necesario para guardar la sesión sincronizada.'
+      );
+    }
+
+    const idsEstudiantes = new Set(
+      grupo.estudiantes.map((estudiante) =>
+        String(estudiante?.id || '').trim().toLowerCase()
+      )
+    );
+
+    if (
+      !idsAsistencia.size ||
+      [...idsAsistencia].some((id) => !idsEstudiantes.has(id))
+    ) {
+      throw new Error(
+        'La sesión recibida no coincide con el grupo local guardado.'
+      );
+    }
+
+    await guardarAsistenciaOffline({
+      usuarioId,
+      asignacionId: operacion.asignacionId,
+      fecha: datos.sesion.fecha,
+      sesion: datos.sesion,
+      asistencias: datos.asistencias,
+      estudiantes: grupo.estudiantes,
+    });
+  } finally {
+    clearTimeout(temporizador);
+  }
+};
+
 // ==========================================
 // SINCRONIZAR PENDIENTES DE UN DOCENTE
 // ==========================================
@@ -285,6 +416,14 @@ export const sincronizarAsistenciasPendientes =
               operacion,
               operacionId,
             });
+
+          await actualizarCacheSesionConfirmada({
+            apiUrl,
+            accessToken,
+            usuarioId,
+            operacion,
+            sesionId: respuesta.sesionId,
+          });
 
           const confirmada =
             await marcarAsistenciaSincronizada({

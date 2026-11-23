@@ -20,6 +20,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as DocumentPicker from 'expo-document-picker';
 import * as Crypto from 'expo-crypto';
 import * as Sharing from 'expo-sharing';
+import * as Network from 'expo-network';
 
 import { File } from 'expo-file-system';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -1142,12 +1143,27 @@ export default function GuardianExcuses({
 
     const versionActual = version.current;
     const estudianteActual = estudianteId;
+    let envioIniciado = false;
 
     try {
       if (!ruta || !accessToken) {
         throw new Error(
           'Tu sesión no está disponible.'
         );
+      }
+
+      const estadoRed =
+        await Network.getNetworkStateAsync();
+
+      if (
+        estadoRed.isConnected === false ||
+        estadoRed.isInternetReachable === false
+      ) {
+        Alert.alert(
+          'Se requiere conexión a Internet',
+          'La excusa no fue enviada. Conéctate a Internet e inténtalo nuevamente.'
+        );
+        return;
       }
 
       const soporte = validarArchivo(
@@ -1206,6 +1222,8 @@ export default function GuardianExcuses({
           claveEnvio.current
         );
 
+        envioIniciado = true;
+
         const respuesta = await fetch(
           `${ruta}/excusas`,
           {
@@ -1248,6 +1266,8 @@ export default function GuardianExcuses({
             'El archivo está vacío, supera los 5 MB o ya no está disponible. Selecciónalo nuevamente.'
           );
         }
+
+        envioIniciado = true;
 
         const resultado = await FileSystem.uploadAsync(
           `${ruta}/excusas`,
@@ -1336,10 +1356,15 @@ export default function GuardianExcuses({
       }
 
       Alert.alert(
-        'Verificar solicitud',
-        (err?.message ||
-          'No fue posible confirmar el envío.') +
-          '\n\nConsulta el seguimiento antes de volver a intentarlo.'
+        envioIniciado
+          ? 'Verificar solicitud'
+          : 'No se envió la excusa',
+        envioIniciado
+          ? (err?.message ||
+            'No fue posible confirmar el envío.') +
+            '\n\nConsulta el seguimiento antes de volver a intentarlo.'
+          : err?.message ||
+            'No fue posible preparar la solicitud.'
       );
     } finally {
       bloqueoEnvio.current = false;

@@ -12,6 +12,9 @@ const {
   verificarToken,
   permitirRoles,
 } = require('../middleware/authMiddleware');
+const {
+  medirConsultaComunicaciones,
+} = require('../middleware/communicationResponseTimeMiddleware');
 
 const {
   publicarComunicado,
@@ -30,6 +33,7 @@ const router = express.Router();
 router.get(
   '/',
   verificarToken,
+  medirConsultaComunicaciones('listar_comunicados'),
   listarMisComunicados
 );
 
@@ -41,6 +45,7 @@ router.get(
 router.get(
   '/:id',
   verificarToken,
+  medirConsultaComunicaciones('detalle_comunicado'),
   obtenerDetalleComunicado
 );
 

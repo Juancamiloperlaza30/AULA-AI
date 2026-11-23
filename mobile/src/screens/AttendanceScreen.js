@@ -315,6 +315,59 @@ export default function AttendanceScreen({
     useState([]);
 
   const [
+    periodoSeleccionadoId,
+    setPeriodoSeleccionadoId,
+  ] = useState(null);
+
+  // HU-14: períodos asociados a las asignaciones del docente.
+  const periodosDisponibles = [
+    ...new Map(
+      asignaciones
+        .filter((item) => item.periodo?.id != null)
+        .map((item) => [
+          String(item.periodo.id),
+          item.periodo,
+        ])
+    ).values(),
+  ];
+
+  // Identificar el período vigente por fecha.
+  // No dependemos exclusivamente de esActual.
+  const fechaHoy = fechaLocal();
+
+  const periodoActual =
+    periodosDisponibles.find(
+      (periodo) => periodo.esActual === true
+    ) ||
+    periodosDisponibles.find(
+      (periodo) =>
+        periodo.fecha_inicio &&
+        periodo.fecha_fin &&
+        fechaHoy >= periodo.fecha_inicio &&
+        fechaHoy <= periodo.fecha_fin
+    ) ||
+    [...periodosDisponibles]
+      .sort((a, b) =>
+        String(b.fecha_inicio || '').localeCompare(
+          String(a.fecha_inicio || '')
+        )
+      )[0] ||
+    null;
+
+  const periodoActivoId =
+    periodoSeleccionadoId ?? periodoActual?.id;
+
+  // Mantener todas las asignaciones originales.
+  // El filtro solo determina cuáles se visualizan.
+  const asignacionesFiltradas = asignaciones.filter(
+    (item) =>
+      periodoActivoId != null &&
+      item.periodo?.id != null &&
+      String(item.periodo.id) ===
+        String(periodoActivoId)
+  );
+
+  const [
     asignacionSeleccionada,
     setAsignacionSeleccionada,
   ] = useState(null);
@@ -326,6 +379,10 @@ export default function AttendanceScreen({
     sesionSeleccionada,
     setSesionSeleccionada,
   ] = useState(null);
+
+  // HU-14: sesiones históricas de la materia seleccionada.
+  const [sesionesHistorial, setSesionesHistorial] =
+    useState([]);
 
   const [fecha, setFecha] = useState(
     fechaLocal()
@@ -896,8 +953,21 @@ export default function AttendanceScreen({
             estudiantesData.estudiantes ||
             [];
 
-          const listaSesiones =
-            sesionesData.sesiones || [];
+          const listaSesiones = (
+            sesionesData.sesiones || []
+          ).sort((a, b) => {
+            const comparacionFecha =
+              String(b.fecha).localeCompare(String(a.fecha));
+
+            if (comparacionFecha !== 0) {
+              return comparacionFecha;
+            }
+
+            return Number(a.numero_sesion) -
+              Number(b.numero_sesion);
+          });
+
+          setSesionesHistorial(listaSesiones);
 
           // HU-06: almacenar el grupo y sus estudiantes
           // para futuras consultas sin conexión.
@@ -968,6 +1038,7 @@ export default function AttendanceScreen({
             );
           }
         } catch (error) {
+          setSesionesHistorial([]);
           setSesionSeleccionada(null);
           setEstudiantes([]);
           setEstados({});
@@ -1046,13 +1117,18 @@ export default function AttendanceScreen({
     );
 
   const seleccionarAsignacion =
-    async (asignacion) => {
+    useCallback(async (asignacion) => {
+      const fechaInicial =
+        new Date().toLocaleDateString('en-CA');
+
       setMostrarMaterias(false);
-      setAsignacionSeleccionada(
-        asignacion
-      );
+      setAsignacionSeleccionada(asignacion);
+
+      // HU-14: restablecer la fecha al cambiar de materia.
+      setFecha(fechaInicial);
 
       setSesionSeleccionada(null);
+      setSesionesHistorial([]);
       setAsistenciasGuardadas([]);
       setEstudiantes([]);
 
@@ -1061,7 +1137,7 @@ export default function AttendanceScreen({
 
         await cargarDatosAsignacion(
           asignacion,
-          fecha
+          fechaInicial
         );
       } catch (error) {
         Alert.alert(
@@ -1071,7 +1147,65 @@ export default function AttendanceScreen({
       } finally {
         setCargando(false);
       }
-    };
+    }, [cargarDatosAsignacion, setFecha]);
+
+  // HU-14: consultar una sesión histórica concreta.
+  const consultarSesionHistorica = async (sesion) => {
+    if (
+      !sesion?.id ||
+      !asignacionSeleccionada?.id ||
+      cargando ||
+      guardando ||
+      actualizando
+    ) {
+      return;
+    }
+
+    try {
+      setCargando(true);
+
+      // Evitar mostrar registros de la sesión anterior.
+      setSesionSeleccionada(null);
+      setAsistenciasGuardadas([]);
+
+      const estadosIniciales = {};
+
+      estudiantes.forEach((estudiante) => {
+        estadosIniciales[estudiante.id] = null;
+      });
+
+      setEstados(estadosIniciales);
+
+      // Actualizar la fecha visible.
+      setFecha(sesion.fecha);
+
+      // Cargar exactamente la sesión seleccionada.
+      await cargarAsistenciaSesion(sesion.id, {
+        sesion,
+        estudiantesSesion: estudiantes,
+        asignacionId: asignacionSeleccionada.id,
+      });
+
+      setSesionSeleccionada(sesion);
+    } catch (error) {
+      Alert.alert(
+        'Error al consultar historial',
+        mensajeError(error)
+      );
+
+      // Recuperar el estado mediante la consulta existente.
+      try {
+        await cargarDatosAsignacion(
+          asignacionSeleccionada,
+          sesion.fecha
+        );
+      } catch {
+        // Conservar el mensaje original.
+      }
+    } finally {
+      setCargando(false);
+    }
+  };
 
   const actualizarFecha =
     async () => {
@@ -1676,6 +1810,12 @@ export default function AttendanceScreen({
             .grado?.nombre,
           asignacionSeleccionada
             .grupo?.nombre,
+          asignacionSeleccionada
+            .periodo?.nombre,
+          asignacionSeleccionada
+            .periodo?.esActual
+            ? 'Actual'
+            : null,
         ]
           .filter(Boolean)
           .join(' · ')
@@ -1738,19 +1878,19 @@ export default function AttendanceScreen({
           <View style={styles.offlineBanner}>
             <Text style={styles.offlineBannerTitle}>
               {hayConexion === false
-                ? 'Sin conexión · Solo consulta'
-                : 'Conexión no confirmada · Solo consulta'}
+                ? 'Sin conexión · Consulta y registro nuevo'
+                : 'Conexión no confirmada · Registro nuevo offline'}
             </Text>
             <Text style={styles.offlineBannerText}>
               {modoOffline
                 ? 'Mostrando datos guardados en este dispositivo.'
-                : 'Las acciones de escritura están deshabilitadas hasta confirmar la conexión.'}
+                : 'La conexión no está disponible.'}
+              {' '}Puedes guardar una asistencia nueva como pendiente para sincronizarla al reconectar. Las correcciones requieren Internet.
               {modoOffline && fechaUltimaSincronizacion
                 ? ` Última sincronización: ${new Date(
                     fechaUltimaSincronizacion
                   ).toLocaleString()}`
                 : ''}
-              {' '}No puedes registrar ni corregir asistencias sin conexión.
             </Text>
           </View>
         ) : null}
@@ -1772,6 +1912,86 @@ export default function AttendanceScreen({
         <Text style={styles.sectionTitle}>
           Materia y grupo
         </Text>
+
+        {/* HU-14: Selector de período académico */}
+        <View style={styles.periodosContainer}>
+          <Text style={styles.periodosTitulo}>
+            Período académico
+          </Text>
+
+          <View style={styles.periodosFila}>
+            {[1, 2, 3, 4].map((numero) => {
+              const periodo = periodosDisponibles.find((item) => {
+                const nombre = String(item.nombre || '');
+
+                const numeroPeriodo =
+                  nombre.match(
+                    /per[ií]odo\s*(?:acad[eé]mico\s*)?([1-4])/i
+                  )?.[1] ||
+                  nombre.match(/^([1-4])(?:\D|$)/)?.[1];
+
+                return Number(numeroPeriodo) === numero;
+              });
+
+              const periodoId = periodo?.id ?? numero;
+
+              const seleccionado =
+                periodoActivoId != null &&
+                String(periodoActivoId) === String(periodoId);
+
+              return (
+                <TouchableOpacity
+                  key={numero}
+                  style={[
+                    styles.periodoBoton,
+                    seleccionado &&
+                      styles.periodoBotonActivo,
+                  ]}
+                  onPress={() => {
+                    setPeriodoSeleccionadoId(periodoId);
+                    setAsignacionSeleccionada(null);
+                    setSesionesHistorial([]);
+                    setEstudiantes([]);
+                    setSesionSeleccionada(null);
+                    setAsistenciasGuardadas([]);
+                    setEstados({});
+                    setMostrarMaterias(false);
+                  }}
+                >
+                  <Text
+                    style={[
+                      styles.periodoBotonTexto,
+                      seleccionado &&
+                        styles.periodoBotonTextoActivo,
+                    ]}
+                  >
+                    {numero}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+
+          <Text style={styles.periodoDescripcion}>
+            {periodoSeleccionadoId == null
+              ? 'Período académico actual'
+              : `Período seleccionado: ${
+                  periodosDisponibles.find(
+                    (item) =>
+                      String(item.id) ===
+                      String(periodoSeleccionadoId)
+                  )?.nombre ||
+                  `Periodo ${periodoSeleccionadoId} - 2026`
+                }`}
+          </Text>
+
+          {periodoActivoId != null &&
+            asignacionesFiltradas.length === 0 && (
+              <Text style={styles.periodoDescripcion}>
+                No hay asignaciones registradas para este período.
+              </Text>
+            )}
+        </View>
 
         <TouchableOpacity
           style={styles.selectCard}
@@ -1795,7 +2015,7 @@ export default function AttendanceScreen({
 
         {mostrarMaterias && (
           <View style={styles.optionsBox}>
-            {asignaciones.map(
+            {asignacionesFiltradas.map(
               (asignacion) => (
                 <TouchableOpacity
                   key={String(
@@ -1832,20 +2052,124 @@ export default function AttendanceScreen({
                     {
                       asignacion.grupo
                         ?.nombre
+                    }{' '}
+                    —{' '}
+                    {
+                      asignacion.periodo
+                        ?.nombre || 'Período'
                     }
+                    {asignacion.periodo
+                      ?.esActual
+                      ? ' · Actual'
+                      : ''}
                   </Text>
                 </TouchableOpacity>
               )
             )}
 
-            {!asignaciones.length && (
-              <Text
-                style={
-                  styles.emptyText
-                }
-              >
-                No hay materias activas asignadas.
+            {asignacionesFiltradas.length === 0 && (
+              <Text style={styles.emptyText}>
+                No hay materias registradas para este período académico.
               </Text>
+            )}
+          </View>
+        )}
+
+        {/* HU-14: historial de sesiones académicas */}
+        {asignacionSeleccionada && !modoOffline && (
+          <View
+            style={{
+              backgroundColor: COLORS.white,
+              borderRadius: 16,
+              padding: 16,
+              marginTop: 16,
+              marginBottom: 12,
+              borderWidth: 1,
+              borderColor: COLORS.border,
+            }}
+          >
+            <Text
+              style={{
+                color: COLORS.primary,
+                fontSize: 17,
+                fontWeight: '800',
+                marginBottom: 6,
+              }}
+            >
+              Historial de asistencias
+            </Text>
+
+            <Text
+              style={{
+                color: COLORS.muted,
+                fontSize: 12,
+                marginBottom: 14,
+              }}
+            >
+              Selecciona una sesión para consultar
+              las asistencias registradas.
+            </Text>
+
+            {sesionesHistorial.length === 0 ? (
+              <Text style={{ color: COLORS.muted }}>
+                No hay sesiones registradas para
+                esta materia y período.
+              </Text>
+            ) : (
+              sesionesHistorial.map((sesion) => {
+                const seleccionada =
+                  String(sesionSeleccionada?.id) ===
+                  String(sesion.id);
+
+                return (
+                  <TouchableOpacity
+                    key={String(sesion.id)}
+                    disabled={
+                      cargando ||
+                      guardando ||
+                      actualizando
+                    }
+                    onPress={() =>
+                      consultarSesionHistorica(sesion)
+                    }
+                    style={{
+                      padding: 14,
+                      borderRadius: 12,
+                      borderWidth: 1,
+                      borderColor: seleccionada
+                        ? COLORS.blue
+                        : COLORS.border,
+                      backgroundColor: seleccionada
+                        ? COLORS.primaryLight
+                        : COLORS.background,
+                      marginBottom: 9,
+                    }}
+                  >
+                    <Text
+                      style={{
+                        color: COLORS.primary,
+                        fontWeight: '700',
+                        fontSize: 14,
+                      }}
+                    >
+                      {sesion.fecha}
+                    </Text>
+
+                    <Text
+                      style={{
+                        color: COLORS.muted,
+                        fontSize: 12,
+                        marginTop: 4,
+                      }}
+                    >
+                      Sesión {sesion.numero_sesion}
+                      {seleccionada
+                        ? ' · Seleccionada'
+                        : ' · Consultar asistencia'}
+                    </Text>
+                  </TouchableOpacity>
+                );
+              })
             )}
           </View>
         )}
@@ -2337,6 +2661,53 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     marginBottom: 11,
     marginTop: 18,
+  },
+
+  periodosContainer: {
+    marginBottom: 16,
+  },
+
+  periodosTitulo: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: COLORS.primary,
+    marginBottom: 10,
+  },
+
+  periodosFila: {
+    flexDirection: 'row',
+    gap: 10,
+  },
+
+  periodoBoton: {
+    flex: 1,
+    paddingVertical: 13,
+    alignItems: 'center',
+    borderRadius: 12,
+    backgroundColor: COLORS.white,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+  },
+
+  periodoBotonActivo: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+
+  periodoBotonTexto: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+
+  periodoBotonTextoActivo: {
+    color: COLORS.white,
+  },
+
+  periodoDescripcion: {
+    marginTop: 9,
+    fontSize: 12,
+    color: COLORS.muted,
   },
 
   selectCard: {

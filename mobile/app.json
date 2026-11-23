@@ -12,20 +12,32 @@
     },
     "android": {
       "package": "com.aulaai.mobile",
+      "versionCode": 2,
       "googleServicesFile": "./google-services.json",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/android-icon-foreground.png",
         "backgroundImage": "./assets/android-icon-background.png",
         "monochromeImage": "./assets/android-icon-monochrome.png"
-      }
+      },
+      "permissions": [
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_FINE_LOCATION"
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
       "expo-secure-store",
-      "expo-sqlite",
+      [
+        "expo-sqlite",
+        {
+          "useSQLCipher": true
+        }
+      ],
       "@react-native-community/datetimepicker",
       "expo-notifications",
       "expo-sharing",
@@ -52,6 +64,12 @@
       "eas": {
         "projectId": "7d6c9e71-eb95-4582-9ec3-2ec37f3f9d41"
       }
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/7d6c9e71-eb95-4582-9ec3-2ec37f3f9d41"
     }
   }
 }

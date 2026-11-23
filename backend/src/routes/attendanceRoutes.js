@@ -32,6 +32,9 @@ const {
 const {
   requireAcademicAccess,
 } = require('../middleware/requireAcademicAccess');
+const {
+  medirTiempoRespuestaAsistencia,
+} = require('../middleware/attendanceResponseTimeMiddleware');
 const router = express.Router();
 
 // ==========================================
@@ -50,6 +53,7 @@ router.use(requireAcademicAccess);
 router.get(
   '/mi-historial',
   permitirRoles('estudiante'),
+  medirTiempoRespuestaAsistencia('historial-estudiante'),
   consultarMiHistorial
 );
 
@@ -60,6 +64,7 @@ router.get(
 router.get(
   '/mis-asignaciones',
   permitirRoles('docente'),
+  medirTiempoRespuestaAsistencia('asignaciones-docente'),
   listarAsignaciones
 );
 
@@ -70,6 +75,7 @@ router.get(
 router.get(
   '/asignaciones/:asignacionId/estudiantes',
   permitirRoles('docente'),
+  medirTiempoRespuestaAsistencia('estudiantes-asignacion'),
   listarEstudiantes
 );
 
@@ -80,6 +86,7 @@ router.get(
 router.get(
   '/asignaciones/:asignacionId/sesiones',
   permitirRoles('docente'),
+  medirTiempoRespuestaAsistencia('sesiones-asignacion'),
   listarSesiones
 );
 
@@ -90,6 +97,7 @@ router.get(
 router.post(
   '/sesiones',
   permitirRoles('docente'),
+  medirTiempoRespuestaAsistencia('crear-sesion'),
   crearSesion
 );
 
@@ -100,6 +108,7 @@ router.post(
 router.post(
   '/sincronizar-offline',
   permitirRoles('docente'),
+  medirTiempoRespuestaAsistencia('sincronizar-offline'),
   sincronizarAsistenciaOffline
 );
 
@@ -114,6 +123,7 @@ router.get(
     'administrador',
     'coordinador'
   ),
+  medirTiempoRespuestaAsistencia('consultar-sesion'),
   consultarSesion
 );
 
@@ -124,6 +134,7 @@ router.get(
 router.post(
   '/sesiones/:sesionId/asistencias',
   permitirRoles('docente'),
+  medirTiempoRespuestaAsistencia('registrar-asistencias'),
   registrarAsistencias
 );
 
@@ -138,6 +149,7 @@ router.get(
     'administrador',
     'coordinador'
   ),
+  medirTiempoRespuestaAsistencia('listar-sesiones-administrativas'),
   listarSesionesAdministrativas
 );
 
@@ -152,6 +164,7 @@ router.get(
     'administrador',
     'coordinador'
   ),
+  medirTiempoRespuestaAsistencia('consultar-sesion-administrativa'),
   consultarSesionAdministrativa
 );
 
@@ -178,6 +191,7 @@ router.patch(
     'administrador',
     'coordinador'
   ),
+  medirTiempoRespuestaAsistencia('corregir-asistencia'),
   corregirAsistencia
 );
 

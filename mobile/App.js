@@ -202,6 +202,8 @@ export default function App() {
   ] = useState(null);
 
   const renovacionSesionEnCurso = useRef(null);
+  const recuperacionSesionEnCurso = useRef(false);
+  const recuperacionSesionSolicitada = useRef(false);
 
   const [
     modoActivacion,
@@ -717,6 +719,13 @@ export default function App() {
   );
 
   const cargarSesionGuardada = useCallback(async () => {
+    if (recuperacionSesionEnCurso.current) {
+      recuperacionSesionSolicitada.current = true;
+      return;
+    }
+
+    recuperacionSesionEnCurso.current = true;
+
     let datosGuardados = null;
 
     try {
@@ -1011,6 +1020,14 @@ export default function App() {
       setSesion(null);
     } finally {
       setCargandoSesion(false);
+      recuperacionSesionEnCurso.current = false;
+
+      if (recuperacionSesionSolicitada.current) {
+        recuperacionSesionSolicitada.current = false;
+        setTimeout(() => {
+          void cargarSesionGuardadaRef.current();
+        }, 0);
+      }
     }
   }, [
     fetchConTimeout,
@@ -1036,13 +1053,78 @@ export default function App() {
       cargarSesionGuardada;
   }, [cargarSesionGuardada]);
 
-  // La recuperacion inicial debe ejecutarse
-  // una sola vez al montar la aplicacion.
+  // Restaurar al iniciar y revalidar al recuperar
+  // Internet una sesión docente previamente guardada.
   useEffect(() => {
-    void Promise.resolve().then(() => {
-      return cargarSesionGuardadaRef.current();
-    });
-  }, []);
+    if (sesionOnlineValidada || modoOffline) {
+      return undefined;
+    }
+
+    let activo = true;
+
+    const intentarRecuperacionOnline = async () => {
+      if (!activo) {
+        return;
+      }
+
+      try {
+        const estadoRed =
+          await Network.getNetworkStateAsync();
+
+        if (
+          !activo ||
+          estadoRed.isConnected !== true ||
+          estadoRed.isInternetReachable === false
+        ) {
+          return;
+        }
+
+        const datosGuardados = await obtenerSesion();
+
+        if (
+          String(datosGuardados?.usuario?.rol || '')
+            .trim()
+            .toLowerCase() !== 'docente'
+        ) {
+          return;
+        }
+
+        await cargarSesionGuardadaRef.current();
+      } catch (error) {
+        console.warn(
+          '[HU-14] No fue posible revalidar la sesión tras recuperar Internet:',
+          error?.message || error
+        );
+      }
+    };
+
+    const suscripcionRed =
+      Network.addNetworkStateListener((estadoRed) => {
+        if (
+          estadoRed.isConnected === true &&
+          estadoRed.isInternetReachable !== false
+        ) {
+          void intentarRecuperacionOnline();
+        }
+      });
+
+    const suscripcionAppState =
+      AppState.addEventListener('change', (estado) => {
+        if (estado === 'active') {
+          void intentarRecuperacionOnline();
+        }
+      });
+
+    // Ejecutar una sola restauración inicial; el método
+    // conserva el acceso offline limitado si no hay red.
+    void cargarSesionGuardadaRef.current();
+
+    return () => {
+      activo = false;
+      suscripcionRed.remove();
+      suscripcionAppState.remove();
+    };
+  }, [sesionOnlineValidada, modoOffline]);
 
   // =====================================================
   // HU-14 | RECONEXION AUTOMATICA DESDE MODO OFFLINE

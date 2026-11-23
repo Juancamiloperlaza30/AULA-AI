@@ -441,7 +441,7 @@ export default function StudentGradesScreen({
       let hayCopia = false;
 
       try {
-        if (!usuarioId || !accessToken) {
+        if (!usuarioId) {
           throw new Error(
             'No existe una sesión válida.'
           );
@@ -511,6 +511,12 @@ export default function StudentGradesScreen({
         // CONSULTAR CALIFICACIONES OFICIALES
         // ========================================
 
+        if (!accessToken || !apiUrl) {
+          throw new Error(
+            'No hay una sesión activa para actualizar las calificaciones.'
+          );
+        }
+
         const data = await consultarJSON(
           `${apiUrl}/api/grades/estudiante/mis-calificaciones`,
           accessToken,
@@ -524,9 +530,12 @@ export default function StudentGradesScreen({
           return;
         }
 
-        if (!Array.isArray(data.calificaciones)) {
+        if (
+          data?.success !== true ||
+          !Array.isArray(data.calificaciones)
+        ) {
           throw new Error(
-            'El servidor devolvió calificaciones inválidas.'
+            'El servidor devolvió calificaciones incompletas.'
           );
         }
 
@@ -580,22 +589,25 @@ export default function StudentGradesScreen({
           );
 
           if (
+            materiasData?.success !== true ||
+            !Array.isArray(materiasData.materias)
+          ) {
+            throw new Error(
+              'El servidor devolvió materias incompletas.'
+            );
+          }
+
+          if (
             id === solicitudId.current &&
             !controller.signal.aborted
           ) {
-            setMateriasAsignadas(
-              Array.isArray(materiasData.materias)
-                ? materiasData.materias
-                : []
-            );
+            setMateriasAsignadas(materiasData.materias);
           }
         } catch (errorMaterias) {
           if (
             id === solicitudId.current &&
             !controller.signal.aborted
           ) {
-            setMateriasAsignadas([]);
-
             console.warn(
               'HU-07: no fue posible cargar materias sin nota:',
               errorMaterias.message

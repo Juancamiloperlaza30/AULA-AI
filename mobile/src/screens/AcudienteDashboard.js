@@ -36,6 +36,15 @@ import GuardianExcuses from
 import GuardianNotifications from
   '../components/GuardianNotifications';
 
+import {
+  CLAVE_CACHE_ESTUDIANTES_VINCULADOS,
+  eliminarCacheAcudienteOffline,
+  eliminarCacheEstudianteAcudienteOffline,
+  eliminarCachesEstudiantesNoVinculados,
+  guardarCacheAcudienteOffline,
+  obtenerCacheAcudienteOffline,
+} from '../database/guardianAcademicOfflineDatabase';
+
 // =====================================================
 // AULA-AI | HU-08
 // PANEL PROFESIONAL DEL ACUDIENTE
@@ -67,6 +76,30 @@ const C = {
   amarillo: '#B7791F',
   amarilloSuave: '#FFF5DF',
 };
+
+const esSeguimientoValido = (
+  seguimiento,
+  estudianteId
+) =>
+  seguimiento?.notas?.estudiante?.id ===
+    estudianteId &&
+  seguimiento?.actividades?.estudiante?.id ===
+    estudianteId &&
+  seguimiento?.asistencia?.estudiante?.id ===
+    estudianteId &&
+  Array.isArray(
+    seguimiento.notas.promediosPeriodos
+  ) &&
+  Array.isArray(
+    seguimiento.notas.calificaciones
+  ) &&
+  Array.isArray(
+    seguimiento.actividades.actividades
+  ) &&
+  Array.isArray(
+    seguimiento.asistencia.asistencias
+  ) &&
+  seguimiento.asistencia.resumen;
 
 const PESTANAS = [
   ['resumen', 'Resumen', 'grid-outline'],
@@ -319,10 +352,13 @@ async function getApi(url, token, signal) {
   try {
     datos = await respuesta.json();
   } catch {
-    throw new Error(
+    const error = new Error(
       'El servidor devolvió una respuesta no válida. ' +
       'Inténtalo nuevamente.'
     );
+
+    error.status = respuesta.status;
+    throw error;
   }
 
   if (!respuesta.ok || datos?.success !== true) {
@@ -562,6 +598,12 @@ export default function AcudienteDashboard({
   const [actualizando, setActualizando] =
     useState(false);
 
+  const [modoOffline, setModoOffline] =
+    useState(false);
+
+  const [avisoDatos, setAvisoDatos] =
+    useState('');
+
   const [ultimaConsulta, setUltimaConsulta] =
     useState(null);
 
@@ -637,6 +679,8 @@ export default function AcudienteDashboard({
     setCargandoDatos(false);
     setActualizando(false);
     setErrorDatos('');
+    setAvisoDatos('');
+    setModoOffline(false);
     setUltimaConsulta(null);
 
     setPeriodoNotas(null);
@@ -688,7 +732,66 @@ export default function AcudienteDashboard({
     setEstudiantes([]);
     setEstudiante(null);
 
+    let estudiantesLocales = null;
+
     try {
+      if (!usuario?.id) {
+        throw new Error(
+          'No hay una cuenta de acudiente válida.'
+        );
+      }
+
+      try {
+        const copia = await obtenerCacheAcudienteOffline({
+          acudienteId: usuario.id,
+          estudianteId:
+            CLAVE_CACHE_ESTUDIANTES_VINCULADOS,
+          recurso: 'estudiantes',
+        });
+
+        if (
+          copia &&
+          Array.isArray(
+            copia.contenido?.estudiantes
+          ) &&
+          copia.contenido.estudiantes.every(
+            (item) =>
+              item &&
+              typeof item.id === 'string'
+          )
+        ) {
+          estudiantesLocales =
+            copia.contenido.estudiantes;
+          setEstudiantes(estudiantesLocales);
+          setModoOffline(true);
+          setUltimaConsulta(
+            new Date(copia.sincronizadoEn)
+          );
+        }
+      } catch (errorLocal) {
+        console.warn(
+          'HU-08: no se pudo leer la lista local de estudiantes:',
+          errorLocal.message
+        );
+      }
+
+      if (
+        controller.signal.aborted ||
+        version !== versionLista.current
+      ) {
+        return;
+      }
+
+      if (!accessToken || !base) {
+        if (estudiantesLocales) {
+          return;
+        }
+
+        throw new Error(
+          'No hay conexión ni una lista local de estudiantes vinculados.'
+        );
+      }
+
       const datos = await getApi(
         `${base}/api/guardian/mis-estudiantes`,
         accessToken,
@@ -708,13 +811,56 @@ export default function AcudienteDashboard({
         );
       }
 
-      setEstudiantes(
-        datos.estudiantes.filter(
+      if (
+        !datos.estudiantes.every(
           (item) =>
             item &&
             typeof item.id === 'string'
         )
-      );
+      ) {
+        throw new Error(
+          'El servidor devolvió una lista de estudiantes incompleta.'
+        );
+      }
+
+      const listaAutorizada =
+        datos.estudiantes;
+
+      setEstudiantes(listaAutorizada);
+      setModoOffline(false);
+      const sincronizadoEn = new Date();
+      setUltimaConsulta(sincronizadoEn);
+
+      try {
+        await guardarCacheAcudienteOffline({
+          acudienteId: usuario.id,
+          estudianteId:
+            CLAVE_CACHE_ESTUDIANTES_VINCULADOS,
+          recurso: 'estudiantes',
+          contenido: {
+            estudiantes: listaAutorizada,
+          },
+        });
+      } catch (errorCache) {
+        console.warn(
+          'HU-08: no se pudo guardar la lista de estudiantes para consulta offline:',
+          errorCache.message
+        );
+      }
+
+      try {
+        await eliminarCachesEstudiantesNoVinculados({
+          acudienteId: usuario.id,
+          estudianteIds: listaAutorizada.map(
+            (item) => item.id
+          ),
+        });
+      } catch (errorCache) {
+        console.warn(
+          'HU-08: no se pudo depurar la caché de vinculaciones anteriores:',
+          errorCache.message
+        );
+      }
     } catch (error) {
       if (
         controller.signal.aborted ||
@@ -723,7 +869,35 @@ export default function AcudienteDashboard({
         return;
       }
 
-      setErrorLista(error.message);
+      if (
+        error.status === 401 ||
+        error.status === 403
+      ) {
+        setEstudiantes([]);
+        setEstudiante(null);
+        setModoOffline(false);
+        setUltimaConsulta(null);
+        setErrorLista(error.message);
+
+        try {
+          if (usuario?.id) {
+            await eliminarCacheAcudienteOffline(
+              usuario.id
+            );
+          }
+        } catch (errorCache) {
+          console.warn(
+            'HU-08: no se pudo limpiar la caché tras rechazo de autorización:',
+            errorCache.message
+          );
+        }
+      } else if (estudiantesLocales) {
+        setEstudiantes(estudiantesLocales);
+        setModoOffline(true);
+        setErrorLista('');
+      } else {
+        setErrorLista(error.message);
+      }
     } finally {
       if (
         !controller.signal.aborted &&
@@ -735,6 +909,7 @@ export default function AcudienteDashboard({
   }, [
     base,
     accessToken,
+    usuario,
     cancelarLista,
     limpiarDatos,
   ]);
@@ -772,9 +947,7 @@ export default function AcudienteDashboard({
       abortDatos.current = controller;
 
       setErrorDatos('');
-      setNotas(null);
-      setActividades(null);
-      setAsistencia(null);
+      setAvisoDatos('');
 
       if (refrescar) {
         setActualizando(true);
@@ -782,7 +955,108 @@ export default function AcudienteDashboard({
         setCargandoDatos(true);
       }
 
+      let copiaLocal = null;
+
+      const aplicarSeguimiento = (
+        seguimiento,
+        sincronizadoEn,
+        offline
+      ) => {
+        setNotas(seguimiento.notas);
+        setActividades(
+          seguimiento.actividades
+        );
+        setAsistencia(seguimiento.asistencia);
+        setModoOffline(offline);
+        setUltimaConsulta(
+          new Date(sincronizadoEn)
+        );
+
+        const periodos =
+          seguimiento.notas.promediosPeriodos;
+
+        setPeriodoNotas((anterior) => {
+          const existe = periodos.some(
+            (periodo) =>
+              String(periodo.periodoId) ===
+              String(anterior)
+          );
+
+          return anterior !== null && existe
+            ? anterior
+            : seguimiento.notas.periodoActual?.id ??
+              periodos[0]?.periodoId ??
+              null;
+        });
+      };
+
       try {
+        const estudianteAutorizado =
+          estudiantes.some(
+            (item) =>
+              String(item.id) ===
+              String(estudianteId)
+          );
+
+        if (
+          !usuario?.id ||
+          !estudianteAutorizado
+        ) {
+          throw new Error(
+            'No existe una vinculación autorizada para consultar este estudiante.'
+          );
+        }
+
+        try {
+          const copia =
+            await obtenerCacheAcudienteOffline({
+              acudienteId: usuario.id,
+              estudianteId,
+              recurso: 'seguimiento',
+            });
+
+          if (
+            copia &&
+            esSeguimientoValido(
+              copia.contenido,
+              estudianteId
+            )
+          ) {
+            copiaLocal = copia;
+            aplicarSeguimiento(
+              copia.contenido,
+              copia.sincronizadoEn,
+              true
+            );
+            setCargandoDatos(false);
+          }
+        } catch (errorLocal) {
+          console.warn(
+            'HU-08: no se pudo leer el seguimiento local del estudiante:',
+            errorLocal.message
+          );
+        }
+
+        if (
+          controller.signal.aborted ||
+          version !== versionDatos.current
+        ) {
+          return;
+        }
+
+        if (!accessToken || !base) {
+          if (copiaLocal) {
+            setAvisoDatos(
+              'Sin conexión. Se muestra la última información académica sincronizada.'
+            );
+            return;
+          }
+
+          throw new Error(
+            'No hay conexión ni una copia académica disponible para este estudiante.'
+          );
+        }
+
         const ruta =
           `${base}/api/guardian/estudiantes/` +
           encodeURIComponent(estudianteId);
@@ -816,52 +1090,44 @@ export default function AcudienteDashboard({
           return;
         }
 
-        const validos =
-          respuestaNotas.estudiante?.id === estudianteId &&
-          respuestaActividades.estudiante?.id === estudianteId &&
-          respuestaAsistencia.estudiante?.id === estudianteId &&
-          Array.isArray(
-            respuestaNotas.promediosPeriodos
-          ) &&
-          Array.isArray(
-            respuestaNotas.calificaciones
-          ) &&
-          Array.isArray(
-            respuestaActividades.actividades
-          ) &&
-          Array.isArray(
-            respuestaAsistencia.asistencias
-          ) &&
-          respuestaAsistencia.resumen;
+        const seguimiento = {
+          notas: respuestaNotas,
+          actividades: respuestaActividades,
+          asistencia: respuestaAsistencia,
+        };
 
-        if (!validos) {
+        if (
+          !esSeguimientoValido(
+            seguimiento,
+            estudianteId
+          )
+        ) {
           throw new Error(
             'La respuesta académica está incompleta.'
           );
         }
 
-        setNotas(respuestaNotas);
-        setActividades(respuestaActividades);
-        setAsistencia(respuestaAsistencia);
+        const guardado =
+          await guardarCacheAcudienteOffline({
+            acudienteId: usuario.id,
+            estudianteId,
+            recurso: 'seguimiento',
+            contenido: seguimiento,
+          }).catch((errorCache) => {
+            console.warn(
+              'HU-08: no se pudo guardar el seguimiento para consulta offline:',
+              errorCache.message
+            );
 
-        const periodos =
-          respuestaNotas.promediosPeriodos;
+            return null;
+          });
 
-        setPeriodoNotas((anterior) => {
-          const existe = periodos.some(
-            (p) =>
-              String(p.periodoId) ===
-              String(anterior)
-          );
-
-          return anterior !== null && existe
-            ? anterior
-            : respuestaNotas.periodoActual?.id ??
-              periodos[0]?.periodoId ??
-              null;
-        });
-
-        setUltimaConsulta(new Date());
+        aplicarSeguimiento(
+          seguimiento,
+          guardado?.sincronizadoEn ||
+            new Date().toISOString(),
+          false
+        );
       } catch (error) {
         if (
           controller.signal.aborted ||
@@ -870,10 +1136,59 @@ export default function AcudienteDashboard({
           return;
         }
 
-        setNotas(null);
-        setActividades(null);
-        setAsistencia(null);
-        setErrorDatos(error.message);
+        if (
+          error.status === 401 ||
+          error.status === 403
+        ) {
+          const listaActualizada =
+            estudiantes.filter(
+              (item) =>
+                String(item.id) !==
+                String(estudianteId)
+            );
+
+          setNotas(null);
+          setActividades(null);
+          setAsistencia(null);
+          setModoOffline(false);
+          setUltimaConsulta(null);
+          setAvisoDatos('');
+          setErrorDatos(error.message);
+          setEstudiantes(listaActualizada);
+          setEstudiante(null);
+
+          try {
+            await guardarCacheAcudienteOffline({
+              acudienteId: usuario.id,
+              estudianteId:
+                CLAVE_CACHE_ESTUDIANTES_VINCULADOS,
+              recurso: 'estudiantes',
+              contenido: {
+                estudiantes: listaActualizada,
+              },
+            });
+            await eliminarCacheEstudianteAcudienteOffline({
+              acudienteId: usuario.id,
+              estudianteId,
+            });
+          } catch (errorCache) {
+            console.warn(
+              'HU-08: no se pudo eliminar la copia local tras un rechazo de autorización:',
+              errorCache.message
+            );
+          }
+        } else if (copiaLocal) {
+          setModoOffline(true);
+          setAvisoDatos(
+            'No fue posible actualizar la información. Se conserva la última copia sincronizada.'
+          );
+        } else {
+          setNotas(null);
+          setActividades(null);
+          setAsistencia(null);
+          setModoOffline(false);
+          setErrorDatos(error.message);
+        }
       } finally {
         if (
           !controller.signal.aborted &&
@@ -884,7 +1199,13 @@ export default function AcudienteDashboard({
         }
       }
     },
-    [base, accessToken, cancelarDatos]
+    [
+      base,
+      accessToken,
+      usuario,
+      estudiantes,
+      cancelarDatos,
+    ]
   );
 
   const seleccionarEstudiante = (item) => {
@@ -902,6 +1223,51 @@ export default function AcudienteDashboard({
         : 'resumen'
     );
   };
+
+  const manejarAccesoDenegado = useCallback(
+    async (estudianteId) => {
+      if (!usuario?.id || !estudianteId) {
+        return;
+      }
+
+      const listaActualizada =
+        estudiantes.filter(
+          (item) =>
+            String(item.id) !==
+            String(estudianteId)
+        );
+
+      limpiarDatos();
+      setEstudiantes(listaActualizada);
+      setEstudiante(null);
+
+      try {
+        await guardarCacheAcudienteOffline({
+          acudienteId: usuario.id,
+          estudianteId:
+            CLAVE_CACHE_ESTUDIANTES_VINCULADOS,
+          recurso: 'estudiantes',
+          contenido: {
+            estudiantes: listaActualizada,
+          },
+        });
+        await eliminarCacheEstudianteAcudienteOffline({
+          acudienteId: usuario.id,
+          estudianteId,
+        });
+      } catch (errorCache) {
+        console.warn(
+          'HU-08: no se pudo retirar la copia local de una vinculación no autorizada:',
+          errorCache.message
+        );
+      }
+    },
+    [
+      estudiantes,
+      usuario,
+      limpiarDatos,
+    ]
+  );
 
   useEffect(() => {
     if (
@@ -1199,11 +1565,22 @@ export default function AcudienteDashboard({
   // ===================================================
 
   const renderLista = () => {
-    if (cargandoLista) {
+    if (
+      cargandoLista &&
+      estudiantes.length === 0
+    ) {
       return (
         <Cargando texto="Consultando estudiantes autorizados..." />
       );
     }
+
+    const estadoLocal = modoOffline ? (
+      <Text style={styles.estadoOffline}>
+        Modo sin conexión · Lista sincronizada:{' '}
+        {ultimaConsulta?.toLocaleString('es-CO') ||
+          'fecha no disponible'}
+      </Text>
+    ) : null;
 
     if (errorLista) {
       return (
@@ -1218,16 +1595,21 @@ export default function AcudienteDashboard({
 
     if (estudiantes.length === 0) {
       return (
-        <Mensaje
-          titulo="Sin estudiantes autorizados"
-          texto="No se encontraron vinculaciones activas y verificadas."
-          reintentar={cargarEstudiantes}
-        />
+        <>
+          {estadoLocal}
+          <Mensaje
+            titulo="Sin estudiantes autorizados"
+            texto="No se encontraron vinculaciones activas y verificadas."
+            reintentar={cargarEstudiantes}
+          />
+        </>
       );
     }
 
     return (
       <>
+        {estadoLocal}
+
         <View style={styles.totalCard}>
           <Text style={styles.totalNumero}>
             {estudiantes.length}
@@ -2089,6 +2471,20 @@ export default function AcudienteDashboard({
         ))}
       </View>
 
+      {modoOffline && (
+        <Text style={styles.estadoOffline}>
+          Modo sin conexión · Información sincronizada:{' '}
+          {ultimaConsulta?.toLocaleString('es-CO') ||
+            'fecha no disponible'}
+        </Text>
+      )}
+
+      {!!avisoDatos && (
+        <Text style={styles.avisoOffline}>
+          {avisoDatos}
+        </Text>
+      )}
+
       {tab === 'excusas' && (
         <View style={styles.contenido}>
           <GuardianExcuses
@@ -2111,9 +2507,13 @@ export default function AcudienteDashboard({
         tab === 'alertas' && (
           <View style={styles.contenido}>
             <GuardianAcademicAlerts
+              acudienteId={usuario?.id}
               apiUrl={apiUrl}
               accessToken={accessToken}
               estudiante={estudiante}
+              onAuthorizationDenied={
+                manejarAccesoDenegado
+              }
               notas={notas}
               obtenerPorcentajeBarra={obtenerPorcentajeBarra}
               obtenerColorBarra={obtenerColorBarra}
@@ -2121,7 +2521,14 @@ export default function AcudienteDashboard({
             />
           </View>
         )
-      ) : cargandoDatos || actualizando ? (
+      ) : (
+        cargandoDatos ||
+        actualizando
+      ) && !(
+        notas &&
+        actividades &&
+        asistencia
+      ) ? (
         <Cargando texto="Consultando información académica..." />
       ) : errorDatos ? (
         <Mensaje
@@ -2141,7 +2548,9 @@ export default function AcudienteDashboard({
 
           {!!ultimaConsulta && (
             <Text style={styles.actualizacionTexto}>
-              Última actualización:{' '}
+              {modoOffline
+                ? 'Última sincronización: '
+                : 'Última consulta: '}
               {ultimaConsulta.toLocaleString('es-CO')}
             </Text>
           )}
@@ -2288,6 +2697,7 @@ export default function AcudienteDashboard({
         <GuardianNotifications
           apiUrl={apiUrl}
           accessToken={accessToken}
+          usuarioId={usuario?.id}
           onRefreshSession={onRefreshSession}
           onOpenCommunications={onMyCommunications}
           onOpenAlerts={abrirAlertas}
@@ -2900,6 +3310,21 @@ const styles = StyleSheet.create({
     color: C.gris,
     textAlign: 'center',
     marginTop: 20,
+  },
+  estadoOffline: {
+    color: C.amarillo,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+    marginTop: 12,
+    paddingHorizontal: 10,
+  },
+  avisoOffline: {
+    color: C.amarillo,
+    fontSize: 12,
+    lineHeight: 18,
+    textAlign: 'center',
+    marginTop: 6,
   },
   notaInformativa: {
     color: C.gris,
